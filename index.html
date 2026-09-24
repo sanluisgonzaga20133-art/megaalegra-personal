@@ -316,6 +316,10 @@
 </script>
 
 <div class="marco" id="app" hidden>
+  <div id="avisoSinDefensores" hidden style="background:#FFF6E0;border:1px solid #E8C872;border-radius:10px;padding:12px 14px;margin-bottom:10px;font-size:13.5px">
+    Esta área todavía no tiene su lista de personas en Firebase.
+    <button id="btnCargarLista" hidden style="margin-left:8px;background:var(--rojo-oscuro);color:#fff;border:none;border-radius:8px;padding:6px 12px;font:inherit;font-weight:700;cursor:pointer">Cargar la lista de esta área desde el Excel del Drive 2</button>
+  </div>
   <div class="barra-sesion">
     <span id="usuarioSesion"></span>
     <button id="btnSalir">Salir</button>
@@ -323,8 +327,13 @@
 
   <header>
     <h1>Agenda diaria de asignaciones</h1>
-    <p>Asistencia Legal · Lima Centro</p>
+    <p id="subtituloArea">Asistencia Legal · Lima Centro</p>
     <div class="mes-selector">
+      <select id="selArea">
+        <option>Asistencia Legal</option>
+        <option>Defensa de Víctimas</option>
+        <option>Equipo multidisciplinario</option>
+      </select>
       <select id="selMes"></select>
       <input type="date" id="selDia" style="padding:6px 10px;border-radius:7px;border:none;font-family:inherit;font-size:14px;font-weight:600">
       <button class="btn-descargar" id="btnVistaInforme">🖨 Vista previa del informe</button>
@@ -369,7 +378,7 @@
     <span class="badge-hoy c1">1</span><span class="badge-hoy c2">2</span><span class="badge-hoy c3">3</span>
     <span class="badge-hoy c4">4</span><span class="badge-hoy c5">5</span><span class="badge-hoy c6">6+</span>
   </div>
-  <p class="pie-nota">"Nuevos mes ant." y "Consultas mes ant." (en gris) son solo referencia: vienen de Consolidación, no se editan aquí; muestran "—" hasta que se migre ese Drive. "Adulto Mayor" cuenta los casos marcados con la casilla de adulto mayor, sea cual sea su materia (tampoco se suman dos veces). "Turno Consulta" es lo mismo que Turno presencial: esos casos cuentan en su materia y la columna Turno Consulta muestra cuántos de ellos llegaron por esa vía (no se suman dos veces). "Mes", "Hoy" y las categorías cuentan solo casos nuevos asignados. Las reasignaciones son carga muerta: no suman a ningún total, solo se ven en "Reasig." (+ entraron / − salieron) y en el detalle de cada defensor. Para reasignar un caso de otro mes o que nunca se registró aquí, usa "🔁 Registrar reasignación". La fila con franja verde y "Sugerido" es la de menor carga (sin contar licencias ni Responsables de Área). El "+" verde asigna al toque; "···" abre el formulario completo. Las filas doradas con ★ son las Responsables de Área. Toca cualquier número para ver el detalle.</p>
+  <p class="pie-nota">Arriba eliges el área: Asistencia Legal, Defensa de Víctimas o Equipo multidisciplinario; cada una tiene sus propias columnas. Las columnas de totales (Turno Consulta, Adulto Mayor, Patrocinio presencial, Turno de flagrancia, Turno peritos) marcan casos que ya cuentan en su categoría: no se suman dos veces. Las columnas grises del mes anterior (Nuevos, Consultas, Asesorías, Informes técnicos) vendrán de Consolidación. Las reasignaciones son carga muerta: solo se ven en "Reasig." y en el detalle de cada persona. La fila "Sugerido" es la de menor carga (sin licencias, Responsables de Área ni Coordinador). Toca cualquier número para ver el detalle.</p>
 </div>
 
 <div class="fondo-modal" id="fondoInforme" hidden>
@@ -390,8 +399,10 @@
     <p class="sub">Para cualquier caso: de este mes, de meses o años anteriores, o que nunca se registró en la app. No suma como caso nuevo.</p>
     <label class="campo" for="reFecha">Fecha de la reasignación</label>
     <input type="date" id="reFecha">
-    <label class="campo" for="reReferencia">Código o referencia del caso</label>
-    <input type="text" id="reReferencia" placeholder="Ej. 2025MSC000123456, o nombre del usuario">
+    <label class="campo" for="reUsuario">Nombre completo del usuario</label>
+    <input type="text" id="reUsuario" placeholder="Ej. PÉREZ GÓMEZ, María Luisa">
+    <label class="campo" for="reCarpeta">N° de carpeta defensorial</label>
+    <input type="text" id="reCarpeta" placeholder="Número obtenido del sistema">
     <label class="campo" for="reDe">Lo tenía</label>
     <select id="reDe"></select>
     <label class="campo" for="reA">Pasa a</label>
@@ -415,15 +426,21 @@
     <label class="campo" for="campoFecha">Fecha</label>
     <input type="date" id="campoFecha">
 
-    <label class="campo" for="campoMateria">Categoría</label>
-    <select id="campoMateria"></select>
-    <div style="font-size:12px;color:var(--gris);margin-top:4px">Si eliges una materia específica abajo que no sea Desalojo o Laboral, esto se completa solo con "Otras materias".</div>
+    <div id="bloqueCategoria">
+      <label class="campo" for="campoMateria" id="etiquetaCategoria">Categoría</label>
+      <select id="campoMateria"></select>
+      <div id="ayudaCategoria" style="font-size:12px;color:var(--gris);margin-top:4px">Si eliges una materia específica abajo que no sea Desalojo o Laboral, esto se completa solo con "Otras materias".</div>
+    </div>
 
-    <label class="campo" for="campoEspecifica">Materia específica (opcional — para el Drive 1)</label>
+    <div id="bloqueGrupo" style="display:none">
+      <label class="campo">¿El usuario pertenece a alguno de estos grupos?</label>
+      <div class="origen-grupo" id="grupoUsuario"></div>
+    </div>
+    <label class="campo" for="campoEspecifica" id="etiquetaEspecifica">Materia específica (opcional — para el Drive 1)</label>
     <select id="campoEspecifica"></select>
     <input type="text" id="campoEspecificaOtra" placeholder="¿Cuál?" style="margin-top:8px;display:none">
 
-    <label class="checkbox-adulto"><input type="checkbox" id="campoAdulto"> El usuario es adulto mayor</label>
+    <div id="grupoCasillas"></div>
 
     <label class="campo">Origen del caso</label>
     <div class="origen-grupo" id="grupoOrigen"></div>
@@ -486,14 +503,6 @@ function marcaCreacion(){ return { creadoPor: usuario.correo, creadoEn: serverTi
 // ---------- Defensores: vienen de Firestore (colección defensores, área Asistencia Legal, activos) ----------
 let DEFENSORES = [];
 
-// Las 7 categorías con seguimiento propio + 1 genérica para todo lo demás (alimentos, tenencia, etc.)
-const CATEGORIAS = [
-  "Desalojo", "Laboral", "Desprotección Familiar",
-  "Procedimiento Adm. de Adopción", "Riesgo por Desprotección",
-  "Otras materias"
-];
-
-// Las 19 materias oficiales del Art. 9-A (para el detalle que va al Drive 1; no crean columna en Drive 2)
 const MATERIAS_ESPECIFICAS = [
   { grupo: "Derecho de Familia", items: [
     "Alimentos y filiación", "Aumento y prorrateo de alimentos",
@@ -517,9 +526,69 @@ const MATERIAS_ESPECIFICAS = [
 const ORIGEN_TURNO = "Turno presencial (Turno Consulta)";
 function esTurnoConsulta(a){ return a.origen === ORIGEN_TURNO || a.origen === "Turno presencial"; }
 
-const ORIGENES = [
-  "Mesa de partes virtual", "Fono Alegra", "Correo institucional", "Turno presencial (Turno Consulta)"
-];
+// ---------- Las 3 áreas del Drive 2 (cada una con sus columnas, vías de llegada y casillas) ----------
+const CASILLAS_TODAS = {
+  adultoMayor: 'Adulto mayor',
+  lgtbi: 'LGTBI',
+  indigena: 'Indígenas y otros (quechuahablantes, comunidades afro)',
+  conadis: 'CONADIS',
+  presencial: 'Atención presencial',
+  menorEdad: 'Menores de edad'
+};
+const AREAS = {
+  'Asistencia Legal': {
+    corto: 'L', categoriaDefault: 'Otras materias', usaEspecificas: true,
+    referencias: [{ nombre: 'Nuevos', clave: 'nuevos' }, { nombre: 'Consultas', clave: 'consultas' }],
+    categorias: ["Desalojo", "Laboral", "Desprotección Familiar", "Procedimiento Adm. de Adopción", "Riesgo por Desprotección", "Otras materias"],
+    origenes: ["Mesa de partes virtual", "Fono Alegra", "Correo institucional", ORIGEN_TURNO],
+    totales: [
+      { nombre: 'Turno Consulta', titulo: 'Turno<br>Consulta', f: esTurnoConsulta, origen: ORIGEN_TURNO },
+      { nombre: 'Adulto Mayor', titulo: 'Adulto<br>Mayor', f: a => !!a.adultoMayor }
+    ],
+    casillas: ['adultoMayor', 'lgtbi', 'indigena', 'conadis']
+  },
+  'Defensa de Víctimas': {
+    corto: 'V', categoriaDefault: 'Otras', usaEspecificas: false,
+    referencias: [{ nombre: 'Nuevos', clave: 'nuevos' }, { nombre: 'Consultas', clave: 'consultas' }],
+    categorias: ["Tortura", "Crimen organizado", "Apelaciones", "Discriminación", "Homicidio",
+      "Acoso y violación sexual agravada", "Negligencia médica o lesiones graves", "Accidente de tránsito", "Otras"],
+    origenes: ["Mesa de partes virtual", "Fono Alegra", "Correo institucional", "Turno presencial (Patrocinio presencial)", "Turno de flagrancia"],
+    totales: [
+      { nombre: 'Patrocinio presencial', titulo: 'Patrocinio<br>presencial', f: a => a.origen === "Turno presencial (Patrocinio presencial)", origen: "Turno presencial (Patrocinio presencial)" },
+      { nombre: 'Turno de flagrancia', titulo: 'Turno de<br>flagrancia', f: a => a.origen === "Turno de flagrancia", origen: "Turno de flagrancia" }
+    ],
+    casillas: ['adultoMayor', 'lgtbi', 'indigena', 'conadis']
+  },
+  'Equipo multidisciplinario': {
+    corto: 'E', categoriaDefault: 'Atención', usaEspecificas: false,
+    requiereMateria: true, ocultarColumnasCategoria: true,
+    referencias: [{ nombre: 'Consultas', clave: 'consultas' }, { nombre: 'Asesorías', clave: 'asesorias' }, { nombre: 'Informes técnicos', clave: 'informesTecnicos' }],
+    categorias: ['Asistencia Legal', 'Víctimas'],
+    origenes: ["Mesa de partes virtual", "Fono Alegra", "Correo institucional", "Turno presencial", "Turno peritos"],
+    totales: [
+      { nombre: 'Turno peritos', titulo: 'Turno<br>peritos', f: a => a.origen === "Turno peritos", origen: "Turno peritos" },
+      { nombre: 'Asistencia Legal', titulo: 'Asistencia<br>Legal', f: a => a.categoria === 'Asistencia Legal' },
+      { nombre: 'Víctimas', titulo: 'Víctimas', f: a => a.categoria === 'Víctimas' },
+      { nombre: 'Adulto mayor', titulo: 'Adulto<br>mayor', f: a => a.categoria === 'Adulto mayor' },
+      { nombre: 'Menores de edad', titulo: 'Menores<br>de edad', f: a => a.categoria === 'Menores de edad' },
+      { nombre: 'LGTBI', titulo: 'LGTBI', f: a => a.categoria === 'LGTBI' },
+      { nombre: 'Indígenas y otros', titulo: 'Indígenas<br>y otros', f: a => a.categoria === 'Indígenas y otros' },
+      { nombre: 'CONADIS', titulo: 'CONADIS', f: a => a.categoria === 'CONADIS' }
+    ],
+    casillas: [],
+    // Cada caso va en UNA sola columna: el grupo del usuario (si lo tiene) o, si no, Asistencia Legal / Víctimas según su materia
+    gruposExclusivos: { adultoMayor: 'Adulto mayor', menorEdad: 'Menores de edad', lgtbi: 'LGTBI', indigena: 'Indígenas y otros', conadis: 'CONADIS' }
+  }
+};
+// Lista inicial de Víctimas y Equipo multidisciplinario (tomada del Excel del Drive 2, se carga una sola vez a Firestore)
+const LISTAS_INICIALES = {"Defensa de Víctimas": [{"id": "GUILLEMO_ALEJANDRO_HUAMAN", "nombre": "GUILLEMO ALEJANDRO HUAMAN", "celular": "997 875 943 I - 912606106", "notas": ""}, {"id": "PERCY_HERMAN_AMPUERO_LINARES", "nombre": "PERCY HERMAN AMPUERO LINARES", "celular": "i - 912606227 P-999 920 814", "notas": ""}, {"id": "OSCAR_ARCE_ZAVALA", "nombre": "OSCAR ARCE ZAVALA", "celular": "912615362", "notas": ""}, {"id": "MARIANA_BARBOZA_BECERRA", "nombre": "MARIANA BARBOZA BECERRA", "celular": "I- 912601594 P - 948 523 569", "notas": ""}, {"id": "CARMEN_ANTONIA_BERROCAL_GONZALES", "nombre": "CARMEN ANTONIA BERROCAL GONZALES", "celular": "912601701 - p 960 060 418", "notas": ""}, {"id": "LUIS_MARTIN_CHACALTANA_HUASASQUICHE", "nombre": "LUIS MARTIN CHACALTANA HUASASQUICHE", "celular": "964 654 490 I- 912620229", "notas": ""}, {"id": "ESLEYMAN_JOVANY_CORDOVA_DE_LA_ROSA", "nombre": "ESLEYMAN JOVANY CORDOVA DE LA ROSA", "celular": "944 640 008", "notas": ""}, {"id": "MILAGROS_DE_LA_CRUZ_CRISOLO", "nombre": "MILAGROS DE LA CRUZ CRISOLO", "celular": "I -912 620 474 P - 994 625 044", "notas": ""}, {"id": "CARMELA_LUZ_ERAZO_MANRIQUE", "nombre": "CARMELA LUZ ERAZO MANRIQUE", "celular": "995471857", "notas": ""}, {"id": "LILIANA_MARGOTH_GALINDO_SARAS", "nombre": "LILIANA MARGOTH GALINDO SARAS", "celular": "956 987 895", "notas": ""}, {"id": "LUPE_LULY_GOMEZ_HUAMAN", "nombre": "LUPE LULY GÓMEZ HUÁMAN", "celular": "943006749", "notas": ""}, {"id": "EDUARDO_ALVARO_GUILLEN_RAMOS", "nombre": "EDUARDO ALVARO GUILLEN RAMOS", "celular": "957 610 789", "notas": ""}, {"id": "WILBERT_ELI_GUIZADO_SICOS", "nombre": "WILBERT ELI GUIZADO SICOS", "celular": "987 355 881", "notas": ""}, {"id": "KATHERINE_HIDALGO_BUSTAMENTE", "nombre": "KATHERINE HIDALGO BUSTAMENTE", "celular": "998 005 347", "notas": ""}, {"id": "ARNOLD_HUAMAN_PAIMA", "nombre": "ARNOLD HUAMAN PAIMA", "celular": "980 398 246", "notas": ""}, {"id": "DANNY_ILLACONZA_MORALES", "nombre": "DANNY ILLACONZA MORALES", "celular": "945 004 381 (llamadas) y 959 390 424 (Whats app)", "notas": ""}, {"id": "LIZETH_MERCADO_LAGUNA", "nombre": "LIZETH MERCADO LAGUNA", "celular": "961 430 687", "notas": ""}, {"id": "LUIS_CARLO_MUENTE_MAURICIO", "nombre": "LUIS CARLO MUENTE MAURICIO", "celular": "979 999 935", "notas": ""}, {"id": "JENNY_ROCIO_ORTEGA_OLVEA", "nombre": "JENNY ROCIO ORTEGA OLVEA", "celular": "912620837", "notas": ""}, {"id": "LEADY_VANNESA_PACO_HUERTA_DE_FLORES", "nombre": "LEADY VANNESA PACO HUERTA DE FLORES", "celular": "998 708 586", "notas": ""}, {"id": "MERY_PAJA_OLVEA", "nombre": "MERY PAJA OLVEA", "celular": "981 777 177 - i 912 621 041", "notas": ""}, {"id": "CASTORINA_QUIROZ_VASQUEZ", "nombre": "CASTORINA QUIROZ VASQUEZ", "celular": "I - 912 606 623 P -959 437 976", "notas": ""}, {"id": "JOHSSY_LUZ_QUISPE_APONTE", "nombre": "JOHSSY LUZ QUISPE APONTE", "celular": "987 095 535", "notas": ""}, {"id": "INGRID_DANIELA_RIVERA_MARTINEZ", "nombre": "INGRID DANIELA RIVERA MARTINEZ", "celular": "943 416 858", "notas": ""}, {"id": "LAURA_ISABEL_RODRIGUEZ_BELLEZA", "nombre": "LAURA ISABEL RODRIGUEZ BELLEZA", "celular": "957 421 003", "notas": ""}, {"id": "LESLY_KATHERINE_ROJAS_VALDEZ", "nombre": "LESLY KATHERINE ROJAS VALDEZ", "celular": "956 937 588", "notas": ""}, {"id": "SHEILA_SABOYA_CARDENAS", "nombre": "SHEILA SABOYA CARDENAS", "celular": "998010284 - I 912621483", "notas": ""}, {"id": "VLADIMIR_TALENAS_QUISPE", "nombre": "VLADIMIR TALENAS QUISPE", "celular": "912621380", "notas": "En adición Responsable de Área"}, {"id": "LISSI_INDIRA_TRUJILLO_ROLDAN", "nombre": "LISSI INDIRA TRUJILLO ROLDÁN", "celular": "966582871", "notas": ""}, {"id": "RUTH_GIOVANNA_VARGAS_ANTAURCO", "nombre": "RUTH GIOVANNA VARGAS ANTAURCO", "celular": "976 778 892 I - 912620492", "notas": ""}, {"id": "MYRCEA_VASQUEZ_PIZARRO", "nombre": "MYRCEA VASQUEZ PIZARRO", "celular": "944 996 458", "notas": ""}, {"id": "VENTURA_CORRALES__JHANS_OSMEL", "nombre": "VENTURA CORRALES, Jhans Osmel", "celular": "957 253 334", "notas": "Coordinador"}], "Equipo multidisciplinario": [{"id": "GRANADOS_DURAN__ERIK_ANTONIO", "nombre": "GRANADOS DURAN, Erik Antonio", "celular": "P-964000466", "notas": "Psicología"}, {"id": "TREJO_CABANA__MARIA_BERTHA", "nombre": "TREJO CABANA, María Bertha", "celular": "P-940195302 I-956994744", "notas": "Psicología"}, {"id": "ANDIA_CHAVEZ__RUTH_VILMA", "nombre": "ANDIA CHAVEZ, Ruth Vilma", "celular": "P-949214436 I-944820191", "notas": "Perito"}, {"id": "BOJORQUEZ_BUSTAMANTE__JOSE_LUIS", "nombre": "BOJORQUEZ BUSTAMANTE, José Luis", "celular": "P-984707062 I-984707062", "notas": "Perito"}, {"id": "ROJAS_RIOS__ROSA", "nombre": "ROJAS RIOS, Rosa", "celular": "988 214 542", "notas": "Licenciada"}, {"id": "MALASQUEZ_ESPINOZA__NANCY_ELENA", "nombre": "MALASQUEZ ESPINOZA, Nancy Elena", "celular": "i 912619955 - P-992624361", "notas": "Conciliadora"}, {"id": "JOYCE_TERESA_DE_JESUS_CASTRO_TRIGOSO", "nombre": "JOYCE TERESA DE JESUS CASTRO TRIGOSO", "celular": "942 950 843", "notas": "Licenciada"}, {"id": "SILVIA_BEATRIZ_MELENDEZ_KOHATSU", "nombre": "SILVIA BEATRIZ MELENDEZ KOHATSU", "celular": "999 660 429", "notas": "Licenciada"}, {"id": "JUAN_LANDABURO_CALDERON", "nombre": "JUAN LANDABURO CALDERON", "celular": "961 889 316", "notas": "Perito"}]};
+
+let AREA_NOMBRE = 'Asistencia Legal';
+let AREA = AREAS[AREA_NOMBRE];
+let CATEGORIAS = AREA.categorias;
+// Columnas de categoría que se ven en la tabla (en el Equipo, "Asistencia Legal" y "Víctimas" van como totales, junto a Turno peritos)
+function categoriasEnColumna(){ return AREA.ocultarColumnasCategoria ? [] : CATEGORIAS; }
+let ORIGENES = AREA.origenes;
 
 // A qué categoría pertenece cada materia específica (todas caen en "Otras materias",
 // salvo las dos que literalmente SON una de las 7 nombradas)
@@ -565,6 +634,12 @@ function seccionReasignaciones(defId, mes){
     }).join('');
 }
 
+function nombreMesAnterior(fechaIso){
+  let a = Number(fechaIso.slice(0, 4)), m = Number(fechaIso.slice(5, 7)) - 1;
+  if (m === 0){ m = 12; a--; }
+  return MESES_NOMBRE[m - 1];
+}
+const MESES_NOMBRE = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Setiembre','Octubre','Noviembre','Diciembre'];
 function claseColorHoy(n){ return n >= 6 ? 'c6' : 'c' + n; }
 
 // Datos del mes que se está viendo (se llenan en vivo desde Firestore)
@@ -707,11 +782,9 @@ function pintarTabla(){
   filaEnc.innerHTML =
     '<th>Agregar · Defensor</th>' +
     `<th class="hoy-col">${diaElegido === hoyIso() ? 'Hoy' : 'Día ' + formateaCorta(diaElegido)}</th>` +
-    '<th class="ref-col">Nuevos<br>mes ant.</th>' +
-    '<th class="ref-col">Consultas<br>mes ant.</th>' +
-    CATEGORIAS.map(c => `<th class="materia-col">${c}</th>`).join('') +
-    '<th class="total-col">Turno<br>Consulta</th>' +
-    '<th class="total-col">Adulto<br>Mayor</th>' +
+    AREA.referencias.map(r => `<th class="ref-col">${r.nombre}<br>${nombreMesAnterior(diaElegido)}</th>`).join('') +
+    categoriasEnColumna().map(c => `<th class="materia-col">${c}</th>`).join('') +
+    AREA.totales.map(t => `<th class="total-col">${t.titulo}</th>`).join('') +
     '<th class="total-col">Mes</th>' +
     '<th class="total-col" title="+ entraron / − salieron por reasignación">Reasig.<br>+ / −</th>' +
     '<th class="total-col" style="text-align:left">Día a día · ■ = total semana (TS)</th>';
@@ -723,7 +796,7 @@ function pintarTabla(){
   const candidatos = DEFENSORES.filter(d => !(d.nota && d.nota.toLowerCase().includes('licencia')));
   const totalesPorId = {};
   candidatos.forEach(d => { totalesPorId[d.id] = asignaciones.filter(a => a.defensorId === d.id && a.fecha.slice(0, 7) === diaElegido.slice(0, 7)).length; });
-  const noResponsables = candidatos.filter(d => !(d.nota && d.nota.includes('Responsable')));
+  const noResponsables = candidatos.filter(d => !(d.nota && (d.nota.includes('Responsable') || d.nota.includes('Coordinador'))));
   const grupoPreferido = noResponsables.length > 0 ? noResponsables : candidatos;
   let sugeridoId = null;
   grupoPreferido.forEach(d => {
@@ -740,15 +813,17 @@ function pintarTabla(){
     const entraron = reasignacionesLog.filter(r => r.aId === d.id && r.fecha.slice(0, 7) === mesDelDia).length;
 
     const nDia = propias.filter(a => a.fecha === diaElegido).length;
-    const nTurno = propias.filter(esTurnoConsulta).length;
-    const nAdulto = propias.filter(a => a.adultoMayor).length;
+    const celdasTotales = AREA.totales.map(t => {
+      const n = propias.filter(t.f).length;
+      return `<td class="num celda-total ${n === 0 ? 'cero' : ''}" data-defensor="${d.id}">${n || '·'}</td>`;
+    }).join('');
     const celdaHoy = nDia === 0
       ? `<td class="num cero" data-defensor="${d.id}">·</td>`
       : `<td class="num" data-defensor="${d.id}"><span class="badge-hoy ${claseColorHoy(nDia)}">${nDia}</span></td>`;
     const ref = REFERENCIA_MES_ANTERIOR[d.id] || {};
-    const celdasRef = `<td class="num ref-col">${ref.nuevos ?? '—'}</td><td class="num ref-col">${ref.consultas ?? '—'}</td>`;
+    const celdasRef = AREA.referencias.map(r => `<td class="num ref-col">${ref[r.clave] ?? '—'}</td>`).join('');
 
-    const celdasCategoria = CATEGORIAS.map(c => {
+    const celdasCategoria = categoriasEnColumna().map(c => {
       const n = propias.filter(a => a.categoria === c).length;
       return `<td class="num ${n === 0 ? 'cero' : ''}" data-defensor="${d.id}">${n || '·'}</td>`;
     }).join('');
@@ -778,8 +853,7 @@ function pintarTabla(){
       ${celdaHoy}
       ${celdasRef}
       ${celdasCategoria}
-      <td class="num celda-total ${nTurno === 0 ? 'cero' : ''}" data-defensor="${d.id}">${nTurno || '·'}</td>
-      <td class="num celda-total ${nAdulto === 0 ? 'cero' : ''}" data-defensor="${d.id}">${nAdulto || '·'}</td>
+      ${celdasTotales}
       <td class="num celda-total" data-defensor="${d.id}">${totalMes}</td>
       ${celdaReasig}
       <td data-defensor="${d.id}">${construirMapaDia(propias, diaElegido)}</td>
@@ -791,7 +865,7 @@ function pintarTabla(){
     filaDetalle.id = 'detalle-' + d.id;
     filaDetalle.hidden = d.id !== detalleAbiertoId;
     const td = document.createElement('td');
-    td.colSpan = CATEGORIAS.length + 9;
+    td.colSpan = categoriasEnColumna().length + AREA.totales.length + AREA.referencias.length + 5;
     td.innerHTML = propias.length === 0
       ? '<div class="detalle-vacio">Sin asignaciones registradas este mes todavía.</div>'
       : propias.slice().reverse()
@@ -805,7 +879,7 @@ function pintarTabla(){
                 .map(x => `<option value="${x.id}">${x.nombre}</option>`).join('');
               return `<div class="detalle-item"><span>Reasignar a: <select id="selReasignar-${a.id}" style="font-size:12px;padding:3px 6px;border-radius:5px">${opciones}</select></span><span class="detalle-acciones"><button class="btn-reasignar-si" data-id="${a.id}">Confirmar</button><button class="btn-borrar-no">Cancelar</button></span></div>`;
             }
-            return `<div class="detalle-item"><span>${a.fecha} — ${a.categoria}${a.especifica ? ' (' + a.especifica + ' → Drive 1)' : ''}${a.adultoMayor ? ' · 👵 Adulto mayor' : ''} · ${a.origen}${etiquetaReasig}</span><span class="detalle-acciones"><button class="btn-editar" data-id="${a.id}">✎ Editar</button><button class="btn-reasignar" data-id="${a.id}">🔁 Reasignar</button><button class="btn-borrar" data-id="${a.id}">🗑 Borrar</button></span></div>`;
+            return `<div class="detalle-item"><span>${a.fecha} — ${a.categoria}${a.especifica ? ' (' + a.especifica + ' → Drive 1)' : ''}${Object.keys(CASILLAS_TODAS).filter(k => a[k]).map(k => ' · ' + (k === 'adultoMayor' ? '👵 ' : '') + CASILLAS_TODAS[k].split(' (')[0]).join('')} · ${a.origen}${etiquetaReasig}</span><span class="detalle-acciones"><button class="btn-editar" data-id="${a.id}">✎ Editar</button><button class="btn-reasignar" data-id="${a.id}">🔁 Reasignar</button><button class="btn-borrar" data-id="${a.id}">🗑 Borrar</button></span></div>`;
           })
           .join('');
     td.innerHTML += seccionReasignaciones(d.id, mesDelDia);
@@ -897,10 +971,15 @@ document.getElementById('resultadosBusqueda').addEventListener('click', function
 let ultimaAccion = null; // para "Deshacer último"
 
 function registrarRapido(defensorId){
+  if (AREA.requiereMateria){
+    const d = DEFENSORES.find(x => x.id === defensorId);
+    abrirModal(defensorId, d ? d.nombre : '');
+    return;
+  }
   const fecha = document.getElementById('selDia').value || hoyIso();
   const ref = doc(collection(db, 'asignaciones'));
-  setDoc(ref, { defensorId, fecha, mes: fecha.slice(0, 7), categoria: 'Otras materias', especifica: '',
-    origen: 'Mesa de partes virtual', adultoMayor: false, ...marcaCreacion() }).catch(errorAlGuardar);
+  setDoc(ref, { defensorId, area: AREA_NOMBRE, fecha, mes: fecha.slice(0, 7), categoria: AREA.categoriaDefault, especifica: '',
+    origen: 'Mesa de partes virtual', ...casillasVacias(), ...marcaCreacion() }).catch(errorAlGuardar);
   ultimaAccion = { id: ref.id };
   document.getElementById('btnDeshacer').disabled = false;
   pintarTabla();
@@ -981,15 +1060,13 @@ function datosInforme(){
   const filas = DEFENSORES.map(d => {
     const propias = asignaciones.filter(a => a.defensorId === d.id && a.fecha.slice(0, 7) === mesElegido());
     const fila = { "Defensor": d.nombre };
-    CATEGORIAS.forEach(c => { fila[c] = propias.filter(a => a.categoria === c).length || 0; });
-    fila["Turno Consulta"] = propias.filter(esTurnoConsulta).length;
-    fila["Adulto Mayor"] = propias.filter(a => a.adultoMayor).length;
+    categoriasEnColumna().forEach(c => { fila[c] = propias.filter(a => a.categoria === c).length || 0; });
+    AREA.totales.forEach(t => { fila[t.nombre] = propias.filter(t.f).length; });
     fila["Total mes"] = propias.length;
     return fila;
   });
   const total = { "Defensor": "TOTAL" };
-  [...CATEGORIAS, "Turno Consulta", "Adulto Mayor"].forEach(c => { total[c] = filas.reduce((acc, f) => acc + f[c], 0); });
-  total["Total mes"] = filas.reduce((acc, f) => acc + f["Total mes"], 0);
+  [...categoriasEnColumna(), ...AREA.totales.map(t => t.nombre), "Total mes"].forEach(c => { total[c] = filas.reduce((acc, f) => acc + f[c], 0); });
   filas.push(total);
   return filas;
 }
@@ -1002,6 +1079,7 @@ function datosPorOrigen(){
     ORIGENES.forEach(o => {
       fila[o] = propias.filter(a => o === ORIGEN_TURNO ? esTurnoConsulta(a) : a.origen === o).length;
     });
+    AREA.casillas.forEach(k => { fila[CASILLAS_TODAS[k].split(' (')[0]] = propias.filter(a => a[k]).length; });
     fila["Total"] = propias.length;
     const reasigMes = reasignacionesLog.filter(r => r.fecha.slice(0, 7) === mesElegido());
     fila["Reasig. entraron"] = reasigMes.filter(r => r.aId === d.id).length;
@@ -1009,11 +1087,14 @@ function datosPorOrigen(){
     return fila;
   });
   const total = { "Defensor": "TOTAL" };
-  [...ORIGENES, "Total", "Reasig. entraron", "Reasig. salieron"].forEach(c => { total[c] = filas.reduce((acc, f) => acc + f[c], 0); });
+  columnasPorOrigen().slice(1).forEach(c => { total[c] = filas.reduce((acc, f) => acc + f[c], 0); });
   filas.push(total);
   return filas;
 }
 
+function columnasPorOrigen(){
+  return ["Defensor", ...ORIGENES, "Total", "Reasig. entraron", "Reasig. salieron", ...AREA.casillas.map(k => CASILLAS_TODAS[k].split(' (')[0])];
+}
 function tablaHtml(filas, columnas){
   return `<table>
       <thead><tr>${columnas.map(c => `<th>${c}</th>`).join('')}</tr></thead>
@@ -1024,24 +1105,24 @@ function tablaHtml(filas, columnas){
 function descargarExcel(){
   const hoja = XLSX.utils.json_to_sheet(datosInforme());
   const libro = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(libro, hoja, etiquetaMes(mesElegido()));
+  XLSX.utils.book_append_sheet(libro, hoja, AREA.corto + ' - ' + etiquetaMes(mesElegido()));
   XLSX.utils.book_append_sheet(libro, XLSX.utils.json_to_sheet(datosPorOrigen()), "Por origen");
-  XLSX.writeFile(libro, "Asignaciones_Asistencia_Legal_" + mesElegido() + ".xlsx");
+  XLSX.writeFile(libro, "Asignaciones_" + AREA_NOMBRE.replace(/ /g, '_') + "_" + mesElegido() + ".xlsx");
 }
 document.getElementById('btnDescargar').addEventListener('click', descargarExcel);
 document.getElementById('btnDescargarDesdeInforme').addEventListener('click', descargarExcel);
 
 document.getElementById('btnVistaInforme').addEventListener('click', () => {
   const filas = datosInforme();
-  const columnas = ["Defensor", ...CATEGORIAS, "Turno Consulta", "Adulto Mayor", "Total mes"];
+  const columnas = ["Defensor", ...categoriasEnColumna(), ...AREA.totales.map(t => t.nombre), "Total mes"];
   const mes = etiquetaMes(mesElegido());
   document.getElementById('hojaInforme').innerHTML = `
-    <h3>Asignaciones — Asistencia Legal · Lima Centro</h3>
+    <h3>Asignaciones — ${AREA_NOMBRE} · Lima Centro</h3>
     <p class="sub">${mes} · asignaciones a cada defensor, en materias y cantidades</p>
     <p style="font-size:11.5px;font-weight:700;color:var(--gris);margin:0 0 6px">Hoja 1 — ${mes} (la que se adjunta al informe)</p>
     ${tablaHtml(filas, columnas)}
     <p style="font-size:11.5px;font-weight:700;color:var(--gris);margin:18px 0 6px">Hoja 2 — Por origen (casos según la vía por la que llegaron)</p>
-    ${tablaHtml(datosPorOrigen(), ["Defensor", ...ORIGENES, "Total", "Reasig. entraron", "Reasig. salieron"])}
+    ${tablaHtml(datosPorOrigen(), columnasPorOrigen())}
     <p style="font-size:11.5px;color:var(--gris);margin:6px 0 0">Las reasignaciones son carga muerta: no suman al Total. En la fila TOTAL, "entraron" y "salieron" dan el mismo número, que es la cantidad de casos reasignados en el mes.</p>`;
   document.getElementById('fondoInforme').hidden = false;
 });
@@ -1050,24 +1131,110 @@ document.getElementById('fondoInforme').addEventListener('click', e => { if (e.t
 
 // ---------- Modal ----------
 const selMateria = document.getElementById('campoMateria');
-CATEGORIAS.forEach(c => selMateria.appendChild(new Option(c, c)));
-
 const selEspecifica = document.getElementById('campoEspecifica');
-selEspecifica.appendChild(new Option('— Sin precisar —', ''));
-MATERIAS_ESPECIFICAS.forEach(g => {
-  if (g.grupo){
+function casillasVacias(){ const o = {}; Object.keys(CASILLAS_TODAS).forEach(k => o[k] = false); return o; }
+function leerCasillas(){
+  const o = casillasVacias();
+  AREA.casillas.forEach(k => { o[k] = document.getElementById('casilla-' + k).checked; });
+  return o;
+}
+// Equipo multidisciplinario: la materia o delito depende del área del caso que apoya
+function llenarMateriasEquipo(){
+  selEspecifica.innerHTML = '';
+  selEspecifica.appendChild(new Option('— Elegir materia o delito —', ''));
+  MATERIAS_ESPECIFICAS.forEach(g => {
     const optg = document.createElement('optgroup');
-    optg.label = g.grupo;
-    g.items.forEach(m => optg.appendChild(new Option(m, m)));
+    optg.label = 'Asistencia Legal' + (g.grupo ? ' · ' + g.grupo : '');
+    g.items.forEach(m => optg.appendChild(new Option(m === 'Otra' ? 'Otra materia de Asistencia Legal (escribir)' : m, 'AL|' + m)));
     selEspecifica.appendChild(optg);
+  });
+  const optV = document.createElement('optgroup');
+  optV.label = 'Víctimas';
+  AREAS['Defensa de Víctimas'].categorias.forEach(c => optV.appendChild(new Option(c, 'V|' + c)));
+  optV.appendChild(new Option('Otro delito de Víctimas (escribir)', 'V|Otra'));
+  selEspecifica.appendChild(optV);
+  document.getElementById('campoEspecificaOtra').style.display = 'none';
+}
+// Del valor elegido ("AL|Alimentos…" o "V|Tortura") salen la columna (Asistencia Legal / Víctimas) y la materia
+function leerMateriaEquipo(){
+  const [pre, resto] = (selEspecifica.value || '|').split('|');
+  const texto = document.getElementById('campoEspecificaOtra').value.trim();
+  return { categoria: pre === 'V' ? 'Víctimas' : 'Asistencia Legal', especifica: resto === 'Otra' ? texto : resto };
+}
+
+let grupoElegido = '';
+function marcarGrupo(clave){
+  grupoElegido = clave;
+  [...document.getElementById('grupoUsuario').children].forEach(c => c.classList.toggle('activo', c.dataset.grupo === clave));
+}
+function construirFormulario(){
+  selMateria.innerHTML = '';
+  CATEGORIAS.forEach(c => selMateria.appendChild(new Option(c, c)));
+  document.getElementById('bloqueCategoria').style.display = (CATEGORIAS.length && !AREA.requiereMateria) ? '' : 'none';
+  document.getElementById('ayudaCategoria').style.display = AREA.usaEspecificas ? '' : 'none';
+
+  selEspecifica.innerHTML = '';
+  selEspecifica.appendChild(new Option('— Sin precisar —', ''));
+  if (AREA.usaEspecificas){
+    MATERIAS_ESPECIFICAS.forEach(g => {
+      if (g.grupo){
+        const optg = document.createElement('optgroup');
+        optg.label = g.grupo;
+        g.items.forEach(m => optg.appendChild(new Option(m, m)));
+        selEspecifica.appendChild(optg);
+      } else {
+        g.items.forEach(m => selEspecifica.appendChild(new Option(m, m)));
+      }
+    });
   } else {
-    g.items.forEach(m => selEspecifica.appendChild(new Option(m, m)));
+    selEspecifica.appendChild(new Option('Escribir el detalle', 'Otra'));
   }
-});
+  document.getElementById('etiquetaEspecifica').textContent = AREA.requiereMateria
+    ? 'Materia o delito del caso (obligatorio — para el Drive 1)'
+    : AREA_NOMBRE === 'Defensa de Víctimas'
+      ? 'Delito específico (opcional — para el Drive 1)' : 'Materia específica (opcional — para el Drive 1)';
+  document.getElementById('etiquetaCategoria').textContent = AREA.requiereMateria ? 'Área del caso' : 'Categoría';
+  if (AREA.requiereMateria) llenarMateriasEquipo();
+
+  const bloqueGrupo = document.getElementById('bloqueGrupo');
+  const grupoUsu = document.getElementById('grupoUsuario');
+  grupoUsu.innerHTML = '';
+  bloqueGrupo.style.display = AREA.gruposExclusivos ? '' : 'none';
+  if (AREA.gruposExclusivos){
+    const opciones = [['', 'Ninguno (va a Asistencia Legal o Víctimas según la materia)'], ...Object.entries(AREA.gruposExclusivos)];
+    opciones.forEach(([clave, texto]) => {
+      const div = document.createElement('div');
+      div.className = 'origen-opcion';
+      div.dataset.grupo = clave;
+      div.textContent = texto;
+      if (clave === '') div.style.gridColumn = '1 / -1';
+      div.addEventListener('click', () => marcarGrupo(clave));
+      grupoUsu.appendChild(div);
+    });
+  }
+  const grupoCas = document.getElementById('grupoCasillas');
+  grupoCas.innerHTML = AREA.casillas.map(k =>
+    `<label class="checkbox-adulto"><input type="checkbox" id="casilla-${k}"> ${CASILLAS_TODAS[k]}</label>`).join('');
+
+  grupoOrigen.innerHTML = '';
+  ORIGENES.forEach(o => {
+    const div = document.createElement('div');
+    div.className = 'origen-opcion';
+    div.textContent = o;
+    div.addEventListener('click', () => {
+      origenElegido = o;
+      [...grupoOrigen.children].forEach(c => c.classList.remove('activo'));
+      div.classList.add('activo');
+      document.getElementById('avisoOrigen').style.display = 'none';
+      actualizarNotaTurno();
+    });
+    grupoOrigen.appendChild(div);
+  });
+}
 selEspecifica.addEventListener('change', () => {
-  document.getElementById('campoEspecificaOtra').style.display = selEspecifica.value === 'Otra' ? 'block' : 'none';
+  document.getElementById('campoEspecificaOtra').style.display = (selEspecifica.value === 'Otra' || selEspecifica.value.endsWith('|Otra')) ? 'block' : 'none';
   const categoriaSugerida = categoriaParaEspecifica(selEspecifica.value === 'Otra' ? 'Otras materias' : selEspecifica.value);
-  if (categoriaSugerida){
+  if (categoriaSugerida && AREA.usaEspecificas){
     selMateria.value = categoriaSugerida;
     selMateria.disabled = true;
   } else {
@@ -1077,22 +1244,14 @@ selEspecifica.addEventListener('change', () => {
 
 const grupoOrigen = document.getElementById('grupoOrigen');
 let origenElegido = null;
-ORIGENES.forEach(o => {
-  const div = document.createElement('div');
-  div.className = 'origen-opcion';
-  div.textContent = o;
-  div.addEventListener('click', () => {
-    origenElegido = o;
-    [...grupoOrigen.children].forEach(c => c.classList.remove('activo'));
-    div.classList.add('activo');
-    document.getElementById('avisoOrigen').style.display = 'none';
-    actualizarNotaTurno();
-  });
-  grupoOrigen.appendChild(div);
-});
 
 function actualizarNotaTurno(){
-  document.getElementById('notaTurno').style.display = origenElegido === ORIGEN_TURNO ? 'block' : 'none';
+  const t = AREA.totales.find(x => x.origen && x.origen === origenElegido);
+  const nota = document.getElementById('notaTurno');
+  nota.style.display = t ? 'block' : 'none';
+  if (t) nota.textContent = CATEGORIAS.length
+    ? `${t.nombre}: elige arriba la categoría. El caso cuenta una sola vez en su categoría y además aparece en la columna ${t.nombre}.`
+    : `${t.nombre}: el caso cuenta una sola vez en el mes y además aparece en la columna ${t.nombre}.`;
 }
 let idEditando = null;
 let idPorBorrar = null;
@@ -1108,8 +1267,10 @@ function abrirModal(defensorId, nombre){
   document.getElementById('campoFecha').value = hoyIso();
   selMateria.selectedIndex = 0;
   selMateria.disabled = false;
+  if (AREA.requiereMateria) llenarMateriasEquipo();
   selEspecifica.selectedIndex = 0;
-  document.getElementById('campoAdulto').checked = false;
+  AREA.casillas.forEach(k => { document.getElementById('casilla-' + k).checked = false; });
+  if (AREA.gruposExclusivos) marcarGrupo('');
   document.getElementById('campoEspecificaOtra').style.display = 'none';
   document.getElementById('campoEspecificaOtra').value = '';
   [...grupoOrigen.children].forEach(c => c.classList.remove('activo'));
@@ -1134,8 +1295,10 @@ function abrirModalEdicion(id){
 
   selMateria.disabled = false;
   selMateria.value = registro.categoria;
+  if (AREA.requiereMateria) llenarMateriasEquipo();
 
-  const yaEsEspecifica = MATERIAS_ESPECIFICAS.some(g => g.items.includes(registro.especifica));
+  const yaEsEspecifica = (AREA.usaEspecificas && MATERIAS_ESPECIFICAS.some(g => g.items.includes(registro.especifica)))
+    || (AREA.requiereMateria && [...selEspecifica.options].some(o => o.value && o.value !== 'Otra' && o.value === registro.especifica));
   selEspecifica.value = yaEsEspecifica ? registro.especifica : '';
   document.getElementById('campoEspecificaOtra').style.display = 'none';
   document.getElementById('campoEspecificaOtra').value = '';
@@ -1144,11 +1307,20 @@ function abrirModalEdicion(id){
     document.getElementById('campoEspecificaOtra').style.display = 'block';
     document.getElementById('campoEspecificaOtra').value = registro.especifica;
   }
-  if (categoriaParaEspecifica(selEspecifica.value)) selMateria.disabled = true;
+  if (AREA.usaEspecificas && categoriaParaEspecifica(selEspecifica.value)) selMateria.disabled = true;
+  if (AREA.requiereMateria){
+    marcarGrupo(registro.grupo || '');
+    const pre = (registro.areaMateria || registro.categoria) === 'Víctimas' ? 'V|' : 'AL|';
+    const existe = [...selEspecifica.options].some(o => o.value === pre + registro.especifica);
+    selEspecifica.value = existe ? pre + registro.especifica : pre + 'Otra';
+    const otra = document.getElementById('campoEspecificaOtra');
+    otra.style.display = existe ? 'none' : 'block';
+    otra.value = existe ? '' : (registro.especifica || '');
+  }
 
   origenElegido = registro.origen;
-  document.getElementById('campoAdulto').checked = !!registro.adultoMayor;
-  if (registro.origen === "Turno presencial") origenElegido = ORIGEN_TURNO;
+  AREA.casillas.forEach(k => { document.getElementById('casilla-' + k).checked = !!registro[k]; });
+  if (registro.origen === "Turno presencial" && AREA_NOMBRE === 'Asistencia Legal') origenElegido = ORIGEN_TURNO;
   [...grupoOrigen.children].forEach(c => c.classList.toggle('activo', c.textContent === origenElegido));
   actualizarNotaTurno();
 
@@ -1163,6 +1335,15 @@ document.getElementById('btnCancelar').addEventListener('click', cerrarModal);
 document.getElementById('fondoModal').addEventListener('click', e => { if (e.target.id === 'fondoModal') cerrarModal(); });
 
 document.getElementById('btnGuardar').addEventListener('click', () => {
+  if (AREA.requiereMateria){
+    if (!selEspecifica.value || !leerMateriaEquipo().especifica){
+      const av = document.getElementById('avisoOrigen');
+      av.textContent = 'Elige la materia o delito del caso antes de guardar.';
+      av.style.display = 'block';
+      return;
+    }
+  }
+  document.getElementById('avisoOrigen').textContent = 'Elige el origen del caso antes de guardar.';
   if (!origenElegido){
     document.getElementById('avisoOrigen').style.display = 'block';
     return;
@@ -1171,11 +1352,24 @@ document.getElementById('btnGuardar').addEventListener('click', () => {
   if (especifica === 'Otra'){
     especifica = document.getElementById('campoEspecificaOtra').value.trim();
   }
+  let categoriaElegida = CATEGORIAS.length ? selMateria.value : AREA.categoriaDefault;
+  let extraEquipo = {};
+  if (AREA.requiereMateria){
+    const m = leerMateriaEquipo();
+    categoriaElegida = m.categoria;
+    especifica = m.especifica;
+    if (AREA.gruposExclusivos){
+      // La columna es el grupo del usuario; si no tiene grupo, Asistencia Legal o Víctimas según la materia
+      if (grupoElegido) categoriaElegida = AREA.gruposExclusivos[grupoElegido];
+      extraEquipo = { ...casillasVacias(), grupo: grupoElegido, areaMateria: m.categoria };
+      if (grupoElegido) extraEquipo[grupoElegido] = true;
+    }
+  }
 
   if (idEditando !== null){
     const fecha = document.getElementById('campoFecha').value || hoyIso();
-    const cambios = { fecha, mes: fecha.slice(0, 7), categoria: selMateria.value, especifica: especifica || '',
-      origen: origenElegido, adultoMayor: document.getElementById('campoAdulto').checked,
+    const cambios = { fecha, mes: fecha.slice(0, 7), categoria: categoriaElegida, especifica: especifica || '',
+      origen: origenElegido, ...leerCasillas(), ...extraEquipo,
       editadoPor: usuario.correo, editadoEn: serverTimestamp() };
     updateDoc(doc(db, 'asignaciones', idEditando), cambios).catch(errorAlGuardar);
     const enBusqueda = ultimaBusqueda.find(a => a.id === idEditando);
@@ -1183,8 +1377,8 @@ document.getElementById('btnGuardar').addEventListener('click', () => {
   } else {
     const fecha = document.getElementById('campoFecha').value || hoyIso();
     const ref = doc(collection(db, 'asignaciones'));
-    setDoc(ref, { defensorId: defensorActivo, fecha, mes: fecha.slice(0, 7), categoria: selMateria.value,
-      especifica: especifica || '', origen: origenElegido, adultoMayor: document.getElementById('campoAdulto').checked,
+    setDoc(ref, { defensorId: defensorActivo, area: AREA_NOMBRE, fecha, mes: fecha.slice(0, 7), categoria: categoriaElegida,
+      especifica: especifica || '', origen: origenElegido, ...leerCasillas(), ...extraEquipo,
       ...marcaCreacion() }).catch(errorAlGuardar);
     ultimaAccion = { id: ref.id };
     document.getElementById('btnDeshacer').disabled = false;
@@ -1210,7 +1404,7 @@ function llenarSelectsDefensores(){
 function cerrarReasig(){ document.getElementById('fondoReasig').hidden = true; }
 document.getElementById('btnRegistrarReasig').addEventListener('click', () => {
   document.getElementById('reFecha').value = hoyIso();
-  ['reReferencia', 'reNota'].forEach(i => document.getElementById(i).value = '');
+  ['reUsuario', 'reCarpeta', 'reNota'].forEach(i => document.getElementById(i).value = '');
   document.getElementById('reDe').value = '';
   document.getElementById('reA').value = '';
   document.getElementById('avisoReasig').style.display = 'none';
@@ -1222,16 +1416,20 @@ document.getElementById('btnCancelarReasig').addEventListener('click', cerrarRea
 document.getElementById('fondoReasig').addEventListener('click', e => { if (e.target.id === 'fondoReasig') cerrarReasig(); });
 document.getElementById('btnGuardarReasig').addEventListener('click', () => {
   const de = document.getElementById('reDe').value, a = document.getElementById('reA').value;
-  const referencia = document.getElementById('reReferencia').value.trim();
+  const usuarioRe = document.getElementById('reUsuario').value.trim();
+  const carpetaRe = document.getElementById('reCarpeta').value.trim();
+  const referencia = usuarioRe + (carpetaRe ? ' · Carpeta ' + carpetaRe : '');
   const aviso = document.getElementById('avisoReasig');
   let error = '';
-  if (!referencia) error = 'Escribe el código o una referencia del caso.';
+  if (!usuarioRe) error = 'Escribe el nombre completo del usuario.';
+  else if (!carpetaRe) error = 'Escribe el N° de carpeta defensorial.';
   else if (!de || !a) error = 'Elige quién lo tenía y a quién pasa.';
   else if (de === a) error = 'El defensor de origen y el de destino son el mismo.';
   if (error){ aviso.textContent = error; aviso.style.display = 'block'; return; }
   const fechaRe = document.getElementById('reFecha').value || hoyIso();
   setDoc(doc(collection(db, 'reasignaciones')), { fecha: fechaRe, mes: fechaRe.slice(0, 7), deId: de, aId: a, casoId: null,
-    referencia, nota: document.getElementById('reNota').value.trim(), ...marcaCreacion() }).catch(errorAlGuardar);
+    referencia, usuario: usuarioRe, carpeta: carpetaRe, area: AREA_NOMBRE,
+    nota: document.getElementById('reNota').value.trim(), ...marcaCreacion() }).catch(errorAlGuardar);
   document.getElementById('confirmacionReasig').style.display = 'block';
   document.getElementById('btnGuardarReasig').disabled = true;
   pintarTabla();
@@ -1264,6 +1462,51 @@ document.getElementById('selDia').addEventListener('change', () => {
 
 document.getElementById('selDia').value = hoyIso();
 document.getElementById('selMes').value = mesElegido();
+
+// ---------- Cambio de área ----------
+let areaInicialElegida = false;
+try { areaInicialElegida = !!localStorage.getItem('megaalegra-area'); } catch (e) {}
+async function cargarDefensoresArea(){
+  const snap = await conLimite(getDocs(query(collection(db, 'defensores'), where('area', '==', AREA_NOMBRE))), 20000, 'cargar defensores');
+  __log('Defensores de ' + AREA_NOMBRE + ' leídos: ' + snap.size);
+  DEFENSORES = snap.docs.map(d => ({ id: d.id, ...d.data() }))
+    .filter(d => d.activo !== false)
+    .map(d => ({ id: d.id, nombre: d.nombre, nota: d.notas || '', orden: d.orden }))
+    .sort((a, b) => (a.orden ?? 999) - (b.orden ?? 999) || a.nombre.localeCompare(b.nombre, 'es'));
+}
+async function cambiarArea(nombre){
+  AREA_NOMBRE = nombre; AREA = AREAS[nombre]; CATEGORIAS = AREA.categorias; ORIGENES = AREA.origenes;
+  document.getElementById('selArea').value = nombre;
+  try { localStorage.setItem('megaalegra-area', nombre); } catch (e) {}
+  detalleAbiertoId = null; ultimaAccion = null; ultimaBusqueda = [];
+  await cargarDefensoresArea();
+  construirFormulario();
+  llenarSelectsDefensores();
+  document.getElementById('subtituloArea').textContent = nombre + ' · Lima Centro';
+  document.getElementById('avisoSinDefensores').hidden = DEFENSORES.length > 0;
+  document.getElementById('btnCargarLista').hidden = !(usuario && usuario.rol === 'abogado' && LISTAS_INICIALES[nombre]);
+  pintarTabla();
+}
+document.getElementById('selArea').addEventListener('change', e => {
+  cambiarArea(e.target.value).catch(err => { console.error(err); avisar('No se pudo cambiar de área: ' + (err.code || err.message), 6000); });
+});
+// Carga única de la lista de defensores de Víctimas o del Equipo multidisciplinario
+document.getElementById('btnCargarLista').addEventListener('click', async () => {
+  const lista = LISTAS_INICIALES[AREA_NOMBRE];
+  if (!lista) return;
+  const btn = document.getElementById('btnCargarLista');
+  btn.disabled = true; btn.textContent = 'Cargando…';
+  try {
+    for (let i = 0; i < lista.length; i++){
+      const x = lista[i];
+      await setDoc(doc(db, 'defensores', x.id), { nombre: x.nombre, area: AREA_NOMBRE, celular: x.celular, correo: '',
+        notas: x.notas, activo: true, orden: i + 1, rol: 'defensor', actualizadoEn: new Date().toISOString() }, { merge: true });
+    }
+    avisar('Se cargaron ' + lista.length + ' personas en ' + AREA_NOMBRE);
+    await cambiarArea(AREA_NOMBRE);
+  } catch (err){ errorAlGuardar(err); }
+  btn.disabled = false; btn.textContent = 'Cargar la lista de esta área desde el Excel del Drive 2';
+});
 
 // ---------- Inicio de sesión ----------
 const msgLogin = document.getElementById('msgLogin');
@@ -1325,16 +1568,13 @@ onAuthStateChanged(auth, async user => {
       await signOut(auth);
       return;
     }
-    usuario = { correo, nombre: ficha.data().nombre || correo, rol: ficha.data().rol || '' };
+    usuario = { correo, nombre: ficha.data().nombre || correo, rol: ficha.data().rol || '', area: ficha.data().area || '' };
 
     msgLogin.textContent = 'Cargando defensores…';
-    const snap = await conLimite(getDocs(query(collection(db, 'defensores'), where('area', '==', 'Asistencia Legal'))), 20000, 'cargar defensores');
-    __log('Defensores de Asistencia Legal leídos: ' + snap.size);
-    DEFENSORES = snap.docs.map(d => ({ id: d.id, ...d.data() }))
-      .filter(d => d.activo !== false)
-      .map(d => ({ id: d.id, nombre: d.nombre, nota: d.notas || '' }))
-      .sort((a, b) => a.nombre.localeCompare(b.nombre, 'es'));
-    llenarSelectsDefensores();
+    let areaInicial = 'Asistencia Legal';
+    try { const g = localStorage.getItem('megaalegra-area'); if (g && AREAS[g]) areaInicial = g; } catch (e) {}
+    if (!areaInicialElegida && (usuario.area || '').toLowerCase().startsWith('victima')) areaInicial = 'Defensa de Víctimas';
+    await cambiarArea(areaInicial);
 
     document.body.classList.toggle('solo-lectura', usuario.rol !== 'abogado');
     document.getElementById('usuarioSesion').textContent =
