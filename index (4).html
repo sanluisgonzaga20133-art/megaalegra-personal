@@ -1,0 +1,1299 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Agenda diaria — Asistencia Legal · MEGA ALEGRA</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Source+Serif+4:opsz,wght@8..60,500;8..60,600;8..60,700&family=Public+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+<style>
+  :root{
+    --rojo:#D91023; --rojo-oscuro:#A10C1A; --dorado:#B8873A;
+    --tinta:#241E1B; --gris:#6A635C; --gris-claro:#9A938A;
+    --papel:#F7F2EA; --panel:#FFFFFF; --linea:#E6DECF;
+    --verde:#3F6B52; --verde-fondo:#EAF2ED; --azul:#2C6478;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;padding:0}
+  body{
+    font-family:'Public Sans',system-ui,sans-serif;
+    background:var(--papel); color:var(--tinta);
+    padding: max(10px, env(safe-area-inset-top,0px)) 12px 30px;
+  }
+  .marco{max-width:none;margin:0 auto}
+
+  .aviso-preview{
+    background:#FBEEEC; border:1px solid var(--rojo);
+    color:var(--rojo-oscuro); font-size:13px; font-weight:600;
+    padding:4px 12px; border-radius:8px; margin-bottom:8px;
+    display:inline-block;
+  }
+
+  header{
+    background:var(--rojo); color:#fff; border-radius:14px;
+    padding:12px 18px; margin-bottom:12px; position:relative;
+  }
+  header::after{content:"";display:block;height:3px;background:var(--dorado);margin-top:10px;border-radius:2px}
+  header h1{
+    font-family:'Source Serif 4',Georgia,serif; font-weight:600;
+    font-size:19px; margin:0 0 2px;
+  }
+  header p{margin:0;font-size:14px;color:rgba(255,255,255,.88)}
+  .mes-selector{
+    margin-top:10px; display:flex; align-items:center; gap:8px; flex-wrap:wrap;
+  }
+  .mes-selector select, .mes-selector input{width:auto !important}
+  .mes-selector select{
+    font-family:inherit; font-size:14px; padding:7px 10px;
+    border-radius:7px; border:none; background:#fff; color:var(--tinta);
+    font-weight:600;
+  }
+  .btn-descargar{
+    font-family:inherit;font-size:13.5px;font-weight:700;
+    padding:7px 14px;border-radius:7px;border:1.5px solid #fff;
+    background:transparent;color:#fff;cursor:pointer;
+  }
+  .btn-descargar:hover{background:rgba(255,255,255,.15)}
+  .btn-toggle{
+    font-family:inherit;font-size:13px;font-weight:600;
+    padding:6px 12px;border-radius:20px;border:1.5px solid rgba(255,255,255,.5);
+    background:transparent;color:#fff;cursor:pointer;
+  }
+  .btn-toggle.activo{background:#fff;color:var(--rojo-oscuro);border-color:#fff}
+
+  .tabla-wrap{
+    background:var(--panel); border:1px solid var(--linea);
+    border-radius:14px; overflow:auto;
+    max-height:calc(100vh - 24px);
+  }
+  thead th{position:sticky; top:0; z-index:3; background:#fff}
+  thead th:first-child{left:0; z-index:5}
+  tbody td:first-child{position:sticky; left:0; z-index:2; background:#fff}
+  .celda-nombre{display:flex; align-items:center; gap:8px}
+  .panel-busqueda{
+    background:var(--panel); border:1.5px dashed var(--gris-claro);
+    border-radius:14px; padding:16px; margin-bottom:16px;
+  }
+  .panel-busqueda select, .panel-busqueda input{
+    font-family:inherit;font-size:14px;padding:8px 10px;border-radius:7px;
+    border:1.5px solid var(--linea);background:var(--papel);color:var(--tinta);
+  }
+  .resultado-busqueda{
+    display:flex;justify-content:space-between;align-items:center;gap:10px;
+    font-size:13px;padding:8px 10px;border-bottom:1px dashed var(--linea);
+  }
+  .resultado-busqueda:last-child{border-bottom:none}
+  table{border-collapse:collapse; width:100%; min-width:640px}
+  thead th{
+    text-align:left; font-size:12px; font-weight:700; color:var(--gris);
+    padding:6px 8px; border-bottom:2px solid var(--linea); border-right:1px solid var(--linea); white-space:nowrap;
+  }
+  thead th:first-child{border-right:2px solid var(--gris-claro)}
+  thead th.num{text-align:center; max-width:90px}
+  thead th.materia-col{text-align:center; font-size:10.5px; line-height:1.2; min-width:58px; max-width:84px; white-space:normal; hyphens:auto}
+  thead th.total-col{text-align:center; color:var(--tinta); border-left:2px solid var(--linea)}
+  thead th.adulto-col{text-align:center; border-left:2px solid var(--linea)}
+  tbody td{padding:5px 8px; border-bottom:1px solid var(--linea); border-right:1px solid var(--linea); font-size:14px; vertical-align:middle}
+  tbody td:first-child{border-right:2px solid var(--gris-claro)}
+  tbody tr:last-child td{border-bottom:none}
+  tbody tr.fila-par td{background:#FBF9F4}
+  tbody tr:hover{background:#FCFAF6}
+  tbody tr.fila-responsable td{background:#FBF1E0}
+  tbody tr.fila-responsable:hover td{background:#F7E9D2}
+  tbody tr.fila-sugerida td:first-child{box-shadow:inset 3px 0 0 var(--verde)}
+  .etiqueta-sugerido{
+    display:inline-block; margin-left:6px; font-size:10.5px; font-weight:700;
+    color:var(--verde); background:var(--verde-fondo); padding:1px 6px; border-radius:8px;
+    vertical-align:middle;
+  }
+  .grupo-btns{display:flex; gap:4px; justify-content:center; flex:none}
+  .btn-rapido{
+    width:30px;height:30px;border-radius:8px;border:1.5px solid var(--verde);
+    background:var(--verde-fondo);color:var(--verde);font-size:15px;font-weight:700;
+    cursor:pointer;line-height:1;
+  }
+  .btn-rapido:hover{background:#DCEBE1}
+  .btn-detalle-mas{
+    width:30px;height:30px;border-radius:8px;border:1.5px solid var(--linea);
+    background:#fff;color:var(--gris);font-size:13px;cursor:pointer;line-height:1;
+  }
+  .btn-detalle-mas:hover{background:var(--papel)}
+  .nombre{font-weight:600; min-width:250px; font-size:12.5px}
+  .nombre .nota{display:block; font-size:11.5px; font-weight:500; color:var(--gris); margin-top:1px}
+  .nombre .nota.responsable{color:var(--dorado); font-weight:700}
+  .num{text-align:center; font-variant-numeric:tabular-nums; font-weight:600}
+  .num.cero{color:var(--gris-claro); font-weight:400}
+  .celda-total{border-left:2px solid var(--linea); font-weight:700}
+  .celda-adulto{border-left:2px solid var(--linea)}
+  .btn-mas{
+    width:30px;height:30px;border-radius:8px;border:1.5px solid var(--rojo);
+    background:#fff;color:var(--rojo-oscuro);font-size:17px;font-weight:700;
+    cursor:pointer;line-height:1;
+  }
+  .btn-mas:hover{background:#FBEEEC}
+  .btn-detalle{
+    background:none;border:none;color:var(--azul);font-size:12.5px;
+    font-weight:600;cursor:pointer;padding:0;text-decoration:underline;
+  }
+  .fila-detalle td{background:#FBF9F4;padding:0 14px 14px}
+  .fila-detalle[hidden]{display:none}
+
+  .mini-cal{ font-size:0; white-space:nowrap }
+  .mini-cal-fila{ display:flex; gap:1px; align-items:center }
+  .mini-dia{
+    width:14px; height:18px; border-radius:2px; background:#EFE9DD;
+    font-size:9px; font-weight:600; color:var(--gris);
+    display:flex; align-items:center; justify-content:center;
+    box-sizing:border-box; font-family:inherit;
+  }
+  .mini-dia.vacio{background:transparent}
+  .mini-dia.n1{background:#F4D9A0;color:var(--tinta)}
+  .mini-dia.n2{background:#E8B45B;color:#fff}
+  .mini-dia.n3{background:var(--dorado);color:#fff}
+  .mini-dia.n4{background:var(--rojo-oscuro);color:#fff}
+  .mini-dia.finde{box-shadow:inset 0 0 0 1px #C9A96A}
+  .mini-dia.hoy{box-shadow:inset 0 0 0 1.5px var(--rojo)}
+  .mini-total{
+    min-width:22px; height:18px; border-radius:2px; background:var(--tinta); color:#fff;
+    font-size:9.5px; font-weight:700; display:flex; align-items:center; justify-content:center;
+    margin:0 4px 0 1px; padding:0 2px;
+  }
+  .detalle-item{
+    display:flex;justify-content:space-between;align-items:center;gap:10px;
+    font-size:13px;padding:6px 0;border-bottom:1px dashed var(--linea);
+  }
+  .detalle-item:last-child{border-bottom:none}
+  .detalle-acciones{display:flex;gap:10px;flex:none}
+  .btn-editar, .btn-borrar{
+    background:none;border:none;font-size:12px;font-weight:600;cursor:pointer;padding:0;
+  }
+  .btn-editar{color:var(--azul)}
+  .btn-reasignar{color:#7A3B57}
+  .btn-reasignar-si{color:#fff;background:#7A3B57;border-radius:6px;padding:4px 10px}
+  .btn-borrar{color:var(--rojo-oscuro)}
+  .btn-borrar-si{color:#fff;background:var(--rojo-oscuro);border-radius:6px;padding:4px 10px}
+  .btn-borrar-no{color:var(--gris);background:var(--linea);border-radius:6px;padding:4px 10px}
+  .detalle-vacio{font-size:13px;color:var(--gris);padding:8px 0}
+
+  /* Conteo del dia con color segun cantidad */
+  .badge-hoy{display:inline-flex;min-width:26px;height:26px;padding:0 7px;border-radius:13px;
+    align-items:center;justify-content:center;font-weight:700;font-size:13.5px;color:#fff}
+  .badge-hoy.c1{background:#2E8B57}
+  .badge-hoy.c2{background:#D91023}
+  .badge-hoy.c3{background:#6CC5E8;color:#0B3B4F}
+  .badge-hoy.c4{background:#E8871E}
+  .badge-hoy.c5{background:#7B3FA0}
+  .badge-hoy.c6{background:#111}
+  thead th.ref-col, td.ref-col{background:#F1EEE8 !important;color:var(--gris);text-align:center}
+  thead th.ref-col{font-size:10.5px;line-height:1.2;white-space:normal;max-width:70px}
+  thead th.hoy-col{text-align:center;color:var(--tinta)}
+  .leyenda-hoy{display:flex;gap:6px;flex-wrap:wrap;align-items:center;font-size:12px;margin-top:10px;color:var(--gris)}
+  .leyenda-hoy .badge-hoy{min-width:22px;height:22px;font-size:12px}
+  /* Vista previa del informe */
+  .modal.informe{max-width:980px}
+  .hoja-informe{border:1px solid var(--linea);border-radius:8px;padding:18px;background:#fff;overflow-x:auto}
+  .hoja-informe h3{font-family:'Source Serif 4',Georgia,serif;margin:0 0 2px;font-size:17px}
+  .hoja-informe .sub{margin:0 0 12px}
+  .hoja-informe table{min-width:760px;font-size:12.5px}
+  .hoja-informe th, .hoja-informe td{border:1px solid #BDB5A8 !important;padding:5px 7px !important;font-size:12px}
+  .hoja-informe thead th{background:#EFE9DD;color:var(--tinta);white-space:normal;text-align:center}
+  .hoja-informe td.n{text-align:center;font-variant-numeric:tabular-nums}
+  .hoja-informe tr.fila-total td{font-weight:700;background:#EFE9DD}
+
+  /* Login y sesión */
+  #pantallaLogin{min-height:100vh;display:flex;align-items:center;justify-content:center;padding:20px}
+  .caja-login{background:#fff;border:1px solid var(--linea);border-radius:14px;padding:28px;max-width:380px;width:100%;box-shadow:0 10px 30px rgba(0,0,0,.08)}
+  .caja-login h2{font-family:'Source Serif 4',Georgia,serif;margin:0 0 4px;color:var(--rojo-oscuro)}
+  .caja-login input{width:100%;padding:10px 12px;border:1px solid var(--linea);border-radius:8px;font:inherit;margin-top:4px;box-sizing:border-box}
+  .caja-login button{width:100%;margin-top:16px;padding:11px;border:none;border-radius:8px;background:var(--rojo-oscuro);color:#fff;font:inherit;font-weight:700;cursor:pointer}
+  .caja-login button:disabled{opacity:.6}
+  .caja-login .enlace{background:none;color:var(--gris);font-weight:500;margin-top:8px;padding:4px;text-decoration:underline}
+  #msgLogin{margin-top:12px;font-size:13px;font-weight:600;color:var(--rojo-oscuro);min-height:18px}
+  .barra-sesion{display:flex;justify-content:space-between;align-items:center;gap:10px;margin-bottom:8px;font-size:12.5px;color:var(--gris)}
+  .barra-sesion button{background:#fff;border:1px solid var(--linea);border-radius:8px;padding:4px 12px;font:inherit;cursor:pointer}
+  #aviso{position:fixed;left:50%;bottom:calc(20px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);background:#222;color:#fff;
+    padding:10px 16px;border-radius:10px;font-size:13.5px;font-weight:600;z-index:99;display:none;max-width:90vw}
+  /* Asistentes: solo ven y descargan */
+  .solo-lectura #cuerpoTabla .btn-rapido, .solo-lectura .btn-detalle-mas, .solo-lectura .btn-editar,
+  .solo-lectura .btn-reasignar, .solo-lectura .btn-borrar, .solo-lectura .btn-borrar-reasig,
+  .solo-lectura #btnRegistrarReasig, .solo-lectura #btnDeshacer{display:none !important}
+
+  .pie-nota{font-size:12.5px;color:var(--gris);margin-top:14px;line-height:1.5}
+
+  /* ---- Modal ---- */
+  .fondo-modal{
+    position:fixed;inset:0;background:rgba(36,30,27,.45);
+    display:flex;align-items:flex-end;justify-content:center;z-index:50;
+  }
+  .fondo-modal[hidden]{display:none}
+  .modal{
+    background:#fff;width:100%;max-width:480px;border-radius:16px 16px 0 0;
+    padding:22px 22px calc(22px + env(safe-area-inset-bottom,0px));
+    max-height:88vh;overflow-y:auto;
+  }
+  @media(min-width:560px){
+    .fondo-modal{align-items:center}
+    .modal{border-radius:16px}
+  }
+  .modal h2{font-family:'Source Serif 4',Georgia,serif;font-size:19px;margin:0 0 3px}
+  .modal .sub{font-size:13.5px;color:var(--gris);margin:0 0 18px}
+  label.campo{display:block;font-size:13px;font-weight:700;color:var(--tinta);margin:14px 0 6px}
+  select,input[type="date"],input[type="text"]{
+    width:100%;font-family:inherit;font-size:15px;padding:11px 12px;
+    border:1.5px solid var(--linea);border-radius:9px;background:var(--papel);color:var(--tinta);
+  }
+  select:focus,input:focus{outline:none;border-color:var(--rojo);background:#fff}
+  .origen-grupo{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+  .origen-opcion{
+    border:1.5px solid var(--linea);border-radius:9px;padding:10px 12px;
+    font-size:13.5px;cursor:pointer;display:flex;align-items:center;gap:8px;
+  }
+  .origen-opcion.activo{border-color:var(--rojo);background:#FBEEEC;font-weight:600}
+  .checkbox-adulto{
+    display:flex;align-items:center;gap:9px;margin-top:16px;
+    border:1.5px solid var(--linea);border-radius:9px;padding:11px 12px;
+    font-size:13.5px;cursor:pointer;
+  }
+  .checkbox-adulto input{width:17px;height:17px;margin:0}
+  .acciones-modal{display:flex;gap:10px;margin-top:20px}
+  .acciones-modal button{
+    flex:1;padding:13px;border-radius:9px;font-size:15px;font-weight:700;
+    border:none;cursor:pointer;font-family:inherit;
+  }
+  .btn-cancelar{background:var(--papel);color:var(--tinta);border:1.5px solid var(--linea) !important}
+  .btn-guardar{background:var(--rojo);color:#fff}
+  .btn-guardar:disabled{background:#D8CFC3;cursor:default}
+  .confirmacion{
+    background:var(--verde-fondo);color:var(--verde);border-radius:9px;
+    padding:10px 12px;font-size:13.5px;font-weight:600;margin-top:14px;display:none;
+  }
+</style>
+</head>
+<body>
+<div id="pantallaLogin">
+  <div class="caja-login">
+    <h2>MEGA ALEGRA · Personal</h2>
+    <p style="margin:0 0 16px;color:var(--gris);font-size:13.5px">Agenda diaria de asignaciones · Asistencia Legal</p>
+    <label class="campo" for="loginCorreo">Correo</label>
+    <input type="email" id="loginCorreo" autocomplete="username">
+    <label class="campo" for="loginClave" style="margin-top:10px;display:block">Contraseña</label>
+    <input type="password" id="loginClave" autocomplete="current-password">
+    <button id="btnEntrar">Entrar</button>
+    <button class="enlace" id="btnOlvide">Olvidé mi contraseña</button>
+    <div id="msgLogin"></div>
+  </div>
+</div>
+<div id="aviso"></div>
+
+<div class="marco" id="app" hidden>
+  <div class="barra-sesion">
+    <span id="usuarioSesion"></span>
+    <button id="btnSalir">Salir</button>
+  </div>
+
+  <header>
+    <h1>Agenda diaria de asignaciones</h1>
+    <p>Asistencia Legal · Lima Centro</p>
+    <div class="mes-selector">
+      <select id="selMes"></select>
+      <input type="date" id="selDia" style="padding:6px 10px;border-radius:7px;border:none;font-family:inherit;font-size:14px;font-weight:600">
+      <button class="btn-descargar" id="btnVistaInforme">🖨 Vista previa del informe</button>
+      <button class="btn-descargar" id="btnDescargar">⬇ Descargar Excel</button>
+      <button class="btn-descargar" id="btnDeshacer" disabled>↺ Deshacer último</button>
+      <button class="btn-descargar" id="btnRegistrarReasig">🔁 Registrar reasignación</button>
+      <button class="btn-descargar" id="btnBuscar">🔍 Buscar caso de otro mes</button>
+    </div>
+    <div class="mes-selector" style="margin-top:10px">
+      <span id="etiquetaSemana" style="font-size:13px;color:rgba(255,255,255,.85)"></span>
+    </div>
+  </header>
+
+  <div class="panel-busqueda" id="panelBusqueda" hidden>
+    <p style="margin:0 0 10px;font-size:13.5px;font-weight:700">Buscar un caso sin importar el mes o año</p>
+    <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:end">
+      <div>
+        <label style="display:block;font-size:12px;font-weight:600;color:var(--gris);margin-bottom:4px">Defensor</label>
+        <select id="buscarDefensor"></select>
+      </div>
+      <div>
+        <label style="display:block;font-size:12px;font-weight:600;color:var(--gris);margin-bottom:4px">Desde</label>
+        <input type="date" id="buscarDesde">
+      </div>
+      <div>
+        <label style="display:block;font-size:12px;font-weight:600;color:var(--gris);margin-bottom:4px">Hasta</label>
+        <input type="date" id="buscarHasta">
+      </div>
+      <button class="btn-rapido" id="btnEjecutarBusqueda" style="width:auto;padding:0 16px">Buscar</button>
+    </div>
+    <div id="resultadosBusqueda" style="margin-top:12px"></div>
+  </div>
+
+  <div class="tabla-wrap">
+    <table>
+      <thead><tr id="filaEncabezados"></tr></thead>
+      <tbody id="cuerpoTabla"></tbody>
+    </table>
+  </div>
+
+  <div class="leyenda-hoy">Casos del día:
+    <span class="badge-hoy c1">1</span><span class="badge-hoy c2">2</span><span class="badge-hoy c3">3</span>
+    <span class="badge-hoy c4">4</span><span class="badge-hoy c5">5</span><span class="badge-hoy c6">6+</span>
+  </div>
+  <p class="pie-nota">"Nuevos mes ant." y "Consultas mes ant." (en gris) son solo referencia: vienen de Consolidación, no se editan aquí; muestran "—" hasta que se migre ese Drive. "Adulto Mayor" cuenta los casos marcados con la casilla de adulto mayor, sea cual sea su materia (tampoco se suman dos veces). "Turno Consulta" es lo mismo que Turno presencial: esos casos cuentan en su materia y la columna Turno Consulta muestra cuántos de ellos llegaron por esa vía (no se suman dos veces). "Mes", "Hoy" y las categorías cuentan solo casos nuevos asignados. Las reasignaciones son carga muerta: no suman a ningún total, solo se ven en "Reasig." (+ entraron / − salieron) y en el detalle de cada defensor. Para reasignar un caso de otro mes o que nunca se registró aquí, usa "🔁 Registrar reasignación". La fila con franja verde y "Sugerido" es la de menor carga (sin contar licencias ni Responsables de Área). El "+" verde asigna al toque; "···" abre el formulario completo. Las filas doradas con ★ son las Responsables de Área. Toca cualquier número para ver el detalle.</p>
+</div>
+
+<div class="fondo-modal" id="fondoInforme" hidden>
+  <div class="modal informe">
+    <h2>Vista previa del informe mensual</h2>
+    <p class="sub">Así saldrá el Excel que adjuntas al informe para el Director Distrital.</p>
+    <div class="hoja-informe" id="hojaInforme"></div>
+    <div class="acciones-modal">
+      <button class="btn-cancelar" id="btnCerrarInforme">Cerrar</button>
+      <button class="btn-guardar" id="btnDescargarDesdeInforme">⬇ Descargar este Excel</button>
+    </div>
+  </div>
+</div>
+
+<div class="fondo-modal" id="fondoReasig" hidden>
+  <div class="modal">
+    <h2>Registrar reasignación</h2>
+    <p class="sub">Para cualquier caso: de este mes, de meses o años anteriores, o que nunca se registró en la app. No suma como caso nuevo.</p>
+    <label class="campo" for="reFecha">Fecha de la reasignación</label>
+    <input type="date" id="reFecha">
+    <label class="campo" for="reReferencia">Código o referencia del caso</label>
+    <input type="text" id="reReferencia" placeholder="Ej. 2025MSC000123456, o nombre del usuario">
+    <label class="campo" for="reDe">Lo tenía</label>
+    <select id="reDe"></select>
+    <label class="campo" for="reA">Pasa a</label>
+    <select id="reA"></select>
+    <label class="campo" for="reNota">Motivo (opcional)</label>
+    <input type="text" id="reNota" placeholder="Ej. licencia, conflicto de intereses">
+    <div id="avisoReasig" style="display:none;color:var(--rojo-oscuro);font-size:12.5px;margin-top:8px;font-weight:600"></div>
+    <div class="confirmacion" id="confirmacionReasig">✓ Reasignación registrada</div>
+    <div class="acciones-modal">
+      <button class="btn-cancelar" id="btnCancelarReasig">Cancelar</button>
+      <button class="btn-guardar" id="btnGuardarReasig">Guardar</button>
+    </div>
+  </div>
+</div>
+
+<div class="fondo-modal" id="fondoModal" hidden>
+  <div class="modal">
+    <h2 id="modalNombre">Nueva asignación</h2>
+    <p class="sub" id="modalSub"></p>
+
+    <label class="campo" for="campoFecha">Fecha</label>
+    <input type="date" id="campoFecha">
+
+    <label class="campo" for="campoMateria">Categoría</label>
+    <select id="campoMateria"></select>
+    <div style="font-size:12px;color:var(--gris);margin-top:4px">Si eliges una materia específica abajo que no sea Desalojo o Laboral, esto se completa solo con "Otras materias".</div>
+
+    <label class="campo" for="campoEspecifica">Materia específica (opcional — para el Drive 1)</label>
+    <select id="campoEspecifica"></select>
+    <input type="text" id="campoEspecificaOtra" placeholder="¿Cuál?" style="margin-top:8px;display:none">
+
+    <label class="checkbox-adulto"><input type="checkbox" id="campoAdulto"> El usuario es adulto mayor</label>
+
+    <label class="campo">Origen del caso</label>
+    <div class="origen-grupo" id="grupoOrigen"></div>
+    <div id="notaTurno" style="display:none;background:#EAF2ED;color:var(--verde);border-radius:8px;padding:8px 10px;font-size:12.5px;font-weight:600;margin-top:8px">Turno Consulta: elige arriba la materia del formato. El caso cuenta una sola vez en su materia y además aparece en la columna Turno Consulta.</div>
+    <div id="avisoOrigen" style="display:none;color:var(--rojo-oscuro);font-size:12.5px;margin-top:6px;font-weight:600">Elige el origen del caso antes de guardar.</div>
+
+    <div class="confirmacion" id="confirmacionGuardado">✓ Registrado</div>
+
+    <div class="acciones-modal">
+      <button class="btn-cancelar" id="btnCancelar">Cancelar</button>
+      <button class="btn-guardar" id="btnGuardar">Guardar</button>
+    </div>
+  </div>
+</div>
+
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
+import { getAuth, onAuthStateChanged, signInWithEmailAndPassword, signOut, sendPasswordResetEmail }
+  from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
+import { initializeFirestore, persistentLocalCache, persistentMultipleTabManager, collection, doc, getDoc, getDocs,
+  setDoc, updateDoc, deleteDoc, deleteField, query, where, onSnapshot, serverTimestamp }
+  from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+
+const firebaseConfig = {
+  apiKey: "AIzaSyBHxewV5R3CAj-5i3AzCgfdKvwI5A3jXnA",
+  authDomain: "defensapublica-limacentro.firebaseapp.com",
+  projectId: "defensapublica-limacentro",
+  storageBucket: "defensapublica-limacentro.firebasestorage.app",
+  messagingSenderId: "595677954487",
+  appId: "1:595677954487:web:8a68160c5927bf5cf0a832"
+};
+const fbApp = initializeApp(firebaseConfig);
+const auth = getAuth(fbApp);
+// Caché local: si se corta el internet, lo registrado se guarda y se sube solo al volver la conexión
+const db = initializeFirestore(fbApp, { localCache: persistentLocalCache({ tabManager: persistentMultipleTabManager() }) });
+
+let usuario = null; // { correo, nombre, rol }
+
+function avisar(texto, ms = 3500){
+  const a = document.getElementById('aviso');
+  a.textContent = texto; a.style.display = 'block';
+  clearTimeout(avisar.t); avisar.t = setTimeout(() => { a.style.display = 'none'; }, ms);
+}
+function errorAlGuardar(err){
+  console.error(err);
+  avisar(err && err.code === 'permission-denied'
+    ? 'No tienes permiso para esta acción (solo abogados registran y editan).'
+    : 'No se pudo guardar. Revisa tu conexión e inténtalo de nuevo.', 5000);
+}
+function marcaCreacion(){ return { creadoPor: usuario.correo, creadoEn: serverTimestamp() }; }
+
+// ---------- Defensores: vienen de Firestore (colección defensores, área Asistencia Legal, activos) ----------
+let DEFENSORES = [];
+
+// Las 7 categorías con seguimiento propio + 1 genérica para todo lo demás (alimentos, tenencia, etc.)
+const CATEGORIAS = [
+  "Desalojo", "Laboral", "Desprotección Familiar",
+  "Procedimiento Adm. de Adopción", "Riesgo por Desprotección",
+  "Otras materias"
+];
+
+// Las 19 materias oficiales del Art. 9-A (para el detalle que va al Drive 1; no crean columna en Drive 2)
+const MATERIAS_ESPECIFICAS = [
+  { grupo: "Derecho de Familia", items: [
+    "Alimentos y filiación", "Aumento y prorrateo de alimentos",
+    "Reducción, exoneración o extinción de pensión alimenticia",
+    "Tenencia y régimen de visita (a favor de NNA)", "Separación convencional y divorcio ulterior",
+    "Tenencia y custodia", "Régimen de Visitas", "Consejo de familia",
+    "Protección de NNA sin cuidados parentales o en riesgo", "Declaración de unión de hecho",
+    "Materias conexas de violencia familiar"
+  ]},
+  { grupo: "Civil", items: [
+    "Rectificación de partidas", "Sucesión intestada", "Inscripción de defunción",
+    "Interdicción", "Apoyos y salvaguardias", "Desalojo (casa habitación)"
+  ]},
+  { grupo: "Administrativo", items: ["Impugnación de resolución administrativa"] },
+  { grupo: "Laboral", items: ["Nulidad de despido, despido arbitrario o beneficios sociales"] },
+  { grupo: "Contencioso Administrativo", items: ["Previsional"] },
+  { grupo: "", items: ["Otra"] }
+];
+
+// Turno Consulta = Turno presencial: el caso se registra en su materia Y además suma en la columna Turno Consulta
+const ORIGEN_TURNO = "Turno presencial (Turno Consulta)";
+function esTurnoConsulta(a){ return a.origen === ORIGEN_TURNO || a.origen === "Turno presencial"; }
+
+const ORIGENES = [
+  "Mesa de partes virtual", "Fono Alegra", "Correo institucional", "Turno presencial (Turno Consulta)"
+];
+
+// A qué categoría pertenece cada materia específica (todas caen en "Otras materias",
+// salvo las dos que literalmente SON una de las 7 nombradas)
+const CATEGORIA_DE_ESPECIFICA = {
+  "Desalojo (casa habitación)": "Desalojo",
+  "Nulidad de despido, despido arbitrario o beneficios sociales": "Laboral"
+};
+function categoriaParaEspecifica(especifica){
+  if (!especifica) return null;
+  return CATEGORIA_DE_ESPECIFICA[especifica] || "Otras materias";
+}
+
+// Referencia del mes anterior (G y H del Drive 2) — vendrá de Consolidación (Drive 4).
+// Formato: { ARCE_VILLAR: { nuevos: 12, consultas: 30 }, ... }. Vacío hasta migrar Consolidación.
+const REFERENCIA_MES_ANTERIOR = {};
+
+let idReasigPorBorrar = null;
+function nombreDe(id){ const d = DEFENSORES.find(x => x.id === id); return d ? d.nombre : id; }
+// Quién ve hoy el caso (para el Drive 1). La asignación/carga siempre se queda en defensorId.
+function titularActual(r){ return r.abogadoActualId || r.defensorId; }
+function reasignarRegistro(registro, nuevoId){
+  const fecha = hoyIso();
+  setDoc(doc(collection(db, 'reasignaciones')), { fecha, mes: fecha.slice(0, 7), deId: titularActual(registro), aId: nuevoId,
+    casoId: registro.id, referencia: 'Caso asignado el ' + registro.fecha + ' (' + registro.categoria + ')', nota: '', ...marcaCreacion() })
+    .catch(errorAlGuardar);
+  updateDoc(doc(db, 'asignaciones', registro.id), { abogadoActualId: nuevoId }).catch(errorAlGuardar);
+  registro.abogadoActualId = nuevoId;
+  avisar('Reasignación registrada');
+}
+function seccionReasignaciones(defId, mes){
+  const lista = reasignacionesLog.filter(r => (r.deId === defId || r.aId === defId) && r.fecha.slice(0, 7) === mes);
+  if (lista.length === 0) return '';
+  const estiloBtn = 'background:none;border:none;font-size:12px;font-weight:600;cursor:pointer;padding:0;color:var(--rojo-oscuro)';
+  return '<div style="margin-top:12px;font-size:12px;font-weight:700;color:#7A3B57">Reasignaciones de este mes — carga muerta, no suman a ningún total</div>' +
+    lista.map(r => {
+      if (r.id === idReasigPorBorrar){
+        return `<div class="detalle-item"><span>¿Borrar esta reasignación?</span><span class="detalle-acciones"><button class="btn-borrar-reasig-si" data-rid="${r.id}" style="${estiloBtn};color:#fff;background:var(--rojo-oscuro);border-radius:6px;padding:4px 10px">Sí, borrar</button><button class="btn-borrar-no">Cancelar</button></span></div>`;
+      }
+      const texto = r.aId === defId
+        ? `<b style="color:var(--verde)">+ entró</b> de ${nombreDe(r.deId)}`
+        : `<b style="color:var(--rojo-oscuro)">− salió</b> a ${nombreDe(r.aId)}`;
+      return `<div class="detalle-item"><span>${r.fecha} — ${r.referencia || 'sin referencia'} · ${texto}${r.nota ? ' · ' + r.nota : ''}</span><span class="detalle-acciones"><button class="btn-borrar-reasig" data-rid="${r.id}" style="${estiloBtn}">🗑 Borrar</button></span></div>`;
+    }).join('');
+}
+
+function claseColorHoy(n){ return n >= 6 ? 'c6' : 'c' + n; }
+
+// Datos del mes que se está viendo (se llenan en vivo desde Firestore)
+let asignaciones = [];      // colección "asignaciones"
+let reasignacionesLog = []; // colección "reasignaciones" — carga muerta, no cuentan como casos nuevos
+let defensorActivo = null;
+
+let mesEscuchado = null, cortarAsig = null, cortarReasig = null;
+function escucharMes(mes){
+  if (mes === mesEscuchado) return;
+  mesEscuchado = mes;
+  if (cortarAsig) cortarAsig();
+  if (cortarReasig) cortarReasig();
+  asignaciones = []; reasignacionesLog = [];
+  cortarAsig = onSnapshot(query(collection(db, 'asignaciones'), where('mes', '==', mes)), snap => {
+    asignaciones = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    pintarTabla();
+  }, err => { console.error(err); avisar('No se pudieron leer las asignaciones: ' + err.code, 6000); });
+  cortarReasig = onSnapshot(query(collection(db, 'reasignaciones'), where('mes', '==', mes)), snap => {
+    reasignacionesLog = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    pintarTabla();
+  }, err => { console.error(err); avisar('No se pudieron leer las reasignaciones: ' + err.code, 6000); });
+}
+
+// Busca un caso en el mes cargado o en los resultados de la búsqueda de otros meses
+function buscarRegistro(id){ return asignaciones.find(a => a.id === id) || ultimaBusqueda.find(a => a.id === id); }
+
+// Borra un caso y sus reasignaciones ligadas (sin conteo fantasma)
+async function borrarCaso(id){
+  try {
+    const ligadas = await getDocs(query(collection(db, 'reasignaciones'), where('casoId', '==', id)));
+    await Promise.all(ligadas.docs.map(d => deleteDoc(d.ref)));
+    await deleteDoc(doc(db, 'asignaciones', id));
+    avisar('Caso borrado');
+  } catch (err){ errorAlGuardar(err); }
+}
+
+function hoyIso(){
+  const d = new Date();
+  return d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0');
+}
+
+// Semana ISO (lunes a domingo) a la que pertenece una fecha "AAAA-MM-DD"
+function claveSemana(fechaIso){
+  const d = new Date(fechaIso + 'T00:00:00');
+  const dia = (d.getDay() + 6) % 7; // 0 = lunes
+  const lunes = new Date(d);
+  lunes.setDate(d.getDate() - dia);
+  return lunes.toISOString().slice(0, 10);
+}
+
+let vistaActual = 'materia';
+
+const NOMBRES_DIA = ['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom'];
+
+function diasDelMes(fechaIso){
+  const d = new Date(fechaIso + 'T00:00:00');
+  const anio = d.getFullYear(), mes = d.getMonth();
+  const ultimoDia = new Date(anio, mes + 1, 0).getDate();
+  const dias = [];
+  for (let i = 1; i <= ultimoDia; i++){
+    dias.push(anio + '-' + String(mes + 1).padStart(2, '0') + '-' + String(i).padStart(2, '0'));
+  }
+  return dias;
+}
+
+function formateaCorta(fechaIso){
+  const d = new Date(fechaIso + 'T00:00:00');
+  return String(d.getDate()).padStart(2, '0') + '/' + String(d.getMonth() + 1).padStart(2, '0');
+}
+
+// Feriados nacionales 2026 (Perú)
+const FERIADOS_2026 = [
+  '2026-01-01', '2026-04-02', '2026-04-03', '2026-05-01', '2026-06-07',
+  '2026-06-29', '2026-07-23', '2026-07-28', '2026-07-29', '2026-08-06',
+  '2026-08-30', '2026-10-08', '2026-11-01', '2026-12-08', '2026-12-09', '2026-12-25'
+];
+function esNoLaborable(fechaIso){
+  const dow = new Date(fechaIso + 'T00:00:00').getDay();
+  return dow === 0 || dow === 6 || FERIADOS_2026.includes(fechaIso);
+}
+
+function nombreMes(fechaIso){
+  const d = new Date(fechaIso + 'T00:00:00');
+  return d.toLocaleDateString('es-PE', { month: 'long', year: 'numeric' });
+}
+
+function construirColumnasMes(diaIso){
+  const dias = diasDelMes(diaIso);
+  const columnas = [];
+  let semanaActual = [];
+  dias.forEach(f => {
+    columnas.push({ tipo: 'dia', fecha: f });
+    semanaActual.push(f);
+    const dow = new Date(f + 'T00:00:00').getDay(); // 0 = domingo
+    if (dow === 0){
+      columnas.push({ tipo: 'ts', dias: semanaActual.slice() });
+      semanaActual = [];
+    }
+  });
+  if (semanaActual.length > 0) columnas.push({ tipo: 'ts', dias: semanaActual.slice() });
+  let n = 0;
+  columnas.forEach(c => { if (c.tipo === 'ts') c.etiqueta = 'TS' + (++n); });
+  return columnas;
+}
+
+function construirMapaDia(propiasDefensor, mesRef){
+  const hoy = hoyIso();
+  const dias = diasDelMes(mesRef);
+  let html = '', totalSemana = 0, nSemana = 0;
+  dias.forEach((f, i) => {
+    const n = propiasDefensor.filter(a => a.fecha === f).length;
+    totalSemana += n;
+    const nivel = n === 0 ? 0 : Math.min(n, 4);
+    const clases = ['mini-dia'];
+    if (nivel > 0) clases.push('n' + nivel);
+    if (esNoLaborable(f)) clases.push('finde');
+    if (f === hoy) clases.push('hoy');
+    html += `<span class="${clases.join(' ')}" title="${formateaCorta(f)}: ${n} caso${n === 1 ? '' : 's'}">${Number(f.slice(8))}</span>`;
+    const esDomingo = new Date(f + 'T00:00:00').getDay() === 0;
+    if (esDomingo || i === dias.length - 1){
+      nSemana++;
+      html += `<span class="mini-total" title="TS${nSemana}: total de la semana">${totalSemana}</span>`;
+      totalSemana = 0;
+    }
+  });
+  return `<div class="mini-cal"><div class="mini-cal-fila">${html}</div></div>`;
+}
+
+function pintarTabla(){
+  if (!usuario) return;
+  escucharMes((document.getElementById('selDia').value || hoyIso()).slice(0, 7));
+  const diaElegido = document.getElementById('selDia').value || hoyIso();
+  const semanaElegida = claveSemana(diaElegido);
+
+  document.getElementById('etiquetaSemana').textContent =
+    `${etiquetaMes(diaElegido.slice(0, 7))} — a la derecha, día por día del mes; el cuadro oscuro después de cada domingo es el total de esa semana (TS1, TS2...)`;
+
+  const filaEnc = document.getElementById('filaEncabezados');
+  filaEnc.innerHTML =
+    '<th>Agregar · Defensor</th>' +
+    `<th class="hoy-col">${diaElegido === hoyIso() ? 'Hoy' : 'Día ' + formateaCorta(diaElegido)}</th>` +
+    '<th class="ref-col">Nuevos<br>mes ant.</th>' +
+    '<th class="ref-col">Consultas<br>mes ant.</th>' +
+    CATEGORIAS.map(c => `<th class="materia-col">${c}</th>`).join('') +
+    '<th class="total-col">Turno<br>Consulta</th>' +
+    '<th class="total-col">Adulto<br>Mayor</th>' +
+    '<th class="total-col">Mes</th>' +
+    '<th class="total-col" title="+ entraron / − salieron por reasignación">Reasig.<br>+ / −</th>' +
+    '<th class="total-col" style="text-align:left">Día a día · ■ = total semana (TS)</th>';
+
+  const cuerpo = document.getElementById('cuerpoTabla');
+  cuerpo.innerHTML = '';
+
+  // Sugerido: menor carga del mes, sin contar a quien está de licencia; entre iguales, evita a los Responsables de Área
+  const candidatos = DEFENSORES.filter(d => !(d.nota && d.nota.toLowerCase().includes('licencia')));
+  const totalesPorId = {};
+  candidatos.forEach(d => { totalesPorId[d.id] = asignaciones.filter(a => a.defensorId === d.id && a.fecha.slice(0, 7) === diaElegido.slice(0, 7)).length; });
+  const noResponsables = candidatos.filter(d => !(d.nota && d.nota.includes('Responsable')));
+  const grupoPreferido = noResponsables.length > 0 ? noResponsables : candidatos;
+  let sugeridoId = null;
+  grupoPreferido.forEach(d => {
+    if (sugeridoId === null || totalesPorId[d.id] < totalesPorId[sugeridoId]) sugeridoId = d.id;
+  });
+
+  DEFENSORES.forEach((d, idx) => {
+    const propias = asignaciones.filter(a => a.defensorId === d.id && a.fecha.slice(0, 7) === diaElegido.slice(0, 7));
+    const totalMes = propias.length;
+    // Semana y Mes cuentan TODO junto (nombradas + otras) — es un solo resultado, no por partes
+    const totalSemana = propias.filter(a => claveSemana(a.fecha) === semanaElegida).length;
+    const mesDelDia = diaElegido.slice(0, 7);
+    const salieron = reasignacionesLog.filter(r => r.deId === d.id && r.fecha.slice(0, 7) === mesDelDia).length;
+    const entraron = reasignacionesLog.filter(r => r.aId === d.id && r.fecha.slice(0, 7) === mesDelDia).length;
+
+    const nDia = propias.filter(a => a.fecha === diaElegido).length;
+    const nTurno = propias.filter(esTurnoConsulta).length;
+    const nAdulto = propias.filter(a => a.adultoMayor).length;
+    const celdaHoy = nDia === 0
+      ? `<td class="num cero" data-defensor="${d.id}">·</td>`
+      : `<td class="num" data-defensor="${d.id}"><span class="badge-hoy ${claseColorHoy(nDia)}">${nDia}</span></td>`;
+    const ref = REFERENCIA_MES_ANTERIOR[d.id] || {};
+    const celdasRef = `<td class="num ref-col">${ref.nuevos ?? '—'}</td><td class="num ref-col">${ref.consultas ?? '—'}</td>`;
+
+    const celdasCategoria = CATEGORIAS.map(c => {
+      const n = propias.filter(a => a.categoria === c).length;
+      return `<td class="num ${n === 0 ? 'cero' : ''}" data-defensor="${d.id}">${n || '·'}</td>`;
+    }).join('');
+
+    const esResponsable = d.nota && d.nota.includes('Responsable');
+    const esSugerido = d.id === sugeridoId;
+    const clasesFila = [
+      idx % 2 === 1 ? 'fila-par' : '',
+      esResponsable ? 'fila-responsable' : '',
+      esSugerido ? 'fila-sugerida' : ''
+    ].filter(Boolean).join(' ');
+
+    const celdaReasig = (entraron === 0 && salieron === 0)
+      ? '<td class="num celda-total cero" data-defensor="' + d.id + '">·</td>'
+      : `<td class="num celda-total" data-defensor="${d.id}" style="font-size:12px">${entraron > 0 ? '<span style="color:var(--verde)">+' + entraron + '</span>' : ''}${entraron > 0 && salieron > 0 ? ' / ' : ''}${salieron > 0 ? '<span style="color:var(--rojo-oscuro)">−' + salieron + '</span>' : ''}</td>`;
+
+    const fila = document.createElement('tr');
+    if (clasesFila) fila.className = clasesFila;
+    fila.innerHTML = `
+      <td class="nombre"><div class="celda-nombre">
+        <div class="grupo-btns">
+          <button class="btn-rapido" data-defensor="${d.id}" title="Agregar rápido: hoy, Otras materias, Mesa de partes virtual">+</button>
+          <button class="btn-detalle-mas" data-defensor="${d.id}" data-nombre="${d.nombre}" title="Elegir categoría, materia u origen distintos">···</button>
+        </div>
+        <div>${d.nombre}${esSugerido ? '<span class="etiqueta-sugerido">Sugerido</span>' : ''}${d.nota ? `<span class="nota${esResponsable ? ' responsable' : ''}">${esResponsable ? '★ ' : ''}${d.nota}</span>` : ''}</div>
+      </div></td>
+      ${celdaHoy}
+      ${celdasRef}
+      ${celdasCategoria}
+      <td class="num celda-total ${nTurno === 0 ? 'cero' : ''}" data-defensor="${d.id}">${nTurno || '·'}</td>
+      <td class="num celda-total ${nAdulto === 0 ? 'cero' : ''}" data-defensor="${d.id}">${nAdulto || '·'}</td>
+      <td class="num celda-total" data-defensor="${d.id}">${totalMes}</td>
+      ${celdaReasig}
+      <td data-defensor="${d.id}">${construirMapaDia(propias, diaElegido)}</td>
+    `;
+    cuerpo.appendChild(fila);
+
+    const filaDetalle = document.createElement('tr');
+    filaDetalle.className = 'fila-detalle';
+    filaDetalle.id = 'detalle-' + d.id;
+    filaDetalle.hidden = d.id !== detalleAbiertoId;
+    const td = document.createElement('td');
+    td.colSpan = CATEGORIAS.length + 9;
+    td.innerHTML = propias.length === 0
+      ? '<div class="detalle-vacio">Sin asignaciones registradas este mes todavía.</div>'
+      : propias.slice().reverse()
+          .map(a => {
+            if (a.id === idPorBorrar){
+              return `<div class="detalle-item"><span>¿Borrar el caso del ${a.fecha} (${a.categoria})?</span><span class="detalle-acciones"><button class="btn-borrar-si" data-id="${a.id}">Sí, borrar</button><button class="btn-borrar-no">Cancelar</button></span></div>`;
+            }
+            const etiquetaReasig = a.abogadoActualId ? ` <span style="color:#7A3B57;font-weight:600">🔁 ahora lo ve: ${nombreDe(a.abogadoActualId)} (la asignación sigue contando aquí)</span>` : '';
+            if (a.id === idPorReasignar){
+              const opciones = DEFENSORES.filter(x => x.id !== titularActual(a))
+                .map(x => `<option value="${x.id}">${x.nombre}</option>`).join('');
+              return `<div class="detalle-item"><span>Reasignar a: <select id="selReasignar-${a.id}" style="font-size:12px;padding:3px 6px;border-radius:5px">${opciones}</select></span><span class="detalle-acciones"><button class="btn-reasignar-si" data-id="${a.id}">Confirmar</button><button class="btn-borrar-no">Cancelar</button></span></div>`;
+            }
+            return `<div class="detalle-item"><span>${a.fecha} — ${a.categoria}${a.especifica ? ' (' + a.especifica + ' → Drive 1)' : ''}${a.adultoMayor ? ' · 👵 Adulto mayor' : ''} · ${a.origen}${etiquetaReasig}</span><span class="detalle-acciones"><button class="btn-editar" data-id="${a.id}">✎ Editar</button><button class="btn-reasignar" data-id="${a.id}">🔁 Reasignar</button><button class="btn-borrar" data-id="${a.id}">🗑 Borrar</button></span></div>`;
+          })
+          .join('');
+    td.innerHTML += seccionReasignaciones(d.id, mesDelDia);
+    filaDetalle.appendChild(td);
+    cuerpo.appendChild(filaDetalle);
+  });
+}
+
+document.getElementById('selDia').addEventListener('change', pintarTabla);
+
+// ---------- Buscar caso de otro mes/año ----------
+const selBuscarDefensor = document.getElementById('buscarDefensor');
+
+document.getElementById('btnBuscar').addEventListener('click', () => {
+  const panel = document.getElementById('panelBusqueda');
+  panel.hidden = !panel.hidden;
+});
+
+let ultimaBusqueda = [];
+
+async function ejecutarBusqueda(){
+  const defId = selBuscarDefensor.value;
+  const desde = document.getElementById('buscarDesde').value;
+  const hasta = document.getElementById('buscarHasta').value;
+  let todos = [];
+  try {
+    const snap = await getDocs(query(collection(db, 'asignaciones'), where('defensorId', '==', defId)));
+    todos = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+  } catch (err){ errorAlGuardar(err); }
+  ultimaBusqueda = todos.filter(a => {
+    if (a.defensorId !== defId) return false;
+    if (desde && a.fecha < desde) return false;
+    if (hasta && a.fecha > hasta) return false;
+    return true;
+  }).sort((a, b) => b.fecha.localeCompare(a.fecha));
+  pintarResultadosBusqueda();
+}
+document.getElementById('btnEjecutarBusqueda').addEventListener('click', ejecutarBusqueda);
+
+function pintarResultadosBusqueda(){
+  const cont = document.getElementById('resultadosBusqueda');
+  if (ultimaBusqueda.length === 0){
+    cont.innerHTML = '<div class="detalle-vacio">Sin resultados para ese defensor y rango de fechas.</div>';
+    return;
+  }
+  cont.innerHTML = ultimaBusqueda.map(a => {
+    if (a.id === idPorBorrar){
+      return `<div class="resultado-busqueda"><span>¿Borrar el caso del ${a.fecha} (${a.categoria})?</span><span class="detalle-acciones"><button class="btn-borrar-si" data-id="${a.id}">Sí, borrar</button><button class="btn-borrar-no">Cancelar</button></span></div>`;
+    }
+    if (a.id === idPorReasignar){
+      const opciones = DEFENSORES.filter(x => x.id !== titularActual(a)).map(x => `<option value="${x.id}">${x.nombre}</option>`).join('');
+      return `<div class="resultado-busqueda"><span>Reasignar a: <select id="selReasignar-${a.id}" style="font-size:12px;padding:3px 6px;border-radius:5px">${opciones}</select></span><span class="detalle-acciones"><button class="btn-reasignar-si" data-id="${a.id}">Confirmar</button><button class="btn-borrar-no">Cancelar</button></span></div>`;
+    }
+    const etiquetaReasig = a.abogadoActualId ? ` <span style="color:#7A3B57;font-weight:600">🔁 ahora lo ve: ${nombreDe(a.abogadoActualId)} (la asignación sigue contando aquí)</span>` : '';
+    return `<div class="resultado-busqueda"><span>${a.fecha} — ${a.categoria}${a.especifica ? ' (' + a.especifica + ')' : ''} · ${a.origen}${etiquetaReasig}</span><span class="detalle-acciones"><button class="btn-editar" data-id="${a.id}">✎ Editar</button><button class="btn-reasignar" data-id="${a.id}">🔁 Reasignar</button><button class="btn-borrar" data-id="${a.id}">🗑 Borrar</button></span></div>`;
+  }).join('');
+}
+
+document.getElementById('resultadosBusqueda').addEventListener('click', function(e){
+  const btnEditar = e.target.closest('.btn-editar');
+  if (btnEditar){ abrirModalEdicion(btnEditar.dataset.id); return; }
+  const btnReasignar = e.target.closest('.btn-reasignar');
+  if (btnReasignar){ idPorReasignar = btnReasignar.dataset.id; idPorBorrar = null; pintarResultadosBusqueda(); return; }
+  const btnReasignarSi = e.target.closest('.btn-reasignar-si');
+  if (btnReasignarSi){
+    const id = btnReasignarSi.dataset.id;
+    const registro = buscarRegistro(id);
+    const select = document.getElementById('selReasignar-' + id);
+    if (registro && select && select.value) reasignarRegistro(registro, select.value);
+    idPorReasignar = null;
+    ejecutarBusqueda();
+    pintarTabla();
+    return;
+  }
+  const btnBorrar = e.target.closest('.btn-borrar');
+  if (btnBorrar){ idPorBorrar = btnBorrar.dataset.id; idPorReasignar = null; pintarResultadosBusqueda(); return; }
+  const btnBorrarSi = e.target.closest('.btn-borrar-si');
+  if (btnBorrarSi){
+    const id = btnBorrarSi.dataset.id;
+    idPorBorrar = null;
+    borrarCaso(id).then(ejecutarBusqueda);
+    pintarTabla();
+    return;
+  }
+  const btnBorrarNo = e.target.closest('.btn-borrar-no');
+  if (btnBorrarNo){ idPorBorrar = null; idPorReasignar = null; pintarResultadosBusqueda(); return; }
+});
+
+let ultimaAccion = null; // para "Deshacer último"
+
+function registrarRapido(defensorId){
+  const fecha = document.getElementById('selDia').value || hoyIso();
+  const ref = doc(collection(db, 'asignaciones'));
+  setDoc(ref, { defensorId, fecha, mes: fecha.slice(0, 7), categoria: 'Otras materias', especifica: '',
+    origen: 'Mesa de partes virtual', adultoMayor: false, ...marcaCreacion() }).catch(errorAlGuardar);
+  ultimaAccion = { id: ref.id };
+  document.getElementById('btnDeshacer').disabled = false;
+  pintarTabla();
+}
+
+document.getElementById('btnDeshacer').addEventListener('click', () => {
+  if (!ultimaAccion) return;
+  borrarCaso(ultimaAccion.id);
+  ultimaAccion = null;
+  document.getElementById('btnDeshacer').disabled = true;
+  pintarTabla();
+});
+
+document.getElementById('cuerpoTabla').addEventListener('click', function(e){
+  const btnReSi = e.target.closest('.btn-borrar-reasig-si');
+  if (btnReSi){
+    const rid = btnReSi.dataset.rid;
+    const r = reasignacionesLog.find(x => x.id === rid);
+    idReasigPorBorrar = null;
+    (async () => {
+      try {
+        if (r && r.casoId){
+          const caso = await getDoc(doc(db, 'asignaciones', r.casoId));
+          if (caso.exists()){
+            await updateDoc(caso.ref, { abogadoActualId: r.deId === caso.data().defensorId ? deleteField() : r.deId });
+          }
+        }
+        await deleteDoc(doc(db, 'reasignaciones', rid));
+        avisar('Reasignación borrada');
+      } catch (err){ errorAlGuardar(err); }
+    })();
+    pintarTabla();
+    return;
+  }
+  const btnRe = e.target.closest('.btn-borrar-reasig');
+  if (btnRe){ idReasigPorBorrar = btnRe.dataset.rid; pintarTabla(); return; }
+  const btnRapido = e.target.closest('.btn-rapido');
+  if (btnRapido){ registrarRapido(btnRapido.dataset.defensor); return; }
+  const btnDetalle = e.target.closest('.btn-detalle-mas');
+  if (btnDetalle){ abrirModal(btnDetalle.dataset.defensor, btnDetalle.dataset.nombre); return; }
+  const btnEditar = e.target.closest('.btn-editar');
+  if (btnEditar){ abrirModalEdicion(btnEditar.dataset.id); return; }
+  const btnReasignar = e.target.closest('.btn-reasignar');
+  if (btnReasignar){ idPorReasignar = btnReasignar.dataset.id; idPorBorrar = null; pintarTabla(); return; }
+  const btnReasignarSi = e.target.closest('.btn-reasignar-si');
+  if (btnReasignarSi){
+    const id = btnReasignarSi.dataset.id;
+    const registro = buscarRegistro(id);
+    const select = document.getElementById('selReasignar-' + id);
+    if (registro && select && select.value) reasignarRegistro(registro, select.value);
+    idPorReasignar = null;
+    pintarTabla();
+    return;
+  }
+  const btnBorrar = e.target.closest('.btn-borrar');
+  if (btnBorrar){ idPorBorrar = btnBorrar.dataset.id; idPorReasignar = null; pintarTabla(); return; }
+  const btnBorrarSi = e.target.closest('.btn-borrar-si');
+  if (btnBorrarSi){
+    const id = btnBorrarSi.dataset.id;
+    idPorBorrar = null;
+    borrarCaso(id);
+    pintarTabla();
+    return;
+  }
+  const btnBorrarNo = e.target.closest('.btn-borrar-no');
+  if (btnBorrarNo){ idPorBorrar = null; idReasigPorBorrar = null; idPorReasignar = null; pintarTabla(); return; }
+  const celda = e.target.closest('td[data-defensor]');
+  if (celda){
+    detalleAbiertoId = detalleAbiertoId === celda.dataset.defensor ? null : celda.dataset.defensor;
+    idPorBorrar = null;
+    idPorReasignar = null;
+    pintarTabla();
+  }
+});
+
+// Mismos datos para la vista previa y para el Excel (lo que ves es lo que se descarga)
+function datosInforme(){
+  const filas = DEFENSORES.map(d => {
+    const propias = asignaciones.filter(a => a.defensorId === d.id && a.fecha.slice(0, 7) === mesElegido());
+    const fila = { "Defensor": d.nombre };
+    CATEGORIAS.forEach(c => { fila[c] = propias.filter(a => a.categoria === c).length || 0; });
+    fila["Turno Consulta"] = propias.filter(esTurnoConsulta).length;
+    fila["Adulto Mayor"] = propias.filter(a => a.adultoMayor).length;
+    fila["Total mes"] = propias.length;
+    return fila;
+  });
+  const total = { "Defensor": "TOTAL" };
+  [...CATEGORIAS, "Turno Consulta", "Adulto Mayor"].forEach(c => { total[c] = filas.reduce((acc, f) => acc + f[c], 0); });
+  total["Total mes"] = filas.reduce((acc, f) => acc + f["Total mes"], 0);
+  filas.push(total);
+  return filas;
+}
+
+// Segunda hoja: cuántos casos entraron por cada vía (origen), por defensor
+function datosPorOrigen(){
+  const filas = DEFENSORES.map(d => {
+    const propias = asignaciones.filter(a => a.defensorId === d.id && a.fecha.slice(0, 7) === mesElegido());
+    const fila = { "Defensor": d.nombre };
+    ORIGENES.forEach(o => {
+      fila[o] = propias.filter(a => o === ORIGEN_TURNO ? esTurnoConsulta(a) : a.origen === o).length;
+    });
+    fila["Total"] = propias.length;
+    const reasigMes = reasignacionesLog.filter(r => r.fecha.slice(0, 7) === mesElegido());
+    fila["Reasig. entraron"] = reasigMes.filter(r => r.aId === d.id).length;
+    fila["Reasig. salieron"] = reasigMes.filter(r => r.deId === d.id).length;
+    return fila;
+  });
+  const total = { "Defensor": "TOTAL" };
+  [...ORIGENES, "Total", "Reasig. entraron", "Reasig. salieron"].forEach(c => { total[c] = filas.reduce((acc, f) => acc + f[c], 0); });
+  filas.push(total);
+  return filas;
+}
+
+function tablaHtml(filas, columnas){
+  return `<table>
+      <thead><tr>${columnas.map(c => `<th>${c}</th>`).join('')}</tr></thead>
+      <tbody>${filas.map(f => `<tr class="${f.Defensor === 'TOTAL' ? 'fila-total' : ''}">${columnas.map(c => `<td class="${c === 'Defensor' ? '' : 'n'}">${f[c]}</td>`).join('')}</tr>`).join('')}</tbody>
+    </table>`;
+}
+
+function descargarExcel(){
+  const hoja = XLSX.utils.json_to_sheet(datosInforme());
+  const libro = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(libro, hoja, etiquetaMes(mesElegido()));
+  XLSX.utils.book_append_sheet(libro, XLSX.utils.json_to_sheet(datosPorOrigen()), "Por origen");
+  XLSX.writeFile(libro, "Asignaciones_Asistencia_Legal_" + mesElegido() + ".xlsx");
+}
+document.getElementById('btnDescargar').addEventListener('click', descargarExcel);
+document.getElementById('btnDescargarDesdeInforme').addEventListener('click', descargarExcel);
+
+document.getElementById('btnVistaInforme').addEventListener('click', () => {
+  const filas = datosInforme();
+  const columnas = ["Defensor", ...CATEGORIAS, "Turno Consulta", "Adulto Mayor", "Total mes"];
+  const mes = etiquetaMes(mesElegido());
+  document.getElementById('hojaInforme').innerHTML = `
+    <h3>Asignaciones — Asistencia Legal · Lima Centro</h3>
+    <p class="sub">${mes} · asignaciones a cada defensor, en materias y cantidades</p>
+    <p style="font-size:11.5px;font-weight:700;color:var(--gris);margin:0 0 6px">Hoja 1 — ${mes} (la que se adjunta al informe)</p>
+    ${tablaHtml(filas, columnas)}
+    <p style="font-size:11.5px;font-weight:700;color:var(--gris);margin:18px 0 6px">Hoja 2 — Por origen (casos según la vía por la que llegaron)</p>
+    ${tablaHtml(datosPorOrigen(), ["Defensor", ...ORIGENES, "Total", "Reasig. entraron", "Reasig. salieron"])}
+    <p style="font-size:11.5px;color:var(--gris);margin:6px 0 0">Las reasignaciones son carga muerta: no suman al Total. En la fila TOTAL, "entraron" y "salieron" dan el mismo número, que es la cantidad de casos reasignados en el mes.</p>`;
+  document.getElementById('fondoInforme').hidden = false;
+});
+document.getElementById('btnCerrarInforme').addEventListener('click', () => { document.getElementById('fondoInforme').hidden = true; });
+document.getElementById('fondoInforme').addEventListener('click', e => { if (e.target.id === 'fondoInforme') e.target.hidden = true; });
+
+// ---------- Modal ----------
+const selMateria = document.getElementById('campoMateria');
+CATEGORIAS.forEach(c => selMateria.appendChild(new Option(c, c)));
+
+const selEspecifica = document.getElementById('campoEspecifica');
+selEspecifica.appendChild(new Option('— Sin precisar —', ''));
+MATERIAS_ESPECIFICAS.forEach(g => {
+  if (g.grupo){
+    const optg = document.createElement('optgroup');
+    optg.label = g.grupo;
+    g.items.forEach(m => optg.appendChild(new Option(m, m)));
+    selEspecifica.appendChild(optg);
+  } else {
+    g.items.forEach(m => selEspecifica.appendChild(new Option(m, m)));
+  }
+});
+selEspecifica.addEventListener('change', () => {
+  document.getElementById('campoEspecificaOtra').style.display = selEspecifica.value === 'Otra' ? 'block' : 'none';
+  const categoriaSugerida = categoriaParaEspecifica(selEspecifica.value === 'Otra' ? 'Otras materias' : selEspecifica.value);
+  if (categoriaSugerida){
+    selMateria.value = categoriaSugerida;
+    selMateria.disabled = true;
+  } else {
+    selMateria.disabled = false;
+  }
+});
+
+const grupoOrigen = document.getElementById('grupoOrigen');
+let origenElegido = null;
+ORIGENES.forEach(o => {
+  const div = document.createElement('div');
+  div.className = 'origen-opcion';
+  div.textContent = o;
+  div.addEventListener('click', () => {
+    origenElegido = o;
+    [...grupoOrigen.children].forEach(c => c.classList.remove('activo'));
+    div.classList.add('activo');
+    document.getElementById('avisoOrigen').style.display = 'none';
+    actualizarNotaTurno();
+  });
+  grupoOrigen.appendChild(div);
+});
+
+function actualizarNotaTurno(){
+  document.getElementById('notaTurno').style.display = origenElegido === ORIGEN_TURNO ? 'block' : 'none';
+}
+let idEditando = null;
+let idPorBorrar = null;
+let idPorReasignar = null;
+let detalleAbiertoId = null;
+
+function abrirModal(defensorId, nombre){
+  idEditando = null;
+  defensorActivo = defensorId;
+  origenElegido = null;
+  document.getElementById('modalNombre').textContent = 'Nueva asignación';
+  document.getElementById('modalSub').textContent = nombre;
+  document.getElementById('campoFecha').value = hoyIso();
+  selMateria.selectedIndex = 0;
+  selMateria.disabled = false;
+  selEspecifica.selectedIndex = 0;
+  document.getElementById('campoAdulto').checked = false;
+  document.getElementById('campoEspecificaOtra').style.display = 'none';
+  document.getElementById('campoEspecificaOtra').value = '';
+  [...grupoOrigen.children].forEach(c => c.classList.remove('activo'));
+  actualizarNotaTurno();
+  document.getElementById('avisoOrigen').style.display = 'none';
+  document.getElementById('confirmacionGuardado').style.display = 'none';
+  document.getElementById('btnGuardar').disabled = false;
+  document.getElementById('btnGuardar').textContent = 'Guardar';
+  document.getElementById('fondoModal').hidden = false;
+}
+
+function abrirModalEdicion(id){
+  const registro = buscarRegistro(id);
+  if (!registro) return;
+  const d = DEFENSORES.find(x => x.id === registro.defensorId);
+
+  idEditando = id;
+  defensorActivo = registro.defensorId;
+  document.getElementById('modalNombre').textContent = 'Editar asignación';
+  document.getElementById('modalSub').textContent = d ? d.nombre : '';
+  document.getElementById('campoFecha').value = registro.fecha;
+
+  selMateria.disabled = false;
+  selMateria.value = registro.categoria;
+
+  const yaEsEspecifica = MATERIAS_ESPECIFICAS.some(g => g.items.includes(registro.especifica));
+  selEspecifica.value = yaEsEspecifica ? registro.especifica : '';
+  document.getElementById('campoEspecificaOtra').style.display = 'none';
+  document.getElementById('campoEspecificaOtra').value = '';
+  if (registro.especifica && !yaEsEspecifica){
+    selEspecifica.value = 'Otra';
+    document.getElementById('campoEspecificaOtra').style.display = 'block';
+    document.getElementById('campoEspecificaOtra').value = registro.especifica;
+  }
+  if (categoriaParaEspecifica(selEspecifica.value)) selMateria.disabled = true;
+
+  origenElegido = registro.origen;
+  document.getElementById('campoAdulto').checked = !!registro.adultoMayor;
+  if (registro.origen === "Turno presencial") origenElegido = ORIGEN_TURNO;
+  [...grupoOrigen.children].forEach(c => c.classList.toggle('activo', c.textContent === origenElegido));
+  actualizarNotaTurno();
+
+  document.getElementById('avisoOrigen').style.display = 'none';
+  document.getElementById('confirmacionGuardado').style.display = 'none';
+  document.getElementById('btnGuardar').disabled = false;
+  document.getElementById('btnGuardar').textContent = 'Guardar cambios';
+  document.getElementById('fondoModal').hidden = false;
+}
+function cerrarModal(){ document.getElementById('fondoModal').hidden = true; }
+document.getElementById('btnCancelar').addEventListener('click', cerrarModal);
+document.getElementById('fondoModal').addEventListener('click', e => { if (e.target.id === 'fondoModal') cerrarModal(); });
+
+document.getElementById('btnGuardar').addEventListener('click', () => {
+  if (!origenElegido){
+    document.getElementById('avisoOrigen').style.display = 'block';
+    return;
+  }
+  let especifica = selEspecifica.value;
+  if (especifica === 'Otra'){
+    especifica = document.getElementById('campoEspecificaOtra').value.trim();
+  }
+
+  if (idEditando !== null){
+    const fecha = document.getElementById('campoFecha').value || hoyIso();
+    const cambios = { fecha, mes: fecha.slice(0, 7), categoria: selMateria.value, especifica: especifica || '',
+      origen: origenElegido, adultoMayor: document.getElementById('campoAdulto').checked,
+      editadoPor: usuario.correo, editadoEn: serverTimestamp() };
+    updateDoc(doc(db, 'asignaciones', idEditando), cambios).catch(errorAlGuardar);
+    const enBusqueda = ultimaBusqueda.find(a => a.id === idEditando);
+    if (enBusqueda){ Object.assign(enBusqueda, cambios); pintarResultadosBusqueda(); }
+  } else {
+    const fecha = document.getElementById('campoFecha').value || hoyIso();
+    const ref = doc(collection(db, 'asignaciones'));
+    setDoc(ref, { defensorId: defensorActivo, fecha, mes: fecha.slice(0, 7), categoria: selMateria.value,
+      especifica: especifica || '', origen: origenElegido, adultoMayor: document.getElementById('campoAdulto').checked,
+      ...marcaCreacion() }).catch(errorAlGuardar);
+    ultimaAccion = { id: ref.id };
+    document.getElementById('btnDeshacer').disabled = false;
+  }
+
+  document.getElementById('confirmacionGuardado').style.display = 'block';
+  document.getElementById('btnGuardar').disabled = true;
+  pintarTabla();
+  setTimeout(cerrarModal, 700);
+});
+
+// ---------- Registrar reasignación libre ----------
+function llenarSelectsDefensores(){
+  selBuscarDefensor.innerHTML = '';
+  DEFENSORES.forEach(d => selBuscarDefensor.appendChild(new Option(d.nombre, d.id)));
+  ['reDe', 'reA'].forEach(idSel => {
+    const sel = document.getElementById(idSel);
+    sel.innerHTML = '';
+    sel.appendChild(new Option('— Elegir defensor —', ''));
+    DEFENSORES.forEach(d => sel.appendChild(new Option(d.nombre, d.id)));
+  });
+}
+function cerrarReasig(){ document.getElementById('fondoReasig').hidden = true; }
+document.getElementById('btnRegistrarReasig').addEventListener('click', () => {
+  document.getElementById('reFecha').value = hoyIso();
+  ['reReferencia', 'reNota'].forEach(i => document.getElementById(i).value = '');
+  document.getElementById('reDe').value = '';
+  document.getElementById('reA').value = '';
+  document.getElementById('avisoReasig').style.display = 'none';
+  document.getElementById('confirmacionReasig').style.display = 'none';
+  document.getElementById('btnGuardarReasig').disabled = false;
+  document.getElementById('fondoReasig').hidden = false;
+});
+document.getElementById('btnCancelarReasig').addEventListener('click', cerrarReasig);
+document.getElementById('fondoReasig').addEventListener('click', e => { if (e.target.id === 'fondoReasig') cerrarReasig(); });
+document.getElementById('btnGuardarReasig').addEventListener('click', () => {
+  const de = document.getElementById('reDe').value, a = document.getElementById('reA').value;
+  const referencia = document.getElementById('reReferencia').value.trim();
+  const aviso = document.getElementById('avisoReasig');
+  let error = '';
+  if (!referencia) error = 'Escribe el código o una referencia del caso.';
+  else if (!de || !a) error = 'Elige quién lo tenía y a quién pasa.';
+  else if (de === a) error = 'El defensor de origen y el de destino son el mismo.';
+  if (error){ aviso.textContent = error; aviso.style.display = 'block'; return; }
+  const fechaRe = document.getElementById('reFecha').value || hoyIso();
+  setDoc(doc(collection(db, 'reasignaciones')), { fecha: fechaRe, mes: fechaRe.slice(0, 7), deId: de, aId: a, casoId: null,
+    referencia, nota: document.getElementById('reNota').value.trim(), ...marcaCreacion() }).catch(errorAlGuardar);
+  document.getElementById('confirmacionReasig').style.display = 'block';
+  document.getElementById('btnGuardarReasig').disabled = true;
+  pintarTabla();
+  setTimeout(cerrarReasig, 700);
+});
+
+// ---------- Mes elegido: todo (tabla, informe, Excel) se calcula para ese mes ----------
+const MESES_ES = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Setiembre','Octubre','Noviembre','Diciembre'];
+function etiquetaMes(mesClave){ return MESES_ES[Number(mesClave.slice(5, 7)) - 1] + ' ' + mesClave.slice(0, 4); }
+function mesElegido(){ return (document.getElementById('selDia').value || hoyIso()).slice(0, 7); }
+(function llenarMeses(){
+  const sel = document.getElementById('selMes');
+  const hoy = hoyIso();
+  let anio = 2024, mes = 6; // el Drive 2 empieza en junio 2024
+  const claves = [];
+  while (anio < Number(hoy.slice(0, 4)) || (anio === Number(hoy.slice(0, 4)) && mes <= Number(hoy.slice(5, 7)))){
+    claves.push(anio + '-' + String(mes).padStart(2, '0'));
+    mes++; if (mes > 12){ mes = 1; anio++; }
+  }
+  claves.reverse().forEach(c => sel.appendChild(new Option(etiquetaMes(c), c)));
+  sel.addEventListener('change', () => {
+    // Si es el mes actual, se ubica en hoy; si es otro mes, en su día 1
+    document.getElementById('selDia').value = sel.value === hoy.slice(0, 7) ? hoy : sel.value + '-01';
+    pintarTabla();
+  });
+})();
+document.getElementById('selDia').addEventListener('change', () => {
+  document.getElementById('selMes').value = mesElegido();
+});
+
+document.getElementById('selDia').value = hoyIso();
+document.getElementById('selMes').value = mesElegido();
+
+// ---------- Inicio de sesión ----------
+const msgLogin = document.getElementById('msgLogin');
+async function entrar(){
+  const correo = document.getElementById('loginCorreo').value.trim().toLowerCase();
+  const clave = document.getElementById('loginClave').value;
+  if (!correo || !clave){ msgLogin.textContent = 'Escribe tu correo y contraseña.'; return; }
+  const btn = document.getElementById('btnEntrar');
+  btn.disabled = true; msgLogin.textContent = '';
+  try { await signInWithEmailAndPassword(auth, correo, clave); }
+  catch (err){
+    msgLogin.textContent = (err.code === 'auth/invalid-credential' || err.code === 'auth/wrong-password' || err.code === 'auth/user-not-found')
+      ? 'Correo o contraseña incorrectos.'
+      : err.code === 'auth/too-many-requests' ? 'Demasiados intentos. Espera unos minutos.' : 'No se pudo entrar (' + err.code + ').';
+  }
+  btn.disabled = false;
+}
+document.getElementById('btnEntrar').addEventListener('click', entrar);
+document.getElementById('loginClave').addEventListener('keydown', e => { if (e.key === 'Enter') entrar(); });
+document.getElementById('btnOlvide').addEventListener('click', async () => {
+  const correo = document.getElementById('loginCorreo').value.trim().toLowerCase();
+  if (!correo){ msgLogin.textContent = 'Escribe primero tu correo arriba.'; return; }
+  try { await sendPasswordResetEmail(auth, correo); msgLogin.textContent = 'Te enviamos un correo para cambiar tu contraseña (revisa también spam).'; }
+  catch (err){ msgLogin.textContent = 'No se pudo enviar (' + err.code + ').'; }
+});
+document.getElementById('btnSalir').addEventListener('click', () => signOut(auth));
+
+onAuthStateChanged(auth, async user => {
+  if (!user){
+    usuario = null;
+    if (cortarAsig) cortarAsig();
+    if (cortarReasig) cortarReasig();
+    mesEscuchado = null;
+    document.getElementById('app').hidden = true;
+    document.getElementById('pantallaLogin').hidden = false;
+    return;
+  }
+  const correo = (user.email || '').toLowerCase();
+  try {
+    const ficha = await getDoc(doc(db, 'staff', correo));
+    if (!ficha.exists()){
+      msgLogin.textContent = 'Tu correo no está autorizado en MEGA ALEGRA. Pide al coordinador que te registre.';
+      await signOut(auth);
+      return;
+    }
+    usuario = { correo, nombre: ficha.data().nombre || correo, rol: ficha.data().rol || '' };
+
+    const snap = await getDocs(query(collection(db, 'defensores'), where('area', '==', 'Asistencia Legal')));
+    DEFENSORES = snap.docs.map(d => ({ id: d.id, ...d.data() }))
+      .filter(d => d.activo !== false)
+      .map(d => ({ id: d.id, nombre: d.nombre, nota: d.notas || '' }))
+      .sort((a, b) => a.nombre.localeCompare(b.nombre, 'es'));
+    llenarSelectsDefensores();
+
+    document.body.classList.toggle('solo-lectura', usuario.rol !== 'abogado');
+    document.getElementById('usuarioSesion').textContent =
+      usuario.nombre + (usuario.rol === 'abogado' ? ' · puede registrar y editar' : ' · solo lectura');
+    document.getElementById('pantallaLogin').hidden = true;
+    document.getElementById('app').hidden = false;
+    pintarTabla();
+  } catch (err){
+    console.error(err);
+    msgLogin.textContent = 'No se pudo cargar tu acceso (' + (err.code || err.message) + ').';
+    await signOut(auth);
+  }
+});
+</script>
+</body>
+</html>
