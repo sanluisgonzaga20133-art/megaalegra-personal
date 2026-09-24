@@ -286,6 +286,14 @@
   </div>
 </div>
 <div id="aviso"></div>
+<script>
+  setTimeout(function(){
+    if (!window.__appCargada){
+      document.getElementById('msgLogin').textContent =
+        'No se pudo cargar Firebase. Puede que la red bloquee www.gstatic.com: prueba con otra red y avísame.';
+    }
+  }, 12000);
+</script>
 
 <div class="marco" id="app" hidden>
   <div class="barra-sesion">
@@ -430,7 +438,17 @@ const firebaseConfig = {
 const fbApp = initializeApp(firebaseConfig);
 const auth = getAuth(fbApp);
 // Caché local: si se corta el internet, lo registrado se guarda y se sube solo al volver la conexión
-const db = initializeFirestore(fbApp, { localCache: persistentLocalCache({ tabManager: persistentMultipleTabManager() }) });
+const db = initializeFirestore(fbApp, {
+  localCache: persistentLocalCache({ tabManager: persistentMultipleTabManager() }),
+  experimentalForceLongPolling: true
+});
+window.__appCargada = true;
+
+// Si una consulta tarda demasiado, avisar en vez de quedarse esperando en silencio
+function conLimite(promesa, ms, paso){
+  return Promise.race([promesa, new Promise((_, rechazar) =>
+    setTimeout(() => { const e = new Error(paso); e.code = 'tiempo-agotado'; rechazar(e); }, ms))]);
+}
 
 let usuario = null; // { correo, nombre, rol }
 
@@ -1236,10 +1254,13 @@ async function entrar(){
   const clave = document.getElementById('loginClave').value;
   if (!correo || !clave){ msgLogin.textContent = 'Escribe tu correo y contraseña.'; return; }
   const btn = document.getElementById('btnEntrar');
-  btn.disabled = true; msgLogin.textContent = '';
-  try { await signInWithEmailAndPassword(auth, correo, clave); }
+  btn.disabled = true; msgLogin.style.color = 'var(--gris)'; msgLogin.textContent = 'Verificando contraseña…';
+  try { await conLimite(signInWithEmailAndPassword(auth, correo, clave), 20000, 'verificar la contraseña'); }
   catch (err){
-    msgLogin.textContent = (err.code === 'auth/invalid-credential' || err.code === 'auth/wrong-password' || err.code === 'auth/user-not-found')
+    msgLogin.style.color = '';
+    msgLogin.textContent = err.code === 'tiempo-agotado' ? 'No hubo respuesta al verificar la contraseña. Revisa tu internet.' :
+      err.code === 'auth/network-request-failed' ? 'Sin conexión con Firebase. Revisa tu internet o prueba con otra red.' :
+      (err.code === 'auth/invalid-credential' || err.code === 'auth/wrong-password' || err.code === 'auth/user-not-found')
       ? 'Correo o contraseña incorrectos.'
       : err.code === 'auth/too-many-requests' ? 'Demasiados intentos. Espera unos minutos.' : 'No se pudo entrar (' + err.code + ').';
   }
@@ -1266,16 +1287,20 @@ onAuthStateChanged(auth, async user => {
     return;
   }
   const correo = (user.email || '').toLowerCase();
+  msgLogin.style.color = 'var(--gris)';
+  msgLogin.textContent = 'Contraseña correcta. Revisando permisos…';
   try {
-    const ficha = await getDoc(doc(db, 'staff', correo));
+    const ficha = await conLimite(getDoc(doc(db, 'staff', correo)), 20000, 'revisar permisos');
     if (!ficha.exists()){
+      msgLogin.style.color = '';
       msgLogin.textContent = 'Tu correo no está autorizado en MEGA ALEGRA. Pide al coordinador que te registre.';
       await signOut(auth);
       return;
     }
     usuario = { correo, nombre: ficha.data().nombre || correo, rol: ficha.data().rol || '' };
 
-    const snap = await getDocs(query(collection(db, 'defensores'), where('area', '==', 'Asistencia Legal')));
+    msgLogin.textContent = 'Cargando defensores…';
+    const snap = await conLimite(getDocs(query(collection(db, 'defensores'), where('area', '==', 'Asistencia Legal'))), 20000, 'cargar defensores');
     DEFENSORES = snap.docs.map(d => ({ id: d.id, ...d.data() }))
       .filter(d => d.activo !== false)
       .map(d => ({ id: d.id, nombre: d.nombre, nota: d.notas || '' }))
@@ -1285,12 +1310,18 @@ onAuthStateChanged(auth, async user => {
     document.body.classList.toggle('solo-lectura', usuario.rol !== 'abogado');
     document.getElementById('usuarioSesion').textContent =
       usuario.nombre + (usuario.rol === 'abogado' ? ' · puede registrar y editar' : ' · solo lectura');
+    msgLogin.textContent = '';
     document.getElementById('pantallaLogin').hidden = true;
     document.getElementById('app').hidden = false;
     pintarTabla();
   } catch (err){
     console.error(err);
-    msgLogin.textContent = 'No se pudo cargar tu acceso (' + (err.code || err.message) + ').';
+    msgLogin.style.color = '';
+    msgLogin.textContent = err.code === 'tiempo-agotado'
+      ? 'La contraseña es correcta, pero la base de datos no respondió al ' + err.message + '. Puede que la red de la oficina la bloquee: prueba con los datos del celular (compartir internet) y avísame.'
+      : err.code === 'permission-denied'
+        ? 'Firebase negó el acceso al ' + (err.message || 'leer datos') + '. Revisa que las reglas nuevas estén publicadas.'
+        : 'No se pudo cargar tu acceso (' + (err.code || err.message) + ').';
     await signOut(auth);
   }
 });
