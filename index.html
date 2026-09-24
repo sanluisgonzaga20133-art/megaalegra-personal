@@ -72,6 +72,7 @@
   thead th:first-child{left:0; z-index:5}
   tbody td:first-child{position:sticky; left:0; z-index:2; background:#fff}
   .celda-nombre{display:flex; align-items:center; gap:8px}
+  .numero-fila{min-width:22px; text-align:right; font-size:12px; font-weight:700; color:var(--gris); font-variant-numeric:tabular-nums}
   .panel-busqueda{
     background:var(--panel); border:1.5px dashed var(--gris-claro);
     border-radius:14px; padding:16px; margin-bottom:16px;
@@ -780,7 +781,7 @@ function pintarTabla(){
 
   const filaEnc = document.getElementById('filaEncabezados');
   filaEnc.innerHTML =
-    '<th>Agregar · Defensor</th>' +
+    '<th>Agregar · N° · Defensor</th>' +
     `<th class="hoy-col">${diaElegido === hoyIso() ? 'Hoy' : 'Día ' + formateaCorta(diaElegido)}</th>` +
     AREA.referencias.map(r => `<th class="ref-col">${r.nombre}<br>${nombreMesAnterior(diaElegido)}</th>`).join('') +
     categoriasEnColumna().map(c => `<th class="materia-col">${c}</th>`).join('') +
@@ -848,6 +849,7 @@ function pintarTabla(){
           <button class="btn-rapido" data-defensor="${d.id}" title="Agregar rápido: hoy, Otras materias, Mesa de partes virtual">+</button>
           <button class="btn-detalle-mas" data-defensor="${d.id}" data-nombre="${d.nombre}" title="Elegir categoría, materia u origen distintos">···</button>
         </div>
+        <span class="numero-fila">${idx + 1}</span>
         <div>${d.nombre}${esSugerido ? '<span class="etiqueta-sugerido">Sugerido</span>' : ''}${d.nota ? `<span class="nota${esResponsable ? ' responsable' : ''}">${esResponsable ? '★ ' : ''}${d.nota}</span>` : ''}</div>
       </div></td>
       ${celdaHoy}
