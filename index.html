@@ -202,6 +202,7 @@
   .hoja-informe td.n{text-align:center;font-variant-numeric:tabular-nums}
   .hoja-informe tr.fila-total td{font-weight:700;background:#EFE9DD}
 
+  [hidden]{display:none !important}
   /* Login y sesión */
   #pantallaLogin{min-height:100vh;display:flex;align-items:center;justify-content:center;padding:20px}
   .caja-login{background:#fff;border:1px solid var(--linea);border-radius:14px;padding:28px;max-width:380px;width:100%;box-shadow:0 10px 30px rgba(0,0,0,.08)}
@@ -283,10 +284,10 @@
     <button id="btnEntrar">Entrar</button>
     <button class="enlace" id="btnOlvide">Olvidé mi contraseña</button>
     <div id="msgLogin"></div>
-    <div style="margin-top:14px;border-top:1px dashed var(--linea);padding-top:8px">
-      <div style="font-size:11px;font-weight:700;color:var(--gris)">Diagnóstico (versión 4)</div>
+    <details style="margin-top:14px;border-top:1px dashed var(--linea);padding-top:8px">
+      <summary style="font-size:11px;font-weight:700;color:var(--gris);cursor:pointer">Diagnóstico (versión 5)</summary>
       <div id="diag" style="font-size:11px;color:var(--gris);white-space:pre-wrap;max-height:180px;overflow:auto;font-family:monospace"></div>
-    </div>
+    </details>
   </div>
 </div>
 <div id="aviso"></div>
@@ -296,7 +297,7 @@
     var d = document.getElementById('diag');
     if (d) d.textContent += '[' + ((Date.now() - window.__t0) / 1000).toFixed(1) + 's] ' + t + '\n';
   };
-  __log('Página cargada (versión 4)');
+  __log('Página cargada (versión 5)');
   window.addEventListener('error', function(e){ __log('ERROR: ' + (e.message || (e.target && e.target.src) || 'desconocido')); }, true);
   window.addEventListener('unhandledrejection', function(e){
     var r = e.reason || {}; __log('ERROR (promesa): ' + (r.code || '') + ' ' + (r.message || r));
