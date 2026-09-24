@@ -283,12 +283,31 @@
     <button id="btnEntrar">Entrar</button>
     <button class="enlace" id="btnOlvide">Olvidé mi contraseña</button>
     <div id="msgLogin"></div>
+    <div style="margin-top:14px;border-top:1px dashed var(--linea);padding-top:8px">
+      <div style="font-size:11px;font-weight:700;color:var(--gris)">Diagnóstico (versión 4)</div>
+      <div id="diag" style="font-size:11px;color:var(--gris);white-space:pre-wrap;max-height:180px;overflow:auto;font-family:monospace"></div>
+    </div>
   </div>
 </div>
 <div id="aviso"></div>
 <script>
+  window.__t0 = Date.now();
+  window.__log = function(t){
+    var d = document.getElementById('diag');
+    if (d) d.textContent += '[' + ((Date.now() - window.__t0) / 1000).toFixed(1) + 's] ' + t + '\n';
+  };
+  __log('Página cargada (versión 4)');
+  window.addEventListener('error', function(e){ __log('ERROR: ' + (e.message || (e.target && e.target.src) || 'desconocido')); }, true);
+  window.addEventListener('unhandledrejection', function(e){
+    var r = e.reason || {}; __log('ERROR (promesa): ' + (r.code || '') + ' ' + (r.message || r));
+  });
+  // Prueba directa de red hacia Firestore (sin librería de Firebase)
+  fetch('https://firestore.googleapis.com/v1/projects/defensapublica-limacentro/databases/(default)/documents/defensores?pageSize=1')
+    .then(function(r){ __log('Prueba de red a Firestore: respuesta ' + r.status + (r.ok ? ' OK (la red sí llega a Firestore)' : '')); })
+    .catch(function(e){ __log('Prueba de red a Firestore: FALLÓ (' + e.message + ') - la red parece bloquear Firestore'); });
   setTimeout(function(){
     if (!window.__appCargada){
+      __log('Firebase NO cargó en 12 s (posible bloqueo de www.gstatic.com)');
       document.getElementById('msgLogin').textContent =
         'No se pudo cargar Firebase. Puede que la red bloquee www.gstatic.com: prueba con otra red y avísame.';
     }
@@ -440,6 +459,7 @@ const auth = getAuth(fbApp);
 // Conexión compatible con redes de oficina (long polling), sin caché en disco para que ninguna pestaña bloquee a otra
 const db = initializeFirestore(fbApp, { experimentalForceLongPolling: true });
 window.__appCargada = true;
+__log('Librerías de Firebase cargadas');
 
 // Si una consulta tarda demasiado, avisar en vez de quedarse esperando en silencio
 function conLimite(promesa, ms, paso){
@@ -1252,12 +1272,15 @@ async function entrar(){
   if (!correo || !clave){ msgLogin.textContent = 'Escribe tu correo y contraseña.'; return; }
   const btn = document.getElementById('btnEntrar');
   btn.disabled = true; msgLogin.style.color = 'var(--gris)'; msgLogin.textContent = 'Verificando contraseña…';
+  __log('Clic en Entrar (' + correo + ')');
   try {
     // Si quedó una sesión abierta de antes, se cierra para empezar limpio
-    if (auth.currentUser) await signOut(auth);
+    if (auth.currentUser){ __log('Había una sesión abierta: cerrándola'); await signOut(auth); }
     await conLimite(signInWithEmailAndPassword(auth, correo, clave), 20000, 'verificar la contraseña');
+    __log('Contraseña aceptada por Firebase');
   }
   catch (err){
+    __log('Error al entrar: ' + (err.code || err.message));
     msgLogin.style.color = '';
     msgLogin.textContent = err.code === 'tiempo-agotado' ? 'No hubo respuesta al verificar la contraseña. Revisa tu internet.' :
       err.code === 'auth/network-request-failed' ? 'Sin conexión con Firebase. Revisa tu internet o prueba con otra red.' :
@@ -1278,6 +1301,7 @@ document.getElementById('btnOlvide').addEventListener('click', async () => {
 document.getElementById('btnSalir').addEventListener('click', () => signOut(auth));
 
 onAuthStateChanged(auth, async user => {
+  __log('Estado de sesión: ' + (user ? 'conectado como ' + user.email : 'sin sesión'));
   if (!user){
     usuario = null;
     if (cortarAsig) cortarAsig();
@@ -1291,7 +1315,9 @@ onAuthStateChanged(auth, async user => {
   msgLogin.style.color = 'var(--gris)';
   msgLogin.textContent = 'Contraseña correcta. Revisando permisos…';
   try {
+    __log('Leyendo ficha en staff/' + correo);
     const ficha = await conLimite(getDoc(doc(db, 'staff', correo)), 20000, 'revisar permisos');
+    __log('Ficha en staff: ' + (ficha.exists() ? 'encontrada, rol "' + ficha.data().rol + '"' : 'NO encontrada'));
     if (!ficha.exists()){
       msgLogin.style.color = '';
       msgLogin.textContent = 'Tu correo no está autorizado en MEGA ALEGRA. Pide al coordinador que te registre.';
@@ -1302,6 +1328,7 @@ onAuthStateChanged(auth, async user => {
 
     msgLogin.textContent = 'Cargando defensores…';
     const snap = await conLimite(getDocs(query(collection(db, 'defensores'), where('area', '==', 'Asistencia Legal'))), 20000, 'cargar defensores');
+    __log('Defensores de Asistencia Legal leídos: ' + snap.size);
     DEFENSORES = snap.docs.map(d => ({ id: d.id, ...d.data() }))
       .filter(d => d.activo !== false)
       .map(d => ({ id: d.id, nombre: d.nombre, nota: d.notas || '' }))
@@ -1317,6 +1344,7 @@ onAuthStateChanged(auth, async user => {
     pintarTabla();
   } catch (err){
     console.error(err);
+    __log('Error al cargar acceso: ' + (err.code || '') + ' ' + (err.message || ''));
     msgLogin.style.color = '';
     msgLogin.textContent = err.code === 'tiempo-agotado'
       ? 'La contraseña es correcta, pero la base de datos no respondió al ' + err.message + '. Puede que la red de la oficina la bloquee: prueba con los datos del celular (compartir internet) y avísame.'
