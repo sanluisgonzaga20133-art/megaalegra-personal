@@ -84,6 +84,8 @@
   .enlace-antecedente{background:none;border:none;padding:0;cursor:pointer;color:var(--azul);font-size:11.5px;font-weight:700;text-decoration:underline;text-underline-offset:2px;text-align:left}
   tbody tr.urgente .enlace-antecedente, tbody tr.muy-urgente .enlace-antecedente{color:#fff}
   .chip-estado{display:inline-block;font-size:11px;font-weight:700;padding:2px 7px;border-radius:9px;background:#FFF3D6;color:#6B4A0E;border:1px solid #E8C872;cursor:pointer;white-space:normal}
+  .etiqueta-completar{display:block;margin-top:3px;font-size:10.5px;font-weight:700;color:#6B4A0E;background:#FFF3D6;border:1px solid #E8C872;border-radius:6px;padding:1px 6px;width:max-content}
+  .falta{font-size:11.5px;font-weight:700;color:#9A5B00;background:#FFF3D6;border-radius:5px;padding:1px 6px}
   .etiqueta-prioridad{display:inline-block;font-size:10.5px;font-weight:700;padding:1px 6px;border-radius:6px;background:#fff;color:var(--tinta);margin-top:3px}
   .celda-num-doc input{width:110px;font:inherit;font-size:12.5px;padding:4px 6px;border:1px solid var(--fosforo-borde);border-radius:5px;background:#fff;text-transform:uppercase}
   .celda-num-doc input.pendiente{border:2px solid var(--rojo-oscuro)}
@@ -217,6 +219,7 @@
       <option>Equipo multidisciplinario</option>
     </select>
     <label><input type="checkbox" id="filtroPendientes"> Solo pendientes de memo, oficio o carta</label>
+    <label><input type="checkbox" id="filtroCompletar"> Solo por completar (vienen de la Agenda)</label>
   </div>
   <p class="estado-carga" id="estadoCarga"></p>
 
@@ -418,7 +421,7 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
 import { getAuth, onAuthStateChanged, signInWithEmailAndPassword, signOut }
   from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
-import { initializeFirestore, collection, doc, getDoc, getDocs, setDoc, updateDoc, deleteDoc,
+import { initializeFirestore, collection, doc, getDoc, getDocs, setDoc, updateDoc, deleteDoc, deleteField,
   query, where, onSnapshot, serverTimestamp }
   from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 
@@ -455,6 +458,27 @@ const MATERIAS_AL = [
 ];
 const DELITOS_V = ['Tortura', 'Crimen organizado', 'Apelaciones', 'Discriminación', 'Homicidio', 'Acoso y violación sexual agravada',
   'Negligencia médica o lesiones graves', 'Accidente de tránsito'];
+
+// ---------------- Sincronización con la Agenda (Drive 2) ----------------
+// El caso nuevo y su asignación usan el MISMO identificador en "casos" y en "asignaciones".
+const ORIGEN_A_AGENDA = { 'Mesa de partes virtual': 'Mesa de partes virtual', 'Correo electrónico': 'Correo institucional', 'Correo Fono Alegra': 'Fono Alegra' };
+function origenAgenda(origen, area, turno){
+  if (turno) return turno;
+  if (origen === 'Presencial (formato)') return area === 'Asistencia Legal' ? 'Turno presencial (Turno Consulta)'
+    : area === 'Defensa de Víctimas' ? 'Turno presencial (Patrocinio presencial)' : 'Turno presencial';
+  return ORIGEN_A_AGENDA[origen] || 'Mesa de partes virtual';
+}
+const NOMBRADAS_AL = ['Desalojo', 'Laboral', 'Desprotección Familiar', 'Procedimiento Adm. de Adopción', 'Riesgo por Desprotección'];
+function categoriaAgenda(materia, area){
+  if (area === 'Defensa de Víctimas') return DELITOS_V.includes(materia) ? materia : 'Otras';
+  if (area === 'Equipo multidisciplinario') return DELITOS_V.includes(materia) ? 'Víctimas' : 'Asistencia Legal';
+  if (materia === 'Desalojo (casa habitación)') return 'Desalojo';
+  if (materia === 'Nulidad de despido, despido arbitrario o beneficios sociales') return 'Laboral';
+  return NOMBRADAS_AL.includes(materia) ? materia : 'Otras materias';
+}
+const CASILLAS_VACIAS = { adultoMayor: false, lgtbi: false, indigena: false, conadis: false, presencial: false, menorEdad: false };
+async function existe(col, id){ try { return (await getDoc(doc(db, col, id))).exists(); } catch (e){ return false; } }
+function idAsignacion(r){ return r.asignacionId || r.id; }
 
 // ---------------- Utilidades ----------------
 const $ = id => document.getElementById(id);
@@ -533,6 +557,7 @@ function filasAMostrar(){
   let lista = [...cache.values()];
   if (area) lista = lista.filter(r => r.area === area);
   if (soloPend) lista = lista.filter(tienePendiente);
+  if ($('filtroCompletar').checked) lista = lista.filter(r => r.porCompletar);
 
   if (!texto){
     return lista.filter(r => r.anio === anioElegido).sort((a, b) => ordenRegistro(b, a));
@@ -604,14 +629,14 @@ function pintar(){
 
     return `<tr id="fila-${r.id}" class="${clases.join(' ')}">
       <td class="num">${num[r.id] || ''}</td>
-      <td>${celdaFecha}${prioridad}</td>
-      <td>${esc(r.origen)}</td>
+      <td>${celdaFecha}${prioridad}${r.porCompletar ? '<span class="etiqueta-completar">Por completar</span>' : ''}</td>
+      <td>${esc(r.origen) || (r.turno ? '<span class="falta">Falta el medio</span>' : '')}${r.turno ? `<span class="chico">${esc(r.turno)}</span>` : ''}</td>
       <td>${esc(r.codigo)}${tipo}</td>
       <td>${esc(r.numDoc)}</td>
-      <td>${esc(r.usuario)}</td>
-      <td>${esc(r.abogadoNombre)}</td>
-      <td>${esc(r.abogadoCelular)}</td>
-      <td>${esc(r.abogadoCorreo)}</td>
+      <td>${esc(r.usuario) || (r.porCompletar ? '<span class="falta">Falta</span>' : '')}</td>
+      <td>${r.abogadoActualNombre ? esc(r.abogadoActualNombre) + `<span class="chico">Antes: ${esc(r.abogadoNombre)}</span>` : esc(r.abogadoNombre)}</td>
+      <td>${esc(r.abogadoActualNombre ? r.abogadoActualCelular : r.abogadoCelular)}</td>
+      <td>${esc(r.abogadoActualNombre ? r.abogadoActualCorreo : r.abogadoCorreo)}</td>
       <td>${esc(r.materia)}${detalleInforme}</td>
       <td>${esc(r.carpeta)}</td>
       <td>${dilig}</td>
@@ -662,8 +687,18 @@ async function borrar(id){
     const hijos = await getDocs(query(collection(db, COL), where('padreId', '==', id)));
     if (!hijos.empty){ avisar('Este caso tiene ' + hijos.size + ' antecedente(s). Bórralos primero.', 5000); pintar(); return; }
     await deleteDoc(doc(db, COL, id));
-    if (r && r.padreId) await recalcularEstado(r.padreId);
-    avisar('Registro borrado');
+    if (r && r.padreId){
+      // Si era una devolución o un cambio de abogado, también sale su movimiento de la Agenda
+      if (await existe('reasignaciones', id)) await deleteDoc(doc(db, 'reasignaciones', id));
+      await recalcularEstado(r.padreId);
+    } else if (r){
+      // Caso nuevo: sale también de la Agenda (con sus reasignaciones)
+      const idA = idAsignacion(r);
+      const ligadas = await getDocs(query(collection(db, 'reasignaciones'), where('casoId', '==', idA)));
+      await Promise.all(ligadas.docs.map(d => deleteDoc(d.ref)));
+      if (await existe('asignaciones', idA)) await deleteDoc(doc(db, 'asignaciones', idA));
+    }
+    avisar('Registro borrado (también en la Agenda si correspondía)');
   } catch (err){ errorAlGuardar(err); }
   pintar();
 }
@@ -684,8 +719,12 @@ async function recalcularEstado(padreId){
   const ultimo = hijos[hijos.length - 1];
   const cambios = { estado: ultimo ? ultimo.estadoTexto : '' };
   const cambio = snap.docs.map(d => d.data()).filter(h => h.tipoDoc === 'Solicitud de cambio de abogado' && h.resultadoCambio === 'Procede (reasignado)').sort(ordenRegistro).pop();
-  if (cambio){ Object.assign(cambios, { abogadoActualId: cambio.abogadoId, abogadoActualNombre: cambio.abogadoNombre }); }
+  if (cambio){ Object.assign(cambios, { abogadoActualId: cambio.abogadoId, abogadoActualNombre: cambio.abogadoNombre, abogadoActualCelular: cambio.abogadoCelular || '', abogadoActualCorreo: cambio.abogadoCorreo || '' }); }
+  else Object.assign(cambios, { abogadoActualId: deleteField(), abogadoActualNombre: deleteField(), abogadoActualCelular: deleteField(), abogadoActualCorreo: deleteField() });
   await updateDoc(doc(db, COL, padreId), cambios);
+  const padreDoc = cache.get(padreId);
+  const idA = padreDoc ? idAsignacion(padreDoc) : padreId;
+  if (await existe('asignaciones', idA)) await updateDoc(doc(db, 'asignaciones', idA), { abogadoActualId: cambio ? cambio.abogadoId : deleteField() });
 }
 
 // ---------------- Historial del caso ----------------
@@ -962,9 +1001,57 @@ function vencimientoPlazo(){
   return { plazoHoras: Number(p), plazoVence: iso };
 }
 
+let editandoIdNuevo = null;
+// Caso nuevo del Drive 1 → su asignación en la Agenda (cuenta como caso nuevo del abogado)
+async function sincronizarAgenda(id, previo, datos){
+  try {
+    const idA = previo ? idAsignacion(previo) : id;
+    const yaExiste = await existe('asignaciones', idA);
+    if (!previo){
+      await setDoc(doc(db, 'asignaciones', idA), {
+        defensorId: datos.abogadoId, area: datos.area, fecha: datos.fecha, mes: datos.mes,
+        categoria: categoriaAgenda(datos.materia, datos.area), especifica: datos.materia,
+        areaMateria: datos.area === 'Equipo multidisciplinario' ? categoriaAgenda(datos.materia, datos.area) : '',
+        origen: origenAgenda(datos.origen, datos.area, ''), ...CASILLAS_VACIAS, desdeDrive1: true,
+        creadoPor: usuario.correo, creadoEn: serverTimestamp()
+      });
+      return;
+    }
+    if (!yaExiste) return; // casos antiguos que nunca estuvieron en la Agenda
+    const cambios = {};
+    if (previo.abogadoId !== datos.abogadoId) cambios.defensorId = datos.abogadoId;
+    if (previo.fecha !== datos.fecha) Object.assign(cambios, { fecha: datos.fecha, mes: datos.mes });
+    if ((previo.materia || '') !== datos.materia){
+      cambios.especifica = datos.materia;
+      if (datos.area !== 'Equipo multidisciplinario') cambios.categoria = categoriaAgenda(datos.materia, datos.area);
+    }
+    if ((previo.origen || '') !== datos.origen) cambios.origen = origenAgenda(datos.origen, datos.area, previo.turno);
+    if (Object.keys(cambios).length) await updateDoc(doc(db, 'asignaciones', idA), { ...cambios, editadoPor: usuario.correo, editadoEn: serverTimestamp() });
+  } catch (err){ console.error(err); avisar('Se guardó en el Drive 1, pero no se pudo actualizar la Agenda.', 6000); }
+}
+// Devolución a otra distrital (−1) y cambio de abogado que procede (−1 / +1) → movimiento en la Agenda
+async function sincronizarMovimiento(id, datos){
+  try {
+    const ref = doc(db, 'reasignaciones', id);
+    const anterior = (cache.get(id) || {}).abogadoAnteriorId || datos.abogadoAnteriorId || padre.abogadoId;
+    const base = { fecha: datos.fecha, mes: datos.mes, casoId: idAsignacion(padre), area: padre.area || '',
+      usuario: padre.usuario || '', carpeta: padre.carpeta || '', nota: '', creadoPor: usuario.correo, creadoEn: serverTimestamp() };
+    if (datos.tipoDoc === 'Devolución a otra Dirección Distrital'){
+      await setDoc(ref, { ...base, deId: anterior, aId: '', destino: 'OTRA DISTRITAL: ' + datos.distrital,
+        referencia: 'DEVUELTO A ' + datos.distrital + ' · ' + (padre.usuario || '') });
+    } else if (datos.tipoDoc === 'Solicitud de cambio de abogado' && datos.resultadoCambio === 'Procede (reasignado)'){
+      await setDoc(ref, { ...base, deId: anterior, aId: datos.abogadoId,
+        referencia: 'CAMBIO DE ABOGADO · ' + (padre.usuario || '') });
+    } else if (await existe('reasignaciones', id)){
+      await deleteDoc(ref);
+    }
+  } catch (err){ console.error(err); avisar('Se guardó en el Drive 1, pero no se pudo registrar el movimiento en la Agenda.', 6000); }
+}
+
 $('btnGuardarForm').onclick = async () => {
   const error = t => { $('errorForm').textContent = t; $('errorForm').hidden = false; };
   $('errorForm').hidden = true;
+  editandoIdNuevo = null;
   const esAnt = modo === 'antecedente';
   const tipoDoc = esAnt ? $('fTipoDoc').value : 'Caso nuevo';
   const abog = DEFENSORES.find(d => d.id === $('fAbogado').value);
@@ -1013,8 +1100,12 @@ $('btnGuardarForm').onclick = async () => {
     Object.assign(datos, { padreId: null, usuario: may($('fUsuario').value), area: $('fArea').value, carpeta: may($('fCarpeta').value), materia });
   }
 
+  if (esAnt && !editandoId) datos.abogadoAnteriorId = padre.abogadoActualId || padre.abogadoId || '';
+  if (!esAnt) datos.porCompletar = false;
+
   $('btnGuardarForm').disabled = true;
   try {
+    const previo = editandoId ? { ...(cache.get(editandoId) || {}) } : null;
     if (editandoId){
       if (editandoId && !esAnt){ /* si cambian datos del caso, sus antecedentes guardan la referencia al código */ }
       await updateDoc(doc(db, COL, editandoId), { ...datos, editadoPor: usuario.correo, editadoEn: serverTimestamp() });
@@ -1024,9 +1115,14 @@ $('btnGuardarForm').onclick = async () => {
       }
     } else {
       const ref = doc(collection(db, COL));
+      if (!esAnt) datos.asignacionId = ref.id;
       await setDoc(ref, { ...datos, creadoPor: usuario.correo, creadoEn: serverTimestamp(), creadoEnMs: Date.now() });
       cache.set(ref.id, { id: ref.id, ...datos, creadoEnMs: Date.now() });
+      editandoIdNuevo = ref.id;
     }
+    const idFila = editandoId || editandoIdNuevo;
+    if (!esAnt) await sincronizarAgenda(idFila, previo, datos);
+    else await sincronizarMovimiento(idFila, datos);
     if (esAnt) await recalcularEstado(padre.id);
     $('fondoForm').hidden = true;
     avisar(editandoId ? 'Cambios guardados' : 'Registrado');
@@ -1045,6 +1141,7 @@ async function alBuscar(){
 $('txtBuscar').addEventListener('input', () => { clearTimeout(tBuscar); tBuscar = setTimeout(alBuscar, 300); });
 $('filtroArea').onchange = () => { limiteFilas = 200; pintar(); };
 $('filtroPendientes').onchange = () => { limiteFilas = 200; pintar(); };
+$('filtroCompletar').onchange = () => { limiteFilas = 200; pintar(); };
 function pintarAnios(){
   const actual = Number(hoyIso().slice(0, 4));
   const anios = []; for (let a = 2023; a <= actual; a++) anios.push(a);
