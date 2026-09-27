@@ -197,6 +197,14 @@ function error(err){
 }
 
 // Secciones que se pueden autorizar para editar (deben coincidir con las reglas de Firebase)
+const DRIVES = [
+  ['drive1', 'Drive 1', ['sin', 'ver', 'memos', 'editar']],
+  ['drive2', 'Drive 2', ['sin', 'ver', 'editar']],
+  ['drive3', 'Drive 3 · Fono Alegra', ['sin', 'ver', 'editar']],
+  ['drive4', 'Drive 4 · Consolidación', ['sin', 'ver', 'editar']]
+];
+const NIVELES = { sin: 'Sin acceso', ver: 'Ver', memos: 'Anotar N° de memos, oficios y cartas', editar: 'Editar' };
+function nivelPorRol(p, d){ return 'sin'; } // todo cerrado salvo autorización
 const SECCIONES = [
   ['licencias', 'Licencias'], ['turnos', 'Turnos'], ['teletrabajo', 'Teletrabajo'],
   ['defensoriaPueblo', 'Defensoría'], ['conadis', 'CONADIS'], ['defensores', 'Defensores']
@@ -239,10 +247,10 @@ let abiertoTemporal = null;
 function pintarStaff(){
   const admin = esAdmin();
   $('ayudaPersonal').innerHTML = admin
-    ? 'Los cambios con interruptor se guardan al instante. <b>Bloqueado</b>: puede entrar y ver, pero no registrar, editar ni borrar. <b>Permiso temporal</b>: un asistente trabaja como abogado hasta la fecha que elijas y se corta solo.'
+    ? 'Los cambios con interruptor se guardan al instante. <b>Bloqueado</b>: puede entrar y ver, pero no registrar, editar ni borrar. <b>Permiso temporal</b>: un asistente trabaja como abogado hasta la fecha que elijas y se corta solo. Los <b>Drives están cerrados</b> para todos: en cada columna eliges a quién das <b>Ver</b>, <b>Anotar N° de memos, oficios y cartas</b> (Drive 1) o <b>Editar</b>. El permiso temporal de un asistente le abre Drive 1 y Drive 2 como abogado hasta su fecha.'
     : 'Como Responsable de Área puedes dar o retirar el <b>permiso temporal</b> a los asistentes para que trabajen como abogado hasta una fecha.';
   $('encPersonal').innerHTML = admin
-    ? '<th>Nombre</th><th>Rol</th><th>Área</th><th>Bloqueado</th><th>Puede autorizar</th><th>Permiso temporal (asistentes)</th><th>Puede editar estas secciones</th><th>De licencia hasta</th><th></th>'
+    ? `<th>Nombre</th><th>Rol</th><th>Área</th><th>Bloqueado</th><th>Puede autorizar</th><th>Permiso temporal (asistentes)</th>${DRIVES.map(d => `<th>${d[1]}</th>`).join('')}<th>Puede editar estas pestañas</th><th>De licencia hasta</th><th></th>`
     : '<th>Nombre</th><th>Rol</th><th>Permiso temporal</th>';
   const lista = admin ? STAFF : STAFF.filter(p => p.rol === 'asistente');
   $('cuerpoPersonal').innerHTML = lista.map(p => {
@@ -275,6 +283,10 @@ function pintarStaff(){
       <td><label class="interruptor"><input type="checkbox" data-bool="bloqueado" data-id="${esc(p.id)}" ${p.bloqueado ? 'checked' : ''} ${soyYo ? 'disabled' : ''}> ${p.bloqueado ? 'Sí' : 'No'}</label></td>
       <td><label class="interruptor"><input type="checkbox" data-bool="puedeAutorizar" data-id="${esc(p.id)}" ${p.puedeAutorizar || p.esAdmin ? 'checked' : ''} ${soyYo ? 'disabled' : ''}> ${p.puedeAutorizar || p.esAdmin ? 'Sí' : 'No'}</label></td>
       <td>${temporal}</td>
+      ${DRIVES.map(([k, , niveles]) => p.esAdmin ? '<td><span class="chico">Editar (administrador)</span></td>'
+        : `<td><select data-drive="${k}" data-id="${esc(p.id)}" class="${permisos[k] ? 'cambiado' : ''}">
+          <option value="">Sin acceso (por defecto)</option>
+          ${niveles.filter(n => n !== 'sin').map(n => `<option value="${n}" ${permisos[k] === n ? 'selected' : ''}>${NIVELES[n]}</option>`).join('')}</select></td>`).join('')}
       <td><div class="permisos">${SECCIONES.map(([k, t]) => `<label class="${permisos[k] === 'editar' || p.esAdmin ? 'si' : ''}"><input type="checkbox" data-permiso="${k}" data-id="${esc(p.id)}" ${permisos[k] === 'editar' || p.esAdmin ? 'checked' : ''} ${p.esAdmin ? 'disabled' : ''}>${t}</label>`).join('')}</div></td>
       <td><input type="date" data-campo="licenciaHasta" data-id="${esc(p.id)}" value="${esc(p.licenciaHasta || '')}"></td>
       <td>${soyYo ? '' : `<button class="btn sec chico" data-baja="${esc(p.id)}">Dar de baja</button>`}</td>
@@ -300,6 +312,11 @@ $('cuerpoPersonal').addEventListener('change', e => {
   if (t.dataset.bool){
     if (t.dataset.bool === 'bloqueado' && t.checked && !confirm('¿Bloquear a ' + id + '? Podrá ver, pero no registrar, editar ni borrar nada.')){ t.checked = false; return; }
     cambiarStaff(id, { [t.dataset.bool]: t.checked }, (t.checked ? 'Activó ' : 'Quitó ') + (t.dataset.bool === 'bloqueado' ? 'bloqueo' : 'permiso para autorizar'));
+  } else if (t.dataset.drive){
+    const p = STAFF.find(x => x.id === id);
+    const permisos = { ...(p.permisos || {}) };
+    if (t.value) permisos[t.dataset.drive] = t.value; else delete permisos[t.dataset.drive];
+    cambiarStaff(id, { permisos }, 'Cambió acceso a ' + t.dataset.drive + ': ' + (t.value ? NIVELES[t.value] : 'sin acceso'));
   } else if (t.dataset.permiso){
     const p = STAFF.find(x => x.id === id);
     const permisos = { ...(p.permisos || {}) };

@@ -164,6 +164,9 @@
     border:1.5px solid #E6DECF;background:#fff;color:#241E1B;font-size:17px;font-weight:700;line-height:1;cursor:pointer;
     box-shadow:0 2px 6px rgba(36,30,27,.12)}
   .btn-x:hover{background:#FBEEEC;border-color:#D91023;color:#A10C1A}
+
+  /* Sin acceso a esta sección */
+  #sinAcceso{background:#fff;border:1px solid #E6DECF;border-radius:12px;padding:24px;text-align:center;font-size:15px;color:#6A635C}
 </style>
 </head>
 <body>
@@ -199,6 +202,7 @@
     <a class="hoja" href="https://docs.google.com/spreadsheets/d/1vdRtVAkiTeRWeJGDo9QwTKhf5gwhZ81uTvbvAENyGp0" target="_blank" rel="noopener">Drive 3 · Fono Alegra ↗</a>
     <a class="hoja" href="https://docs.google.com/spreadsheets/d/1-oGexf5LrH5CDsmUCX2pebTIBq4eANhPAuHvDQ0xCZY" target="_blank" rel="noopener">Drive 4 · Consolidación ↗</a>
   </nav>
+  <div id="sinAcceso" hidden>No tienes acceso a esta sección. Si lo necesitas, pídeselo al Coordinador.</div>
 
   <header>
     <h1>Registro de casos</h1>
@@ -1214,6 +1218,18 @@ $('btnSalir').onclick = () => signOut(auth);
 document.addEventListener('keydown', e => { if (e.key === 'Escape'){ $('fondoForm').hidden = true; $('fondoHist').hidden = true; } });
 
 
+// Nivel de acceso a cada drive: 'sin' | 'ver' | 'memos' | 'editar' (igual que en las reglas de Firebase)
+function nivelSeccion(f, s){
+  if (f.esAdmin === true) return 'editar';
+  const temporal = f.rol === 'asistente' && f.permisoTemporalHasta && f.permisoTemporalHasta.toDate && f.permisoTemporalHasta.toDate() > new Date();
+  let n;
+  if (temporal && (s === 'drive1' || s === 'drive2')) n = 'editar';
+  else if ((f.permisos || {})[s]) n = f.permisos[s];
+  else n = 'sin'; // todos los drives están cerrados salvo que el Coordinador autorice
+  if (f.bloqueado === true && n !== 'sin') n = 'ver';
+  return n;
+}
+
 // Rol efectivo: bloqueado = solo mira; asistente con permiso temporal vigente = trabaja como abogado
 function rolEfectivo(f){
   if (f.bloqueado === true) return { rol: 'bloqueado', nota: ' · bloqueado: solo puede ver' };
@@ -1237,7 +1253,18 @@ onAuthStateChanged(auth, async user => {
     const ficha = await getDoc(doc(db, 'staff', correo));
     if (!ficha.exists()){ msgLogin.textContent = 'Tu correo no está autorizado en MEGA ALEGRA.'; await signOut(auth); return; }
     const efectivo = rolEfectivo(ficha.data());
-    usuario = { correo, nombre: ficha.data().nombre || correo, rol: efectivo.rol, nota: efectivo.nota };
+    const nivel = nivelSeccion(ficha.data(), 'drive1');
+    usuario = { correo, nombre: ficha.data().nombre || correo, rol: nivel === 'editar' ? 'abogado' : nivel === 'memos' ? 'asistente' : 'bloqueado',
+      nota: efectivo.nota + (nivel === 'ver' && ficha.data().bloqueado !== true ? ' · solo puede ver' : '') };
+    const navD2 = document.querySelector('.menu-drives a[href="index.html"]');
+    if (navD2) navD2.hidden = nivelSeccion(ficha.data(), 'drive2') === 'sin';
+    if (nivel === 'sin'){
+      $('usuarioSesion').textContent = usuario.nombre;
+      document.querySelectorAll('#app > header, #app > .barra-busqueda, #app > .estado-carga, #app > .tabla-wrap').forEach(x => x.hidden = true);
+      $('sinAcceso').hidden = false;
+      $('pantallaLogin').hidden = true; $('app').hidden = false;
+      return;
+    }
     $('enlacePermisos').hidden = !(ficha.data().esAdmin === true || ficha.data().puedeAutorizar === true);
     try {
       const snapStaff = await getDocs(collection(db, 'staff'));
