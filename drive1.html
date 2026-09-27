@@ -1,0 +1,1098 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Registro de casos (Drive 1) · MEGA ALEGRA</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Source+Serif+4:opsz,wght@8..60,600&family=Public+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+<style>
+  :root{
+    --rojo:#D91023; --rojo-oscuro:#A10C1A; --dorado:#B8873A;
+    --tinta:#241E1B; --gris:#6A635C; --gris-claro:#9A938A;
+    --papel:#F7F2EA; --panel:#FFFFFF; --linea:#E3DACB; --celda:#D9D2C5;
+    --verde:#3F6B52; --verde-fondo:#EAF2ED; --azul:#2C6478;
+    --fosforo:#7CFF4F; --fosforo-borde:#46C21F;
+    --celeste:#E6F3FA; --celeste-linea:#6CB4D8;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;padding:0}
+  body{font-family:'Public Sans',system-ui,sans-serif;background:var(--papel);color:var(--tinta);
+    padding:max(10px, env(safe-area-inset-top,0px)) 12px 30px}
+  ::selection{background:#F4D9A0}
+  [hidden]{display:none !important}
+  button{font-family:inherit}
+  :focus-visible{outline:2px solid var(--azul);outline-offset:2px}
+
+  /* Sesión y login */
+  #pantallaLogin{min-height:100vh;display:flex;align-items:center;justify-content:center;padding:20px}
+  .caja-login{background:#fff;border:1px solid var(--linea);border-radius:14px;padding:28px;max-width:380px;width:100%}
+  .caja-login h2{font-family:'Source Serif 4',Georgia,serif;margin:0 0 4px;color:var(--rojo-oscuro)}
+  .caja-login input{width:100%;padding:10px 12px;border:1px solid var(--linea);border-radius:8px;font:inherit;margin-top:4px}
+  .caja-login .btn-principal{width:100%;margin-top:16px}
+  #msgLogin{margin-top:12px;font-size:13px;font-weight:600;color:var(--rojo-oscuro);min-height:18px}
+  .barra-sesion{display:flex;justify-content:space-between;align-items:center;gap:10px;margin-bottom:8px;font-size:12.5px;color:var(--gris);flex-wrap:wrap}
+  .barra-sesion a, .barra-sesion button{background:#fff;border:1px solid var(--linea);border-radius:8px;padding:4px 12px;font:inherit;cursor:pointer;color:var(--tinta);text-decoration:none}
+
+  header{background:var(--rojo);color:#fff;border-radius:14px;padding:12px 18px;margin-bottom:10px}
+  header::after{content:"";display:block;height:3px;background:var(--dorado);margin-top:10px;border-radius:2px}
+  header h1{font-family:'Source Serif 4',Georgia,serif;font-weight:600;font-size:19px;margin:0 0 2px}
+  header p{margin:0;font-size:14px;color:rgba(255,255,255,.88)}
+  .fila-controles{margin-top:10px;display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+  .btn-blanco{font-size:13.5px;font-weight:700;padding:7px 14px;border-radius:7px;border:1.5px solid #fff;background:transparent;color:#fff;cursor:pointer}
+  .btn-blanco:hover{background:rgba(255,255,255,.15)}
+  .btn-registrar{font-size:14px;font-weight:700;padding:8px 16px;border-radius:7px;border:none;background:#fff;color:var(--rojo-oscuro);cursor:pointer}
+  .btn-registrar:hover{background:#FBEEEC}
+
+  /* Pestañas de año y buscador */
+  .barra-busqueda{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:10px}
+  .anios{display:flex;gap:4px;flex-wrap:wrap}
+  .anio{padding:6px 12px;border-radius:7px;border:1px solid var(--linea);background:#fff;font-size:13.5px;font-weight:600;cursor:pointer;color:var(--gris)}
+  .anio.activo{background:var(--tinta);color:#fff;border-color:var(--tinta)}
+  .buscador{flex:1;min-width:240px;position:relative}
+  .buscador input{width:100%;font:inherit;font-size:15px;padding:10px 12px;border:1.5px solid var(--linea);border-radius:9px;background:#fff}
+  .buscador input:focus{outline:none;border-color:var(--rojo)}
+  .filtros{display:flex;gap:8px;align-items:center;flex-wrap:wrap;font-size:13px}
+  .filtros select{font:inherit;font-size:13px;padding:7px 8px;border:1px solid var(--linea);border-radius:7px;background:#fff}
+  .filtros label{display:flex;gap:5px;align-items:center;cursor:pointer;background:#fff;border:1px solid var(--linea);border-radius:7px;padding:6px 10px}
+  .estado-carga{font-size:12.5px;color:var(--gris);margin:0 0 8px;min-height:16px}
+
+  /* Tabla estilo hoja de cálculo */
+  .tabla-wrap{background:var(--panel);border:1px solid var(--celda);border-radius:10px;overflow:auto;max-height:calc(100vh - 60px)}
+  table{border-collapse:collapse;width:max-content;min-width:100%}
+  thead th{position:sticky;top:0;z-index:3;background:#EFE9DD;text-align:left;font-size:11.5px;font-weight:700;color:var(--tinta);
+    padding:7px 8px;border:1px solid var(--celda);white-space:nowrap}
+  thead th.verde{background:var(--fosforo)}
+  tbody td{padding:5px 8px;border:1px solid var(--celda);font-size:12.5px;vertical-align:top;background:#fff;max-width:260px}
+  tbody td.num{text-align:right;font-variant-numeric:tabular-nums;color:var(--gris);font-weight:600}
+  tbody td.verde{background:var(--fosforo)}
+  tbody td .chico{display:block;font-size:11px;color:var(--gris);margin-top:1px}
+  tbody tr.antecedente td{background:var(--celeste)}
+  tbody tr.antecedente td:first-child{box-shadow:inset 3px 0 0 var(--celeste-linea)}
+  tbody tr.antecedente td.verde{background:var(--fosforo)}
+  tbody tr.urgente td{background:#1d1d1d;color:#fff}
+  tbody tr.urgente td .chico, tbody tr.urgente td.num{color:#ddd}
+  tbody tr.muy-urgente td{background:var(--rojo);color:#fff}
+  tbody tr.muy-urgente td .chico, tbody tr.muy-urgente td.num{color:#ffe3e3}
+  tbody tr.urgente td.verde, tbody tr.muy-urgente td.verde{background:var(--fosforo);color:var(--tinta)}
+  tbody tr.destacada td{animation:destello 2.2s ease-out}
+  @keyframes destello{0%{background:#FFE58A}100%{}}
+  .sangria{display:flex;gap:6px;align-items:flex-start}
+  .flecha{color:var(--celeste-linea);font-weight:700}
+  .enlace-antecedente{background:none;border:none;padding:0;cursor:pointer;color:var(--azul);font-size:11.5px;font-weight:700;text-decoration:underline;text-underline-offset:2px;text-align:left}
+  tbody tr.urgente .enlace-antecedente, tbody tr.muy-urgente .enlace-antecedente{color:#fff}
+  .chip-estado{display:inline-block;font-size:11px;font-weight:700;padding:2px 7px;border-radius:9px;background:#FFF3D6;color:#6B4A0E;border:1px solid #E8C872;cursor:pointer;white-space:normal}
+  .etiqueta-prioridad{display:inline-block;font-size:10.5px;font-weight:700;padding:1px 6px;border-radius:6px;background:#fff;color:var(--tinta);margin-top:3px}
+  .celda-num-doc input{width:110px;font:inherit;font-size:12.5px;padding:4px 6px;border:1px solid var(--fosforo-borde);border-radius:5px;background:#fff;text-transform:uppercase}
+  .celda-num-doc input.pendiente{border:2px solid var(--rojo-oscuro)}
+  .celda-num-doc .no-aplica{font-size:11.5px;color:#2d5a14;font-weight:600}
+  .acciones{display:flex;gap:6px;flex-wrap:wrap}
+  .acciones button{background:none;border:none;padding:0;font-size:12px;font-weight:700;cursor:pointer;color:var(--azul)}
+  .acciones .borrar{color:var(--rojo-oscuro)}
+  tbody tr.urgente .acciones button, tbody tr.muy-urgente .acciones button{color:#fff}
+  .confirmar{display:flex;gap:6px;align-items:center;font-size:12px}
+  .confirmar button{border:none;border-radius:6px;padding:3px 9px;font-size:12px;font-weight:700;cursor:pointer}
+  .confirmar .si{background:var(--rojo-oscuro);color:#fff}
+  .confirmar .no{background:var(--linea);color:var(--tinta)}
+  .vacio{padding:28px;text-align:center;color:var(--gris);font-size:14px}
+  .ver-mas{display:block;margin:10px auto;padding:8px 16px;border-radius:8px;border:1px solid var(--linea);background:#fff;font-weight:600;cursor:pointer}
+  .solo-lectura .solo-abogado{display:none !important}
+
+  /* Ventanas */
+  .fondo-modal{position:fixed;inset:0;background:rgba(36,30,27,.45);display:flex;align-items:flex-end;justify-content:center;z-index:50}
+  .modal{background:#fff;width:100%;max-width:640px;border-radius:16px 16px 0 0;padding:20px 22px calc(22px + env(safe-area-inset-bottom,0px));max-height:92vh;overflow-y:auto}
+  @media(min-width:680px){.fondo-modal{align-items:center}.modal{border-radius:16px}}
+  .modal h2{font-family:'Source Serif 4',Georgia,serif;font-size:19px;margin:0 0 4px}
+  .modal .sub{font-size:13px;color:var(--gris);margin:0 0 10px}
+  .rejilla{display:grid;grid-template-columns:1fr 1fr;gap:0 14px}
+  .rejilla .ancho{grid-column:1 / -1}
+  @media(max-width:560px){.rejilla{grid-template-columns:1fr}}
+  label.campo{display:block;font-size:12.5px;font-weight:700;margin:12px 0 5px}
+  label.campo .obl{color:var(--rojo-oscuro)}
+  .modal input[type=text], .modal input[type=date], .modal input[type=time], .modal select, .modal textarea{
+    width:100%;font:inherit;font-size:14.5px;padding:9px 11px;border:1.5px solid var(--linea);border-radius:8px;background:var(--papel);color:var(--tinta)}
+  .modal textarea{min-height:64px;resize:vertical}
+  .modal input:focus, .modal select:focus, .modal textarea:focus{outline:none;border-color:var(--rojo);background:#fff}
+  .may{text-transform:uppercase}
+  .opciones{display:flex;gap:6px;flex-wrap:wrap}
+  .opcion{border:1.5px solid var(--linea);border-radius:8px;padding:8px 11px;font-size:13px;cursor:pointer;background:#fff}
+  .opcion.activo{border-color:var(--rojo);background:#FBEEEC;font-weight:700}
+  .opcion.urg.activo{background:#1d1d1d;color:#fff;border-color:#1d1d1d}
+  .opcion.muy.activo{background:var(--rojo);color:#fff;border-color:var(--rojo)}
+  .casillas{display:flex;gap:8px;flex-wrap:wrap}
+  .casillas label{display:flex;gap:6px;align-items:center;border:1.5px solid var(--linea);border-radius:8px;padding:8px 11px;font-size:13px;cursor:pointer}
+  .bloque{border-top:1px dashed var(--linea);margin-top:14px;padding-top:2px}
+  .caja-caso{background:var(--celeste);border:1px solid var(--celeste-linea);border-radius:9px;padding:10px 12px;font-size:13px;margin-top:6px}
+  .resultados-caso{border:1px solid var(--linea);border-radius:8px;margin-top:6px;max-height:220px;overflow:auto}
+  .resultado-caso{padding:8px 10px;font-size:12.5px;border-bottom:1px solid var(--linea);cursor:pointer}
+  .resultado-caso:hover{background:var(--papel)}
+  .ayuda{font-size:12px;color:var(--gris);margin-top:4px}
+  .error-form{color:var(--rojo-oscuro);font-size:13px;font-weight:700;margin-top:12px}
+  .acciones-modal{display:flex;gap:10px;margin-top:18px}
+  .acciones-modal button{flex:1;padding:12px;border-radius:9px;font-size:15px;font-weight:700;cursor:pointer}
+  .btn-cancelar{background:var(--papel);color:var(--tinta);border:1.5px solid var(--linea)}
+  .btn-principal{background:var(--rojo);color:#fff;border:none;padding:11px;border-radius:9px;font-weight:700;cursor:pointer;font-size:15px}
+  .btn-principal:disabled{background:#D8CFC3;cursor:default}
+
+  /* Historial del caso */
+  .linea-hist{display:flex;gap:10px;padding:9px 10px;border-bottom:1px solid var(--linea);font-size:13px;align-items:flex-start}
+  .linea-hist.actual{background:#FFF3D6;border-radius:6px}
+  .linea-hist .fecha{min-width:74px;font-weight:700;font-variant-numeric:tabular-nums}
+  .linea-hist .txt{flex:1}
+  .linea-hist button{background:none;border:1px solid var(--linea);border-radius:6px;padding:3px 8px;font-size:12px;cursor:pointer;white-space:nowrap}
+
+  #aviso{position:fixed;left:50%;bottom:calc(20px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);background:#222;color:#fff;
+    padding:10px 16px;border-radius:10px;font-size:13.5px;font-weight:600;z-index:99;display:none;max-width:90vw}
+</style>
+</head>
+<body>
+
+<div id="pantallaLogin">
+  <div class="caja-login">
+    <h2>MEGA ALEGRA · Personal</h2>
+    <p style="margin:0 0 14px;color:var(--gris);font-size:13.5px">Registro de casos (Drive 1)</p>
+    <label class="campo" for="loginCorreo">Correo</label>
+    <input type="email" id="loginCorreo" autocomplete="username">
+    <label class="campo" for="loginClave">Contraseña</label>
+    <input type="password" id="loginClave" autocomplete="current-password">
+    <button class="btn-principal" id="btnEntrar">Entrar</button>
+    <div id="msgLogin">Conectando…</div>
+  </div>
+</div>
+<div id="aviso"></div>
+
+<div id="app" hidden>
+  <div class="barra-sesion">
+    <span id="usuarioSesion"></span>
+    <span style="display:flex;gap:8px">
+      <a href="index.html">← Agenda diaria (Drive 2)</a>
+      <button id="btnSalir">Salir</button>
+    </span>
+  </div>
+
+  <header>
+    <h1>Registro de casos</h1>
+    <p>Drive 1 · Defensa Pública Lima Centro</p>
+    <div class="fila-controles">
+      <button class="btn-registrar solo-abogado" id="btnRegistrar">+ Registrar caso</button>
+      <button class="btn-blanco" id="btnAbrirDescarga">⬇ Descargar por fechas</button>
+    </div>
+    <div class="fila-controles" id="panelDescarga" hidden>
+      <label style="font-size:13px">Desde <input type="date" id="descDesde" style="font:inherit;padding:5px 8px;border-radius:6px;border:none"></label>
+      <label style="font-size:13px">Hasta <input type="date" id="descHasta" style="font:inherit;padding:5px 8px;border-radius:6px;border:none"></label>
+      <button class="btn-registrar" id="btnDescargar">Descargar Excel</button>
+    </div>
+  </header>
+
+  <div class="barra-busqueda">
+    <div class="anios" id="anios"></div>
+    <div class="buscador">
+      <input type="search" id="txtBuscar" placeholder="Buscar en todos los años: código, usuario, abogado, N° de informe, memo, oficio, carpeta…" autocomplete="off">
+    </div>
+  </div>
+  <div class="barra-busqueda filtros">
+    <select id="filtroArea">
+      <option value="">Todas las áreas</option>
+      <option>Asistencia Legal</option>
+      <option>Defensa de Víctimas</option>
+      <option>Equipo multidisciplinario</option>
+    </select>
+    <label><input type="checkbox" id="filtroPendientes"> Solo pendientes de memo, oficio o carta</label>
+  </div>
+  <p class="estado-carga" id="estadoCarga"></p>
+
+  <div class="tabla-wrap">
+    <table>
+      <thead><tr>
+        <th>N°</th><th>Fecha</th><th>Origen</th><th>Documento de referencia</th><th>N° doc.</th>
+        <th>Usuario</th><th>Abogado</th><th>Teléfono</th><th>Correo</th><th>Materia o delito</th>
+        <th>N° carpeta</th><th>Diligencia o audiencia</th><th>Estado del caso</th>
+        <th class="verde">Proveído</th><th class="verde">Memo</th><th class="verde">Oficio / Carta</th>
+        <th>Dirigido a</th><th>Plazo</th><th>Supervisión</th><th>No mostrar en app pública</th><th class="solo-abogado">Acciones</th>
+      </tr></thead>
+      <tbody id="cuerpo"></tbody>
+    </table>
+    <div id="pieTabla"></div>
+  </div>
+</div>
+
+<!-- Ventana: registrar o editar -->
+<div class="fondo-modal" id="fondoForm" hidden>
+  <div class="modal" role="dialog" aria-labelledby="tituloForm">
+    <h2 id="tituloForm">Registrar caso</h2>
+    <p class="sub" id="subForm">Los campos con * son obligatorios. El texto se guarda en mayúsculas.</p>
+
+    <div id="bloqueTipoRegistro">
+      <label class="campo">¿Qué vas a registrar?</label>
+      <div class="opciones" id="optTipoRegistro">
+        <div class="opcion activo" data-v="nuevo">Caso nuevo</div>
+        <div class="opcion" data-v="antecedente">Documento de un caso ya registrado (antecedente)</div>
+      </div>
+    </div>
+
+    <div id="bloquePadre" hidden>
+      <label class="campo" for="buscarPadre">Caso al que pertenece <span class="obl">*</span></label>
+      <div id="padreElegido"></div>
+      <div id="buscadorPadre">
+        <input type="text" id="buscarPadre" placeholder="Busca por código, usuario, carpeta o abogado">
+        <div class="resultados-caso" id="resultadosPadre" hidden></div>
+      </div>
+      <label class="campo" for="fTipoDoc">Tipo de documento <span class="obl">*</span></label>
+      <select id="fTipoDoc"></select>
+    </div>
+
+    <div class="rejilla">
+      <div>
+        <label class="campo" for="fFecha">Fecha de registro <span class="obl">*</span></label>
+        <input type="date" id="fFecha">
+      </div>
+      <div>
+        <label class="campo" for="fNumDoc">N° de documento (informe, memo, oficio, carta)</label>
+        <input type="text" id="fNumDoc" class="may" placeholder="Ej. INFORME N° 45-2026">
+      </div>
+      <div class="ancho">
+        <label class="campo">Origen <span class="obl">*</span></label>
+        <div class="opciones" id="optOrigen"></div>
+      </div>
+      <div class="ancho">
+        <label class="campo" for="fCodigo">Documento de referencia / código <span class="obl" id="oblCodigo">*</span></label>
+        <input type="text" id="fCodigo" class="may" placeholder="Ej. 2026MSC000123456 · CORREO DE FECHA 22/09/2026 · FONO ALEGRA DE FECHA…">
+      </div>
+    </div>
+
+    <div class="rejilla" id="bloqueDatosCaso">
+      <div class="ancho">
+        <label class="campo" for="fUsuario">Usuario (agraviado o solicitante) <span class="obl">*</span></label>
+        <input type="text" id="fUsuario" class="may" placeholder="APELLIDOS, Nombres">
+      </div>
+      <div>
+        <label class="campo" for="fArea">Área <span class="obl">*</span></label>
+        <select id="fArea">
+          <option>Asistencia Legal</option>
+          <option>Defensa de Víctimas</option>
+          <option>Equipo multidisciplinario</option>
+        </select>
+      </div>
+      <div>
+        <label class="campo" for="fCarpeta">N° de caso / carpeta / expediente</label>
+        <input type="text" id="fCarpeta" class="may">
+      </div>
+      <div class="ancho">
+        <label class="campo" for="fMateria">Materia o delito <span class="obl">*</span></label>
+        <select id="fMateria"></select>
+        <input type="text" id="fMateriaOtra" class="may" placeholder="¿Cuál?" style="margin-top:6px" hidden>
+      </div>
+    </div>
+
+    <div>
+      <label class="campo" for="fAbogado" id="etiquetaAbogado">Abogado <span class="obl">*</span></label>
+      <select id="fAbogado"></select>
+      <div class="ayuda" id="ayudaAbogado">El teléfono y el correo del abogado se completan solos.</div>
+    </div>
+
+    <!-- Solo para antecedentes, según el tipo de documento -->
+    <div class="bloque" id="bloqueInforme" hidden>
+      <label class="campo" for="fRespuesta">Respuesta del defensor <span class="obl">*</span></label>
+      <select id="fRespuesta"></select>
+    </div>
+    <div class="bloque" id="bloqueDevolucion" hidden>
+      <label class="campo" for="fDistrital">Dirección Distrital a la que corresponde <span class="obl">*</span></label>
+      <input type="text" id="fDistrital" class="may" placeholder="Ej. LIMA NORTE">
+      <div class="ayuda">En el Drive 2 esto le restará 1 al defensor (lo haremos en la parte 2).</div>
+    </div>
+    <div class="bloque" id="bloqueCambio" hidden>
+      <label class="campo">Resultado de la solicitud de cambio <span class="obl">*</span></label>
+      <div class="opciones" id="optResultado"></div>
+      <div class="ayuda">Si procede, arriba elige el abogado que queda a cargo del caso.</div>
+    </div>
+    <div class="bloque" id="bloqueOpinion" hidden>
+      <div class="caja-caso" id="numOpinion">Será la 2ª opinión.</div>
+    </div>
+    <div id="bloqueResumen" hidden>
+      <label class="campo" for="fResumen">Resumen del documento</label>
+      <textarea id="fResumen" class="may" placeholder="Lo que dice el documento, en pocas palabras"></textarea>
+    </div>
+
+    <div class="bloque">
+      <div class="rejilla">
+        <div>
+          <label class="campo" for="fDiligencia">Diligencia o audiencia</label>
+          <select id="fDiligencia"></select>
+          <input type="text" id="fDiligenciaOtra" class="may" placeholder="Describir" style="margin-top:6px" hidden>
+        </div>
+        <div style="display:flex;gap:8px">
+          <div style="flex:1"><label class="campo" for="fDilFecha">Fecha</label><input type="date" id="fDilFecha"></div>
+          <div style="flex:1"><label class="campo" for="fDilHora">Hora</label><input type="time" id="fDilHora"></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="bloque">
+      <label class="campo">Prioridad</label>
+      <div class="opciones" id="optPrioridad">
+        <div class="opcion activo" data-v="normal">Normal</div>
+        <div class="opcion urg" data-v="urgente">Urgente</div>
+        <div class="opcion muy" data-v="muy urgente">Muy urgente</div>
+      </div>
+      <label class="campo">Qué debe proyectar el personal administrativo</label>
+      <div class="casillas">
+        <label><input type="checkbox" id="fHacerMemo"> Hacer memo</label>
+        <label><input type="checkbox" id="fHacerOficio"> Hacer oficio</label>
+        <label><input type="checkbox" id="fHacerCarta"> Hacer carta</label>
+        <label><input type="checkbox" id="fNoHacer"> No hacer memo</label>
+      </div>
+      <label class="campo" for="fProveido">Proveído</label>
+      <textarea id="fProveido" class="may" placeholder="Indicaciones o texto para el memo, oficio o carta"></textarea>
+      <div class="rejilla">
+        <div>
+          <label class="campo" for="fDirigido">Dirigido a</label>
+          <select id="fDirigido"></select>
+          <input type="text" id="fDirigidoOtro" class="may" placeholder="Escribir" style="margin-top:6px" hidden>
+        </div>
+        <div>
+          <label class="campo" for="fPlazo">Plazo</label>
+          <select id="fPlazo">
+            <option value="">Sin plazo</option>
+            <option value="12">12 horas</option>
+            <option value="24">24 horas</option>
+            <option value="48">48 horas</option>
+            <option value="72">72 horas</option>
+            <option value="otro">Otro (elegir fecha y hora)</option>
+          </select>
+          <div id="bloquePlazoOtro" style="display:flex;gap:6px;margin-top:6px" hidden>
+            <input type="date" id="fPlazoFecha"><input type="time" id="fPlazoHora">
+          </div>
+        </div>
+        <div>
+          <label class="campo" for="fSupFecha">Supervisión (fecha)</label>
+          <input type="date" id="fSupFecha">
+        </div>
+        <div>
+          <label class="campo" for="fSupNota">Supervisión (qué revisar)</label>
+          <input type="text" id="fSupNota" class="may">
+        </div>
+      </div>
+      <div class="casillas" style="margin-top:12px">
+        <label><input type="checkbox" id="fOcultar"> No mostrar este caso en la app pública</label>
+      </div>
+    </div>
+
+    <div class="error-form" id="errorForm" hidden></div>
+    <div class="acciones-modal">
+      <button class="btn-cancelar" id="btnCancelarForm">Cancelar</button>
+      <button class="btn-principal" id="btnGuardarForm">Guardar</button>
+    </div>
+  </div>
+</div>
+
+<!-- Ventana: historial del caso -->
+<div class="fondo-modal" id="fondoHist" hidden>
+  <div class="modal" role="dialog" aria-labelledby="tituloHist">
+    <h2 id="tituloHist">Historial del caso</h2>
+    <p class="sub" id="subHist"></p>
+    <div id="listaHist"></div>
+    <div class="acciones-modal"><button class="btn-cancelar" id="btnCerrarHist">Cerrar</button></div>
+  </div>
+</div>
+
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
+import { getAuth, onAuthStateChanged, signInWithEmailAndPassword, signOut }
+  from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
+import { initializeFirestore, collection, doc, getDoc, getDocs, setDoc, updateDoc, deleteDoc,
+  query, where, onSnapshot, serverTimestamp }
+  from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+
+const fbApp = initializeApp({
+  apiKey: "AIzaSyBHxewV5R3CAj-5i3AzCgfdKvwI5A3jXnA",
+  authDomain: "defensapublica-limacentro.firebaseapp.com",
+  projectId: "defensapublica-limacentro",
+  storageBucket: "defensapublica-limacentro.firebasestorage.app",
+  messagingSenderId: "595677954487",
+  appId: "1:595677954487:web:8a68160c5927bf5cf0a832"
+});
+const auth = getAuth(fbApp);
+const db = initializeFirestore(fbApp, { experimentalForceLongPolling: true });
+const COL = 'casos'; // colección privada del Drive 1 (ya permitida en las reglas para el personal)
+
+// ---------------- Listas ----------------
+const ORIGENES = ['Mesa de partes virtual', 'Correo electrónico', 'Correo Fono Alegra', 'Presencial (formato)'];
+const TIPOS_DOC = ['Informe del defensor', 'Devolución a otra Dirección Distrital', 'Solicitud de cambio de abogado',
+  'Solicitud de nueva opinión', 'Otro documento'];
+const RESPUESTAS = ['Usuario no contesta', 'No desea patrocinio', 'Solicita oficiar a otra institución', 'Caso atendido',
+  'Informa estado del caso', 'Caso sin solución (absuelto)', 'Otro'];
+const RESULTADOS_CAMBIO = ['En evaluación', 'Procede (reasignado)', 'No procede (continúa)'];
+const DILIGENCIAS = ['Prueba anticipada', 'Audiencia única', 'Cámara Gesell', 'Inspección', 'Control de sobreseimiento',
+  'Control de acusación', 'Juicio oral', 'Otra'];
+const PERSONAL_ADMIN = ['MENA RENGIFO, Sirle', 'CAYCHO COYOCUSI, Jhonatan', 'AQUINO LAZO, Yuriko'];
+const MATERIAS_AL = [
+  ['Derecho de Familia', ['Alimentos y filiación', 'Aumento y prorrateo de alimentos', 'Reducción, exoneración o extinción de pensión alimenticia',
+    'Tenencia y régimen de visita (a favor de NNA)', 'Separación convencional y divorcio ulterior', 'Tenencia y custodia', 'Régimen de visitas',
+    'Consejo de familia', 'Protección de NNA sin cuidados parentales o en riesgo', 'Declaración de unión de hecho', 'Materias conexas de violencia familiar']],
+  ['Civil', ['Rectificación de partidas', 'Sucesión intestada', 'Inscripción de defunción', 'Interdicción', 'Apoyos y salvaguardias', 'Desalojo (casa habitación)']],
+  ['Administrativo', ['Impugnación de resolución administrativa']],
+  ['Laboral', ['Nulidad de despido, despido arbitrario o beneficios sociales']],
+  ['Contencioso Administrativo', ['Previsional']]
+];
+const DELITOS_V = ['Tortura', 'Crimen organizado', 'Apelaciones', 'Discriminación', 'Homicidio', 'Acoso y violación sexual agravada',
+  'Negligencia médica o lesiones graves', 'Accidente de tránsito'];
+
+// ---------------- Utilidades ----------------
+const $ = id => document.getElementById(id);
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const may = s => String(s || '').trim().toUpperCase();
+const norm = s => String(s || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+// Código sin guiones ni espacios: "2026MSC-000001950" y "2026MSC000001950" son el mismo código
+const codigoNorm = s => String(s || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
+const coincide = (t, p) => t.includes(p) || (p.replace(/[^a-z0-9]/g, '').length > 3 && t.includes(p.replace(/[^a-z0-9]/g, '')));
+function hoyIso(){ const d = new Date(); return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'); }
+function fechaCorta(iso){ return iso ? iso.slice(8, 10) + '/' + iso.slice(5, 7) + '/' + iso.slice(0, 4) : ''; }
+function avisar(t, ms = 3500){ const a = $('aviso'); a.textContent = t; a.style.display = 'block'; clearTimeout(avisar.t); avisar.t = setTimeout(() => a.style.display = 'none', ms); }
+function errorAlGuardar(err){
+  console.error(err);
+  avisar(err && err.code === 'permission-denied' ? 'Firebase no dio permiso para guardar. Revisa que tu correo esté en staff.' : 'No se pudo guardar. Revisa tu conexión e inténtalo de nuevo.', 6000);
+}
+function ordinal(n){ return n + 'ª'; }
+
+let usuario = null;
+let DEFENSORES = []; // todas las áreas
+const cache = new Map(); // id -> registro (año elegido + todos los años si ya se cargaron)
+let anioElegido = Number(hoyIso().slice(0, 4));
+let todosCargados = false, cargandoTodos = null;
+let limiteFilas = 200;
+let idPorBorrar = null;
+
+// ---------------- Carga de datos ----------------
+let cortarAnio = null;
+function escucharAnio(anio){
+  if (cortarAnio) cortarAnio();
+  $('estadoCarga').textContent = 'Cargando ' + anio + '…';
+  cortarAnio = onSnapshot(query(collection(db, COL), where('anio', '==', anio)), snap => {
+    snap.docChanges().forEach(ch => {
+      if (ch.type === 'removed') cache.delete(ch.doc.id);
+      else cache.set(ch.doc.id, { id: ch.doc.id, ...ch.doc.data() });
+    });
+    $('estadoCarga').textContent = '';
+    pintar();
+  }, err => { console.error(err); $('estadoCarga').textContent = 'No se pudo leer el registro (' + err.code + ').'; });
+}
+function cargarTodos(){
+  if (todosCargados) return Promise.resolve();
+  if (cargandoTodos) return cargandoTodos;
+  $('estadoCarga').textContent = 'Cargando todos los años para buscar…';
+  cargandoTodos = getDocs(collection(db, COL)).then(snap => {
+    snap.docs.forEach(d => { if (!cache.has(d.id)) cache.set(d.id, { id: d.id, ...d.data() }); });
+    todosCargados = true;
+    $('estadoCarga').textContent = '';
+  }).catch(err => { console.error(err); cargandoTodos = null; $('estadoCarga').textContent = 'No se pudo cargar todos los años (' + err.code + ').'; });
+  return cargandoTodos;
+}
+
+// Numeración por año, como en la hoja: orden de registro
+function numeracion(){
+  const porAnio = {};
+  [...cache.values()].forEach(r => (porAnio[r.anio] = porAnio[r.anio] || []).push(r));
+  const num = {};
+  Object.values(porAnio).forEach(lista => {
+    lista.sort(ordenRegistro).forEach((r, i) => { num[r.id] = i + 1; });
+  });
+  return num;
+}
+function ordenRegistro(a, b){ return a.fecha.localeCompare(b.fecha) || (a.creadoEnMs || 0) - (b.creadoEnMs || 0); }
+
+function textoBusqueda(r){
+  return norm([r.codigo, codigoNorm(r.codigo), codigoNorm(r.padreCodigo), r.numDoc, r.usuario, r.abogadoNombre, r.carpeta, r.materia, r.origen, r.tipoDoc, r.proveido,
+    r.memoNum, r.oficioNum, r.resumen, r.respuesta, r.distrital, r.dirigidoA, r.padreCodigo, r.padreUsuario, r.estado,
+    r.diligencia, r.supNota].join(' | '));
+}
+
+// ---------------- Pintar la tabla ----------------
+function filasAMostrar(){
+  const texto = norm($('txtBuscar').value.trim());
+  const area = $('filtroArea').value;
+  const soloPend = $('filtroPendientes').checked;
+  let lista = [...cache.values()];
+  if (area) lista = lista.filter(r => r.area === area);
+  if (soloPend) lista = lista.filter(tienePendiente);
+
+  if (!texto){
+    return lista.filter(r => r.anio === anioElegido).sort((a, b) => ordenRegistro(b, a));
+  }
+  // Con búsqueda: cada coincidencia trae a toda su familia (el caso y sus antecedentes), juntos
+  const palabras = texto.split(/\s+/);
+  const coinciden = lista.filter(r => { const t = textoBusqueda(r); return palabras.every(p => coincide(t, p)); });
+  const raices = new Map();
+  coinciden.forEach(r => { const raiz = r.padreId || r.id; if (!raices.has(raiz)) raices.set(raiz, true); });
+  const familias = [...raices.keys()].map(raizId => {
+    const raiz = cache.get(raizId);
+    const hijos = [...cache.values()].filter(x => x.padreId === raizId).sort(ordenRegistro);
+    const miembros = raiz ? [raiz, ...hijos] : hijos;
+    const ultima = miembros.reduce((m, x) => x.fecha > m ? x.fecha : m, '');
+    return { miembros, ultima };
+  });
+  familias.sort((a, b) => b.ultima.localeCompare(a.ultima));
+  return familias.flatMap(f => f.miembros);
+}
+function tienePendiente(r){
+  const h = r.hacer || {};
+  return ((h.memo && !r.memoNum) || ((h.oficio || h.carta) && !r.oficioNum));
+}
+
+function pintar(){
+  if (!usuario) return;
+  const num = numeracion();
+  const todas = filasAMostrar();
+  const filas = todas.slice(0, limiteFilas);
+  const esAbogado = usuario.rol === 'abogado';
+  const hayBusqueda = $('txtBuscar').value.trim() !== '';
+
+  if (todas.length === 0){
+    $('cuerpo').innerHTML = `<tr><td colspan="21" class="vacio">${hayBusqueda ? 'No hay casos que coincidan con la búsqueda.' :
+      'Todavía no hay casos registrados en ' + anioElegido + '.' + (esAbogado ? ' Usa “+ Registrar caso” para empezar.' : '')}</td></tr>`;
+    $('pieTabla').innerHTML = '';
+    return;
+  }
+
+  $('cuerpo').innerHTML = filas.map(r => {
+    const clases = [];
+    if (r.padreId) clases.push('antecedente');
+    if (r.prioridad === 'urgente') clases.push('urgente');
+    if (r.prioridad === 'muy urgente') clases.push('muy-urgente');
+    const h = r.hacer || {};
+
+    const celdaFecha = r.padreId
+      ? `<div class="sangria"><span class="flecha" aria-hidden="true">↳</span><div>${fechaCorta(r.fecha)}<br><button class="enlace-antecedente" data-hist="${r.padreId}" data-actual="${r.id}">Antecedente del caso ${esc(r.padreCodigo || r.padreUsuario || '')}</button></div></div>`
+      : fechaCorta(r.fecha);
+    const tipo = r.padreId ? `<span class="chico">${esc(r.tipoDoc || '')}${r.tipoDoc === 'Solicitud de nueva opinión' && r.opinionNum ? ' · ' + ordinal(r.opinionNum) + ' opinión' : ''}${r.resultadoCambio ? ' · ' + esc(r.resultadoCambio) : ''}</span>` : '';
+    const detalleInforme = r.padreId && (r.respuesta || r.resumen || r.distrital)
+      ? `<span class="chico">${esc([r.respuesta, r.distrital ? 'A: ' + r.distrital : '', r.resumen].filter(Boolean).join(' — '))}</span>` : '';
+    const prioridad = r.prioridad && r.prioridad !== 'normal' ? `<span class="etiqueta-prioridad">${r.prioridad.toUpperCase()}</span>` : '';
+
+    const estado = !r.padreId && r.estado ? `<span class="chip-estado" data-hist="${r.id}" data-actual="${r.id}" title="Ver historial">${esc(r.estado)}</span>` : '';
+
+    const celdaMemo = h.noHacer ? '<span class="no-aplica">NO HACER MEMO</span>'
+      : `<input data-campo="memoNum" data-id="${r.id}" value="${esc(r.memoNum || '')}" placeholder="${h.memo ? 'Pendiente' : ''}" class="${h.memo && !r.memoNum ? 'pendiente' : ''}" aria-label="N° de memo">`;
+    const celdaOficio = h.noHacer ? ''
+      : `<input data-campo="oficioNum" data-id="${r.id}" value="${esc(r.oficioNum || '')}" placeholder="${h.oficio || h.carta ? 'Pendiente' : ''}" class="${(h.oficio || h.carta) && !r.oficioNum ? 'pendiente' : ''}" aria-label="N° de oficio o carta">${h.oficio || h.carta ? `<span class="chico">${[h.oficio ? 'Oficio' : '', h.carta ? 'Carta' : ''].filter(Boolean).join(' y ')}</span>` : ''}`;
+
+    const plazo = r.plazoVence ? `${fechaCorta(r.plazoVence.slice(0, 10))} ${r.plazoVence.slice(11, 16)}<span class="chico">${r.plazoHoras ? r.plazoHoras + ' h' : 'fecha fija'}</span>` : '';
+    const dilig = r.diligencia ? `${esc(r.diligencia)}${r.dilFecha ? `<span class="chico">${fechaCorta(r.dilFecha)} ${esc(r.dilHora || '')}</span>` : ''}` : '';
+    const sup = r.supFecha ? `${fechaCorta(r.supFecha)}<span class="chico">${esc(r.supNota || '')}</span>` : '';
+
+    const acciones = idPorBorrar === r.id
+      ? `<div class="confirmar">¿Borrar? <button class="si" data-borrar-si="${r.id}">Sí</button><button class="no" data-borrar-no>No</button></div>`
+      : `<div class="acciones"><button data-editar="${r.id}">✎ Editar</button>${!r.padreId ? `<button data-antecedente="${r.id}">+ Antecedente</button>` : ''}<button class="borrar" data-borrar="${r.id}">🗑 Borrar</button></div>`;
+
+    return `<tr id="fila-${r.id}" class="${clases.join(' ')}">
+      <td class="num">${num[r.id] || ''}</td>
+      <td>${celdaFecha}${prioridad}</td>
+      <td>${esc(r.origen)}</td>
+      <td>${esc(r.codigo)}${tipo}</td>
+      <td>${esc(r.numDoc)}</td>
+      <td>${esc(r.usuario)}</td>
+      <td>${esc(r.abogadoNombre)}</td>
+      <td>${esc(r.abogadoCelular)}</td>
+      <td>${esc(r.abogadoCorreo)}</td>
+      <td>${esc(r.materia)}${detalleInforme}</td>
+      <td>${esc(r.carpeta)}</td>
+      <td>${dilig}</td>
+      <td>${estado}</td>
+      <td class="verde">${esc(r.proveido)}</td>
+      <td class="verde celda-num-doc">${celdaMemo}</td>
+      <td class="verde celda-num-doc">${celdaOficio}</td>
+      <td>${esc(r.dirigidoA)}</td>
+      <td>${plazo}</td>
+      <td>${sup}</td>
+      <td style="text-align:center">${esAbogado ? `<input type="checkbox" data-ocultar="${r.id}" ${r.ocultarPublico ? 'checked' : ''} aria-label="No mostrar en app pública">` : (r.ocultarPublico ? '✓' : '')}</td>
+      <td class="solo-abogado">${acciones}</td>
+    </tr>`;
+  }).join('');
+
+  $('pieTabla').innerHTML = todas.length > limiteFilas
+    ? `<button class="ver-mas" id="btnVerMas">Mostrar ${Math.min(200, todas.length - limiteFilas)} más (se ven ${limiteFilas} de ${todas.length})</button>` : '';
+  if ($('btnVerMas')) $('btnVerMas').onclick = () => { limiteFilas += 200; pintar(); };
+}
+
+// ---------------- Eventos de la tabla ----------------
+$('cuerpo').addEventListener('click', e => {
+  const t = e.target;
+  if (t.dataset.hist){ abrirHistorial(t.dataset.hist, t.dataset.actual); return; }
+  if (t.dataset.editar){ abrirForm({ editarId: t.dataset.editar }); return; }
+  if (t.dataset.antecedente){ abrirForm({ padreId: t.dataset.antecedente }); return; }
+  if (t.dataset.borrar){ idPorBorrar = t.dataset.borrar; pintar(); return; }
+  if (t.dataset.borrarNo !== undefined){ idPorBorrar = null; pintar(); return; }
+  if (t.dataset.borrarSi){ borrar(t.dataset.borrarSi); return; }
+});
+$('cuerpo').addEventListener('change', e => {
+  const t = e.target;
+  if (t.dataset.campo){
+    const valor = may(t.value);
+    const cambios = { [t.dataset.campo]: valor, [t.dataset.campo + 'Fecha']: valor ? hoyIso() : '', [t.dataset.campo + 'Por']: usuario.correo };
+    updateDoc(doc(db, COL, t.dataset.id), cambios).then(() => avisar(valor ? 'Guardado: ' + valor : 'Número borrado')).catch(errorAlGuardar);
+  }
+  if (t.dataset.ocultar){
+    updateDoc(doc(db, COL, t.dataset.ocultar), { ocultarPublico: t.checked }).catch(errorAlGuardar);
+  }
+});
+$('cuerpo').addEventListener('keydown', e => { if (e.key === 'Enter' && e.target.dataset.campo) e.target.blur(); });
+
+async function borrar(id){
+  idPorBorrar = null;
+  const r = cache.get(id);
+  try {
+    const hijos = await getDocs(query(collection(db, COL), where('padreId', '==', id)));
+    if (!hijos.empty){ avisar('Este caso tiene ' + hijos.size + ' antecedente(s). Bórralos primero.', 5000); pintar(); return; }
+    await deleteDoc(doc(db, COL, id));
+    if (r && r.padreId) await recalcularEstado(r.padreId);
+    avisar('Registro borrado');
+  } catch (err){ errorAlGuardar(err); }
+  pintar();
+}
+
+// El estado del caso sale de su último antecedente
+function textoEstado(r){
+  switch (r.tipoDoc){
+    case 'Informe del defensor': return may(r.respuesta);
+    case 'Devolución a otra Dirección Distrital': return 'DEVUELTO – ' + may(r.distrital);
+    case 'Solicitud de cambio de abogado': return 'CAMBIO DE ABOGADO: ' + may(r.resultadoCambio);
+    case 'Solicitud de nueva opinión': return 'EN ' + ordinal(r.opinionNum || 2) + ' OPINIÓN';
+    default: return '';
+  }
+}
+async function recalcularEstado(padreId){
+  const snap = await getDocs(query(collection(db, COL), where('padreId', '==', padreId)));
+  const hijos = snap.docs.map(d => d.data()).filter(h => h.estadoTexto).sort(ordenRegistro);
+  const ultimo = hijos[hijos.length - 1];
+  const cambios = { estado: ultimo ? ultimo.estadoTexto : '' };
+  const cambio = snap.docs.map(d => d.data()).filter(h => h.tipoDoc === 'Solicitud de cambio de abogado' && h.resultadoCambio === 'Procede (reasignado)').sort(ordenRegistro).pop();
+  if (cambio){ Object.assign(cambios, { abogadoActualId: cambio.abogadoId, abogadoActualNombre: cambio.abogadoNombre }); }
+  await updateDoc(doc(db, COL, padreId), cambios);
+}
+
+// ---------------- Historial del caso ----------------
+async function abrirHistorial(raizId, actualId){
+  $('listaHist').innerHTML = '<p class="sub">Cargando…</p>';
+  $('fondoHist').hidden = false;
+  try {
+    const raizSnap = await getDoc(doc(db, COL, raizId));
+    const hijos = (await getDocs(query(collection(db, COL), where('padreId', '==', raizId)))).docs.map(d => ({ id: d.id, ...d.data() }));
+    const raiz = raizSnap.exists() ? { id: raizSnap.id, ...raizSnap.data() } : null;
+    const lista = [raiz, ...hijos.sort(ordenRegistro)].filter(Boolean);
+    lista.forEach(x => cache.set(x.id, x));
+    $('tituloHist').textContent = 'Caso ' + (raiz ? (raiz.codigo || raiz.usuario) : '');
+    $('subHist').textContent = raiz ? [raiz.usuario, raiz.abogadoNombre, raiz.materia].filter(Boolean).join(' · ') : 'El caso original ya no existe.';
+    $('listaHist').innerHTML = lista.map(x => {
+      const desc = x.padreId
+        ? [x.tipoDoc, x.numDoc, x.respuesta || x.resultadoCambio || (x.distrital ? 'A ' + x.distrital : '') || (x.opinionNum ? ordinal(x.opinionNum) + ' opinión · ' + x.abogadoNombre : ''), x.resumen].filter(Boolean).join(' · ')
+        : ['Caso nuevo', x.origen, x.memoNum ? 'Memo ' + x.memoNum : ''].filter(Boolean).join(' · ');
+      return `<div class="linea-hist ${x.id === actualId ? 'actual' : ''}">
+        <span class="fecha">${fechaCorta(x.fecha)}</span>
+        <span class="txt">${esc(desc)}${x.id === actualId ? ' <b>← estás aquí</b>' : ''}</span>
+        <button data-ir="${x.id}">Ir a la fila</button></div>`;
+    }).join('');
+  } catch (err){ console.error(err); $('listaHist').innerHTML = '<p class="sub">No se pudo cargar el historial.</p>'; }
+}
+$('listaHist').addEventListener('click', e => {
+  const id = e.target.dataset.ir;
+  if (!id) return;
+  $('fondoHist').hidden = true;
+  const r = cache.get(id);
+  const raiz = cache.get(r.padreId || r.id) || r;
+  $('txtBuscar').value = raiz.codigo || raiz.usuario || '';
+  alBuscar().then(() => {
+    const fila = $('fila-' + id);
+    if (fila){ fila.scrollIntoView({ block: 'center', behavior: 'smooth' }); fila.classList.add('destacada'); }
+  });
+});
+$('btnCerrarHist').onclick = () => $('fondoHist').hidden = true;
+$('fondoHist').addEventListener('click', e => { if (e.target.id === 'fondoHist') $('fondoHist').hidden = true; });
+
+// ---------------- Formulario ----------------
+let modo = 'nuevo';           // 'nuevo' | 'antecedente'
+let editandoId = null;
+let padre = null;
+let origen = '', prioridad = 'normal', resultadoCambio = '';
+
+function opcionesSimples(cont, lista, alElegir){
+  cont.innerHTML = lista.map(v => `<div class="opcion" data-v="${esc(v)}">${esc(v)}</div>`).join('');
+  cont.onclick = e => { const o = e.target.closest('.opcion'); if (!o) return; marcar(cont, o.dataset.v); alElegir(o.dataset.v); };
+}
+function marcar(cont, v){ [...cont.children].forEach(c => c.classList.toggle('activo', c.dataset.v === v)); }
+opcionesSimples($('optOrigen'), ORIGENES, v => { origen = v; actualizarObligatorios(); });
+opcionesSimples($('optResultado'), RESULTADOS_CAMBIO, v => { resultadoCambio = v; actualizarAbogadoLabel(); });
+$('optPrioridad').onclick = e => { const o = e.target.closest('.opcion'); if (!o) return; prioridad = o.dataset.v; marcar($('optPrioridad'), prioridad); };
+$('optTipoRegistro').onclick = e => { const o = e.target.closest('.opcion'); if (!o) return; ponerModo(o.dataset.v); };
+
+$('fTipoDoc').innerHTML = TIPOS_DOC.map(t => `<option>${t}</option>`).join('');
+$('fRespuesta').innerHTML = '<option value="">— Elegir —</option>' + RESPUESTAS.map(t => `<option>${t}</option>`).join('');
+$('fDiligencia').innerHTML = '<option value="">— Ninguna —</option>' + DILIGENCIAS.map(t => `<option>${t}</option>`).join('');
+$('fDiligencia').onchange = () => $('fDiligenciaOtra').hidden = $('fDiligencia').value !== 'Otra';
+$('fPlazo').onchange = () => $('bloquePlazoOtro').hidden = $('fPlazo').value !== 'otro';
+$('fDirigido').onchange = () => $('fDirigidoOtro').hidden = !$('fDirigido').value.startsWith('OTRA');
+$('fMateria').onchange = () => $('fMateriaOtra').hidden = $('fMateria').value !== 'Otra';
+$('fArea').onchange = () => { llenarMaterias(); llenarAbogados(); };
+$('fTipoDoc').onchange = actualizarBloquesTipo;
+$('fNoHacer').onchange = () => { if ($('fNoHacer').checked) ['fHacerMemo', 'fHacerOficio', 'fHacerCarta'].forEach(i => $(i).checked = false); };
+['fHacerMemo', 'fHacerOficio', 'fHacerCarta'].forEach(i => $(i).addEventListener('change', () => { if ($(i).checked) $('fNoHacer').checked = false; }));
+
+function llenarMaterias(valor){
+  const area = $('fArea').value;
+  let html = '<option value="">— Elegir —</option>';
+  if (area !== 'Defensa de Víctimas') html += MATERIAS_AL.map(([g, items]) => `<optgroup label="${area === 'Asistencia Legal' ? g : 'Asistencia Legal · ' + g}">${items.map(m => `<option>${m}</option>`).join('')}</optgroup>`).join('');
+  if (area !== 'Asistencia Legal') html += `<optgroup label="Víctimas">${DELITOS_V.map(m => `<option>${m}</option>`).join('')}</optgroup>`;
+  html += '<option value="Otra">Otra (escribir)</option>';
+  $('fMateria').innerHTML = html;
+  const existe = valor && [...$('fMateria').options].some(o => o.value === valor);
+  $('fMateria').value = !valor ? '' : existe ? valor : 'Otra';
+  $('fMateriaOtra').value = valor && !existe ? valor : '';
+  $('fMateriaOtra').hidden = $('fMateria').value !== 'Otra';
+}
+function llenarAbogados(valor){
+  const area = $('fArea').value;
+  const propios = DEFENSORES.filter(d => d.area === area);
+  const otros = DEFENSORES.filter(d => d.area !== area);
+  $('fAbogado').innerHTML = '<option value="">— Elegir —</option>' +
+    `<optgroup label="${area}">${propios.map(d => `<option value="${d.id}">${esc(d.nombre)}</option>`).join('')}</optgroup>` +
+    `<optgroup label="Otras áreas">${otros.map(d => `<option value="${d.id}">${esc(d.nombre)}</option>`).join('')}</optgroup>`;
+  if (valor) $('fAbogado').value = valor;
+}
+function llenarDirigido(valor){
+  const grupo = (titulo, lista) => `<optgroup label="${titulo}">${lista.map(n => `<option>${esc(n)}</option>`).join('')}</optgroup>`;
+  const nombres = area => DEFENSORES.filter(d => d.area === area).map(d => d.nombre);
+  $('fDirigido').innerHTML = '<option value="">— Nadie en particular —</option>' +
+    grupo('Personal administrativo', PERSONAL_ADMIN) +
+    grupo('Asistencia Legal', nombres('Asistencia Legal')) +
+    grupo('Defensa de Víctimas', nombres('Defensa de Víctimas')) +
+    grupo('Equipo multidisciplinario', nombres('Equipo multidisciplinario')) +
+    grupo('Instituciones', ['DIRECCIÓN DISTRITAL DE LIMA CENTRO', 'COORDINACIÓN PENAL LIMA CENTRO', 'OTRA DIRECCIÓN DISTRITAL (escribir)', 'OTRA INSTITUCIÓN (escribir)']);
+  const existe = valor && [...$('fDirigido').options].some(o => o.value === valor);
+  $('fDirigido').value = !valor ? '' : existe ? valor : 'OTRA INSTITUCIÓN (escribir)';
+  $('fDirigidoOtro').value = valor && !existe ? valor : '';
+  $('fDirigidoOtro').hidden = !$('fDirigido').value.startsWith('OTRA');
+}
+
+function ponerModo(m){
+  modo = m;
+  marcar($('optTipoRegistro'), m);
+  $('bloquePadre').hidden = m !== 'antecedente';
+  $('bloqueDatosCaso').hidden = m === 'antecedente';
+  $('bloqueResumen').hidden = m !== 'antecedente';
+  if (m === 'antecedente' && !padre) mostrarBuscadorPadre();
+  actualizarBloquesTipo();
+}
+function actualizarBloquesTipo(){
+  const t = modo === 'antecedente' ? $('fTipoDoc').value : '';
+  $('bloqueInforme').hidden = t !== 'Informe del defensor';
+  $('bloqueDevolucion').hidden = t !== 'Devolución a otra Dirección Distrital';
+  $('bloqueCambio').hidden = t !== 'Solicitud de cambio de abogado';
+  $('bloqueOpinion').hidden = t !== 'Solicitud de nueva opinión';
+  if (t === 'Solicitud de nueva opinión') calcularOpinion();
+  actualizarAbogadoLabel();
+}
+function actualizarAbogadoLabel(){
+  const t = modo === 'antecedente' ? $('fTipoDoc').value : '';
+  const texto = t === 'Solicitud de nueva opinión' ? 'Abogado que dará la opinión'
+    : t === 'Solicitud de cambio de abogado' && resultadoCambio === 'Procede (reasignado)' ? 'Abogado que queda a cargo del caso'
+    : 'Abogado';
+  $('etiquetaAbogado').innerHTML = texto + ' <span class="obl">*</span>';
+}
+function actualizarObligatorios(){ $('oblCodigo').hidden = origen !== 'Mesa de partes virtual'; }
+
+let opinionCalculada = 2;
+async function calcularOpinion(){
+  if (!padre) { $('numOpinion').textContent = 'Elige primero el caso al que pertenece.'; return; }
+  const hermanos = (await getDocs(query(collection(db, COL), where('padreId', '==', padre.id)))).docs
+    .map(d => ({ id: d.id, ...d.data() })).filter(h => h.tipoDoc === 'Solicitud de nueva opinión' && h.id !== editandoId);
+  opinionCalculada = hermanos.length + 2;
+  const yaOpinaron = [...new Set([padre.abogadoNombre, ...hermanos.map(h => h.abogadoNombre)])].filter(Boolean);
+  $('numOpinion').innerHTML = `Será la <b>${ordinal(opinionCalculada)} opinión</b>.` +
+    (yaOpinaron.length ? `<br><span class="ayuda">Ya vieron este caso: ${esc(yaOpinaron.join(', '))}. Elige a otro abogado.</span>` : '');
+}
+
+// Buscar el caso al que pertenece el antecedente
+function mostrarBuscadorPadre(){
+  $('padreElegido').innerHTML = '';
+  $('buscadorPadre').hidden = false;
+  $('buscarPadre').value = '';
+  $('resultadosPadre').hidden = true;
+  cargarTodos();
+}
+let tBuscarPadre = null;
+$('buscarPadre').addEventListener('input', () => {
+  clearTimeout(tBuscarPadre);
+  tBuscarPadre = setTimeout(async () => {
+    const texto = norm($('buscarPadre').value.trim());
+    if (texto.length < 2){ $('resultadosPadre').hidden = true; return; }
+    await cargarTodos();
+    const palabras = texto.split(/\s+/);
+    const res = [...cache.values()].filter(r => !r.padreId && palabras.every(p => coincide(textoBusqueda(r), p)))
+      .sort((a, b) => ordenRegistro(b, a)).slice(0, 30);
+    $('resultadosPadre').hidden = false;
+    $('resultadosPadre').innerHTML = res.length ? res.map(r =>
+      `<div class="resultado-caso" data-padre="${r.id}"><b>${esc(r.codigo || '(sin código)')}</b> · ${esc(r.usuario)}<br>
+       <span class="ayuda">${fechaCorta(r.fecha)} · ${esc(r.abogadoNombre)} · ${esc(r.materia)}${r.carpeta ? ' · Carpeta ' + esc(r.carpeta) : ''}</span></div>`).join('')
+      : '<div class="resultado-caso">No se encontró. Si el caso no está registrado, regístralo primero como caso nuevo.</div>';
+  }, 250);
+});
+$('resultadosPadre').addEventListener('click', e => {
+  const el = e.target.closest('[data-padre]');
+  if (el) elegirPadre(cache.get(el.dataset.padre));
+});
+function elegirPadre(r){
+  padre = r;
+  $('buscadorPadre').hidden = true;
+  $('padreElegido').innerHTML = `<div class="caja-caso"><b>${esc(r.codigo || '(sin código)')}</b> · ${esc(r.usuario)}<br>
+    <span class="ayuda">${fechaCorta(r.fecha)} · ${esc(r.abogadoActualNombre || r.abogadoNombre)} · ${esc(r.materia)}${r.carpeta ? ' · Carpeta ' + esc(r.carpeta) : ''}</span>
+    ${editandoId ? '' : ' <button class="enlace-antecedente" id="btnCambiarPadre">Cambiar</button>'}</div>`;
+  if ($('btnCambiarPadre')) $('btnCambiarPadre').onclick = () => { padre = null; mostrarBuscadorPadre(); };
+  $('fArea').value = r.area || 'Asistencia Legal';
+  llenarAbogados(r.abogadoActualId || r.abogadoId);
+  actualizarBloquesTipo();
+}
+
+function limpiarForm(){
+  editandoId = null; padre = null; origen = ''; prioridad = 'normal'; resultadoCambio = '';
+  ['fNumDoc', 'fCodigo', 'fUsuario', 'fCarpeta', 'fResumen', 'fDistrital', 'fProveido', 'fDiligenciaOtra', 'fSupNota', 'fDilHora', 'fDilFecha', 'fPlazoFecha', 'fPlazoHora', 'fSupFecha']
+    .forEach(i => $(i).value = '');
+  ['fHacerMemo', 'fHacerOficio', 'fHacerCarta', 'fNoHacer', 'fOcultar'].forEach(i => $(i).checked = false);
+  $('fFecha').value = hoyIso();
+  $('fArea').value = 'Asistencia Legal';
+  $('fTipoDoc').value = TIPOS_DOC[0];
+  $('fRespuesta').value = ''; $('fDiligencia').value = ''; $('fPlazo').value = '';
+  $('fDiligenciaOtra').hidden = true; $('bloquePlazoOtro').hidden = true;
+  marcar($('optOrigen'), ''); marcar($('optResultado'), ''); marcar($('optPrioridad'), 'normal');
+  llenarMaterias(); llenarAbogados(); llenarDirigido();
+  $('errorForm').hidden = true;
+  $('btnGuardarForm').disabled = false;
+  actualizarObligatorios();
+}
+
+function abrirForm({ editarId = null, padreId = null } = {}){
+  limpiarForm();
+  $('bloqueTipoRegistro').hidden = false;
+  $('tituloForm').textContent = 'Registrar caso';
+  $('btnGuardarForm').textContent = 'Guardar';
+  if (padreId){
+    ponerModo('antecedente');
+    elegirPadre(cache.get(padreId));
+  } else if (editarId){
+    const r = cache.get(editarId);
+    editandoId = editarId;
+    $('tituloForm').textContent = 'Editar registro';
+    $('btnGuardarForm').textContent = 'Guardar cambios';
+    $('bloqueTipoRegistro').hidden = true;
+    ponerModo(r.padreId ? 'antecedente' : 'nuevo');
+    if (r.padreId){
+      const p = cache.get(r.padreId);
+      $('fTipoDoc').value = r.tipoDoc;
+      if (p) elegirPadre(p); else { padre = { id: r.padreId, codigo: r.padreCodigo, usuario: r.padreUsuario }; $('buscadorPadre').hidden = true; }
+    }
+    $('fFecha').value = r.fecha; $('fNumDoc').value = r.numDoc || ''; $('fCodigo').value = r.codigo || '';
+    origen = r.origen || ''; marcar($('optOrigen'), origen);
+    $('fUsuario').value = r.usuario || ''; $('fArea').value = r.area || 'Asistencia Legal'; $('fCarpeta').value = r.carpeta || '';
+    llenarMaterias(r.materia); llenarAbogados(r.abogadoId);
+    $('fRespuesta').value = r.respuesta || ''; $('fDistrital').value = r.distrital || ''; $('fResumen').value = r.resumen || '';
+    resultadoCambio = r.resultadoCambio || ''; marcar($('optResultado'), resultadoCambio);
+    const dilExiste = DILIGENCIAS.includes(r.diligencia);
+    $('fDiligencia').value = !r.diligencia ? '' : dilExiste ? r.diligencia : 'Otra';
+    $('fDiligenciaOtra').value = r.diligencia && !dilExiste ? r.diligencia : ''; $('fDiligenciaOtra').hidden = $('fDiligencia').value !== 'Otra';
+    $('fDilFecha').value = r.dilFecha || ''; $('fDilHora').value = r.dilHora || '';
+    prioridad = r.prioridad || 'normal'; marcar($('optPrioridad'), prioridad);
+    const h = r.hacer || {};
+    $('fHacerMemo').checked = !!h.memo; $('fHacerOficio').checked = !!h.oficio; $('fHacerCarta').checked = !!h.carta; $('fNoHacer').checked = !!h.noHacer;
+    $('fProveido').value = r.proveido || ''; llenarDirigido(r.dirigidoA);
+    if (r.plazoHoras){ $('fPlazo').value = String(r.plazoHoras); }
+    else if (r.plazoVence){ $('fPlazo').value = 'otro'; $('bloquePlazoOtro').hidden = false; $('fPlazoFecha').value = r.plazoVence.slice(0, 10); $('fPlazoHora').value = r.plazoVence.slice(11, 16); }
+    $('fSupFecha').value = r.supFecha || ''; $('fSupNota').value = r.supNota || '';
+    $('fOcultar').checked = !!r.ocultarPublico;
+    actualizarObligatorios(); actualizarBloquesTipo();
+  } else {
+    ponerModo('nuevo');
+  }
+  $('fondoForm').hidden = false;
+}
+$('btnRegistrar').onclick = () => abrirForm();
+$('btnCancelarForm').onclick = () => $('fondoForm').hidden = true;
+
+function vencimientoPlazo(){
+  const p = $('fPlazo').value;
+  if (!p) return { plazoHoras: null, plazoVence: '' };
+  if (p === 'otro'){
+    if (!$('fPlazoFecha').value) return { plazoHoras: null, plazoVence: '' };
+    return { plazoHoras: null, plazoVence: $('fPlazoFecha').value + 'T' + ($('fPlazoHora').value || '17:00') };
+  }
+  const d = new Date(Date.now() + Number(p) * 3600 * 1000);
+  const iso = d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0') + 'T' + String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0');
+  return { plazoHoras: Number(p), plazoVence: iso };
+}
+
+$('btnGuardarForm').onclick = async () => {
+  const error = t => { $('errorForm').textContent = t; $('errorForm').hidden = false; };
+  $('errorForm').hidden = true;
+  const esAnt = modo === 'antecedente';
+  const tipoDoc = esAnt ? $('fTipoDoc').value : 'Caso nuevo';
+  const abog = DEFENSORES.find(d => d.id === $('fAbogado').value);
+  const materia = $('fMateria').value === 'Otra' ? may($('fMateriaOtra').value) : $('fMateria').value;
+
+  if (esAnt && !padre) return error('Elige el caso al que pertenece este documento.');
+  if (!$('fFecha').value) return error('Falta la fecha de registro.');
+  if (!origen) return error('Elige el origen.');
+  if (origen === 'Mesa de partes virtual' && !$('fCodigo').value.trim()) return error('Falta el código de mesa de partes virtual.');
+  if (!esAnt && !$('fUsuario').value.trim()) return error('Falta el nombre del usuario.');
+  if (!esAnt && !materia) return error('Elige la materia o delito.');
+  if (!abog) return error('Elige el abogado.');
+  if (tipoDoc === 'Informe del defensor' && !$('fRespuesta').value) return error('Elige la respuesta del defensor.');
+  if (tipoDoc === 'Devolución a otra Dirección Distrital' && !$('fDistrital').value.trim()) return error('Escribe a qué Dirección Distrital corresponde.');
+  if (tipoDoc === 'Solicitud de cambio de abogado' && !resultadoCambio) return error('Elige el resultado de la solicitud de cambio.');
+  if ($('fPlazo').value === 'otro' && !$('fPlazoFecha').value) return error('Elige la fecha del plazo.');
+
+  const dirigido = $('fDirigido').value.startsWith('OTRA') ? may($('fDirigidoOtro').value) : $('fDirigido').value;
+  const diligencia = $('fDiligencia').value === 'Otra' ? may($('fDiligenciaOtra').value) : $('fDiligencia').value;
+  const fecha = $('fFecha').value;
+
+  const datos = {
+    fecha, anio: Number(fecha.slice(0, 4)), mes: fecha.slice(0, 7),
+    tipoDoc, origen, codigo: may($('fCodigo').value), codigoNorm: codigoNorm($('fCodigo').value), numDoc: may($('fNumDoc').value),
+    abogadoId: abog.id, abogadoNombre: abog.nombre, abogadoCelular: abog.celular || '', abogadoCorreo: abog.correo || '',
+    diligencia, dilFecha: diligencia ? $('fDilFecha').value : '', dilHora: diligencia ? $('fDilHora').value : '',
+    prioridad,
+    hacer: { memo: $('fHacerMemo').checked, oficio: $('fHacerOficio').checked, carta: $('fHacerCarta').checked, noHacer: $('fNoHacer').checked },
+    proveido: may($('fProveido').value), dirigidoA: dirigido,
+    ...vencimientoPlazo(),
+    supFecha: $('fSupFecha').value, supNota: may($('fSupNota').value),
+    ocultarPublico: $('fOcultar').checked
+  };
+  if (esAnt){
+    Object.assign(datos, {
+      padreId: padre.id, padreCodigo: padre.codigo || '', padreUsuario: padre.usuario || '',
+      usuario: padre.usuario || '', area: padre.area || $('fArea').value, carpeta: padre.carpeta || '', materia: padre.materia || '',
+      respuesta: tipoDoc === 'Informe del defensor' ? $('fRespuesta').value : '',
+      distrital: tipoDoc === 'Devolución a otra Dirección Distrital' ? may($('fDistrital').value) : '',
+      resultadoCambio: tipoDoc === 'Solicitud de cambio de abogado' ? resultadoCambio : '',
+      opinionNum: tipoDoc === 'Solicitud de nueva opinión' ? opinionCalculada : null,
+      resumen: may($('fResumen').value)
+    });
+    datos.estadoTexto = textoEstado(datos);
+  } else {
+    Object.assign(datos, { padreId: null, usuario: may($('fUsuario').value), area: $('fArea').value, carpeta: may($('fCarpeta').value), materia });
+  }
+
+  $('btnGuardarForm').disabled = true;
+  try {
+    if (editandoId){
+      if (editandoId && !esAnt){ /* si cambian datos del caso, sus antecedentes guardan la referencia al código */ }
+      await updateDoc(doc(db, COL, editandoId), { ...datos, editadoPor: usuario.correo, editadoEn: serverTimestamp() });
+      if (!esAnt && (datos.codigo !== (cache.get(editandoId) || {}).codigo || datos.usuario !== (cache.get(editandoId) || {}).usuario)){
+        const hijos = await getDocs(query(collection(db, COL), where('padreId', '==', editandoId)));
+        await Promise.all(hijos.docs.map(h => updateDoc(h.ref, { padreCodigo: datos.codigo, padreUsuario: datos.usuario, usuario: datos.usuario })));
+      }
+    } else {
+      const ref = doc(collection(db, COL));
+      await setDoc(ref, { ...datos, creadoPor: usuario.correo, creadoEn: serverTimestamp(), creadoEnMs: Date.now() });
+      cache.set(ref.id, { id: ref.id, ...datos, creadoEnMs: Date.now() });
+    }
+    if (esAnt) await recalcularEstado(padre.id);
+    $('fondoForm').hidden = true;
+    avisar(editandoId ? 'Cambios guardados' : 'Registrado');
+    if (!editandoId && Number(fecha.slice(0, 4)) !== anioElegido) avisar('Registrado en ' + fecha.slice(0, 4) + '. Cambia de año para verlo.', 5000);
+    pintar();
+  } catch (err){ errorAlGuardar(err); $('btnGuardarForm').disabled = false; }
+};
+
+// ---------------- Búsqueda, años y filtros ----------------
+let tBuscar = null;
+async function alBuscar(){
+  limiteFilas = 200;
+  if ($('txtBuscar').value.trim()) await cargarTodos();
+  pintar();
+}
+$('txtBuscar').addEventListener('input', () => { clearTimeout(tBuscar); tBuscar = setTimeout(alBuscar, 300); });
+$('filtroArea').onchange = () => { limiteFilas = 200; pintar(); };
+$('filtroPendientes').onchange = () => { limiteFilas = 200; pintar(); };
+function pintarAnios(){
+  const actual = Number(hoyIso().slice(0, 4));
+  const anios = []; for (let a = 2023; a <= actual; a++) anios.push(a);
+  $('anios').innerHTML = anios.map(a => `<button class="anio ${a === anioElegido ? 'activo' : ''}" data-anio="${a}">${a}</button>`).join('');
+}
+$('anios').onclick = e => {
+  const a = Number(e.target.dataset.anio);
+  if (!a) return;
+  anioElegido = a; limiteFilas = 200; pintarAnios(); escucharAnio(a);
+};
+
+// ---------------- Descarga por fechas ----------------
+$('btnAbrirDescarga').onclick = () => {
+  $('panelDescarga').hidden = !$('panelDescarga').hidden;
+  if (!$('descDesde').value){ $('descDesde').value = hoyIso(); $('descHasta').value = hoyIso(); }
+};
+$('btnDescargar').onclick = async () => {
+  const desde = $('descDesde').value, hasta = $('descHasta').value;
+  if (!desde || !hasta || desde > hasta){ avisar('Revisa las fechas: "desde" debe ser antes que "hasta".'); return; }
+  try {
+    const snap = await getDocs(query(collection(db, COL), where('fecha', '>=', desde), where('fecha', '<=', hasta)));
+    const lista = snap.docs.map(d => ({ id: d.id, ...d.data() })).sort(ordenRegistro);
+    if (!lista.length){ avisar('No hay registros en esas fechas.'); return; }
+    const filas = lista.map(r => ({
+      'Fecha': fechaCorta(r.fecha), 'Tipo': r.padreId ? 'ANTECEDENTE DEL CASO ' + (r.padreCodigo || r.padreUsuario || '') : 'CASO NUEVO',
+      'Tipo de documento': r.tipoDoc || '', 'Origen': r.origen, 'Documento de referencia': r.codigo, 'N° doc.': r.numDoc,
+      'Usuario': r.usuario, 'Abogado': r.abogadoNombre, 'Teléfono': r.abogadoCelular, 'Correo': r.abogadoCorreo,
+      'Materia o delito': r.materia, 'N° carpeta': r.carpeta,
+      'Respuesta / resultado': r.respuesta || r.resultadoCambio || (r.distrital ? 'CORRESPONDE A ' + r.distrital : '') || (r.opinionNum ? r.opinionNum + 'ª OPINIÓN' : ''),
+      'Resumen': r.resumen || '', 'Estado del caso': r.estado || '',
+      'Diligencia': r.diligencia, 'Fecha diligencia': fechaCorta(r.dilFecha), 'Hora': r.dilHora,
+      'Prioridad': (r.prioridad || 'normal').toUpperCase(),
+      'Hacer': (r.hacer || {}).noHacer ? 'NO HACER MEMO' : ['memo', 'oficio', 'carta'].filter(k => (r.hacer || {})[k]).join(', ').toUpperCase(),
+      'Proveído': r.proveido, 'Memo': r.memoNum || '', 'Oficio / Carta': r.oficioNum || '', 'Dirigido a': r.dirigidoA,
+      'Plazo vence': r.plazoVence ? fechaCorta(r.plazoVence.slice(0, 10)) + ' ' + r.plazoVence.slice(11, 16) : '',
+      'Supervisión': r.supFecha ? fechaCorta(r.supFecha) + ' ' + (r.supNota || '') : '',
+      'No mostrar en app pública': r.ocultarPublico ? 'SÍ' : ''
+    }));
+    const libro = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(libro, XLSX.utils.json_to_sheet(filas), 'Registro');
+    XLSX.writeFile(libro, 'Drive1_' + desde + '_al_' + hasta + '.xlsx');
+  } catch (err){ console.error(err); avisar('No se pudo descargar (' + (err.code || err.message) + ').', 6000); }
+};
+
+// ---------------- Sesión ----------------
+const msgLogin = $('msgLogin');
+async function entrar(){
+  const correo = $('loginCorreo').value.trim().toLowerCase(), clave = $('loginClave').value;
+  if (!correo || !clave){ msgLogin.textContent = 'Escribe tu correo y contraseña.'; return; }
+  msgLogin.textContent = 'Verificando…';
+  try { await signInWithEmailAndPassword(auth, correo, clave); }
+  catch (err){ msgLogin.textContent = (err.code === 'auth/invalid-credential' || err.code === 'auth/wrong-password') ? 'Correo o contraseña incorrectos.' : 'No se pudo entrar (' + err.code + ').'; }
+}
+$('btnEntrar').onclick = entrar;
+$('loginClave').addEventListener('keydown', e => { if (e.key === 'Enter') entrar(); });
+$('btnSalir').onclick = () => signOut(auth);
+document.addEventListener('keydown', e => { if (e.key === 'Escape'){ $('fondoForm').hidden = true; $('fondoHist').hidden = true; } });
+
+onAuthStateChanged(auth, async user => {
+  if (!user){
+    usuario = null; if (cortarAnio) cortarAnio();
+    $('app').hidden = true; $('pantallaLogin').hidden = false; msgLogin.textContent = '';
+    return;
+  }
+  const correo = (user.email || '').toLowerCase();
+  msgLogin.textContent = 'Revisando permisos…';
+  try {
+    const ficha = await getDoc(doc(db, 'staff', correo));
+    if (!ficha.exists()){ msgLogin.textContent = 'Tu correo no está autorizado en MEGA ALEGRA.'; await signOut(auth); return; }
+    usuario = { correo, nombre: ficha.data().nombre || correo, rol: ficha.data().rol || '' };
+    const snapDef = await getDocs(collection(db, 'defensores'));
+    DEFENSORES = snapDef.docs.map(d => ({ id: d.id, ...d.data() })).filter(d => d.activo !== false)
+      .sort((a, b) => (a.area || '').localeCompare(b.area || '') || (a.orden ?? 999) - (b.orden ?? 999) || (a.nombre || '').localeCompare(b.nombre || '', 'es'));
+    document.body.classList.toggle('solo-lectura', usuario.rol !== 'abogado');
+    $('usuarioSesion').textContent = usuario.nombre + (usuario.rol === 'abogado' ? ' · puede registrar y editar' : ' · anota N° de memo, oficio y carta');
+    $('pantallaLogin').hidden = true; $('app').hidden = false;
+    pintarAnios(); escucharAnio(anioElegido);
+  } catch (err){
+    console.error(err);
+    msgLogin.textContent = 'No se pudo cargar tu acceso (' + (err.code || err.message) + ').';
+  }
+});
+</script>
+</body>
+</html>
