@@ -358,6 +358,7 @@
   <nav class="menu-drives" aria-label="Drives">
     <a href="drive1.html">Drive 1 · Registro de casos</a>
     <a href="index.html" class="actual" aria-current="page">Drive 2 · Agenda diaria</a>
+    <a href="permisos.html" id="enlacePermisos" hidden>Personal y permisos</a>
     <span class="separador" aria-hidden="true"></span>
     <span class="rotulo">Hojas de Google (mientras se migran):</span>
     <a class="hoja" href="https://docs.google.com/spreadsheets/d/1OMk8U5HRbSnDuVAg72yR9kGt8808u7TfV9c1cA5P5Zg" target="_blank" rel="noopener">Drive 1 ↗</a>
@@ -1718,6 +1719,17 @@ document.getElementById('btnOlvide').addEventListener('click', async () => {
 });
 document.getElementById('btnSalir').addEventListener('click', () => signOut(auth));
 
+
+// Rol efectivo: bloqueado = solo mira; asistente con permiso temporal vigente = trabaja como abogado
+function rolEfectivo(f){
+  if (f.bloqueado === true) return { rol: 'bloqueado', nota: ' · bloqueado: solo puede ver' };
+  if (f.rol === 'asistente' && f.permisoTemporalHasta && f.permisoTemporalHasta.toDate && f.permisoTemporalHasta.toDate() > new Date()){
+    const h = f.permisoTemporalHasta.toDate();
+    return { rol: 'abogado', nota: ' · permiso temporal de abogado hasta ' + String(h.getDate()).padStart(2, '0') + '/' + String(h.getMonth() + 1).padStart(2, '0') };
+  }
+  return { rol: f.rol || '', nota: '' };
+}
+
 onAuthStateChanged(auth, async user => {
   __log('Estado de sesión: ' + (user ? 'conectado como ' + user.email : 'sin sesión'));
   if (!user){
@@ -1745,7 +1757,9 @@ onAuthStateChanged(auth, async user => {
       await signOut(auth);
       return;
     }
-    usuario = { correo, nombre: ficha.data().nombre || correo, rol: ficha.data().rol || '', area: ficha.data().area || '' };
+    const efectivo = rolEfectivo(ficha.data());
+    usuario = { correo, nombre: ficha.data().nombre || correo, rol: efectivo.rol, nota: efectivo.nota, area: ficha.data().area || '' };
+    document.getElementById('enlacePermisos').hidden = !(ficha.data().esAdmin === true || ficha.data().puedeAutorizar === true);
 
     msgLogin.textContent = 'Cargando defensores…';
     let areaInicial = 'Asistencia Legal';
@@ -1755,7 +1769,7 @@ onAuthStateChanged(auth, async user => {
 
     document.body.classList.toggle('solo-lectura', usuario.rol !== 'abogado');
     document.getElementById('usuarioSesion').textContent =
-      usuario.nombre + (usuario.rol === 'abogado' ? ' · puede registrar y editar' : ' · solo lectura');
+      usuario.nombre + (usuario.rol === 'abogado' ? ' · puede registrar y editar' : ' · solo lectura') + usuario.nota;
     msgLogin.textContent = '';
     document.getElementById('pantallaLogin').hidden = true;
     document.getElementById('app').hidden = false;
