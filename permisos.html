@@ -1,0 +1,480 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Personal y permisos · MEGA ALEGRA</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Source+Serif+4:opsz,wght@8..60,600&family=Public+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --rojo:#D91023; --rojo-oscuro:#A10C1A; --dorado:#B8873A; --tinta:#241E1B; --gris:#6A635C; --gris-claro:#9A938A;
+    --papel:#F7F2EA; --linea:#E6DECF; --celda:#D9D2C5; --verde:#3F6B52; --verde-fondo:#EAF2ED; --azul:#2C6478; --vino:#7A3B57;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0}
+  body{font-family:'Public Sans',system-ui,sans-serif;background:var(--papel);color:var(--tinta);padding:max(10px, env(safe-area-inset-top,0px)) 12px 30px}
+  [hidden]{display:none !important}
+  button,input,select{font:inherit}
+  :focus-visible{outline:2px solid var(--azul);outline-offset:2px}
+
+  #pantallaLogin{min-height:100vh;display:flex;align-items:center;justify-content:center;padding:20px}
+  .caja-login{background:#fff;border:1px solid var(--linea);border-radius:14px;padding:28px;max-width:380px;width:100%}
+  .caja-login h2{font-family:'Source Serif 4',Georgia,serif;margin:0 0 12px;color:var(--rojo-oscuro)}
+  .caja-login input{width:100%;padding:10px 12px;border:1px solid var(--linea);border-radius:8px;margin:4px 0 10px}
+  #msgLogin{margin-top:12px;font-size:13px;font-weight:600;color:var(--rojo-oscuro);min-height:18px}
+
+  .barra-sesion{display:flex;justify-content:space-between;align-items:center;gap:10px;margin-bottom:8px;font-size:12.5px;color:var(--gris)}
+  .barra-sesion button{background:#fff;border:1px solid var(--linea);border-radius:8px;padding:4px 12px;cursor:pointer}
+  .menu-drives{display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin:0 0 10px;padding:6px;background:#fff;border:1px solid var(--linea);border-radius:12px}
+  .menu-drives a{padding:7px 12px;border-radius:8px;font-size:13.5px;font-weight:600;color:var(--tinta);text-decoration:none;white-space:nowrap}
+  .menu-drives a:hover{background:var(--papel)}
+  .menu-drives a.actual{background:var(--tinta);color:#fff}
+
+  header{background:var(--rojo);color:#fff;border-radius:14px;padding:12px 18px;margin-bottom:10px}
+  header::after{content:"";display:block;height:3px;background:var(--dorado);margin-top:10px;border-radius:2px}
+  header h1{font-family:'Source Serif 4',Georgia,serif;font-weight:600;font-size:19px;margin:0 0 2px}
+  header p{margin:0;font-size:14px;color:rgba(255,255,255,.9)}
+
+  .pestanas{display:flex;gap:4px;margin:0 0 10px;flex-wrap:wrap}
+  .pestana{padding:9px 16px;border-radius:9px;border:1px solid var(--linea);background:#fff;font-weight:700;font-size:14px;cursor:pointer;color:var(--gris)}
+  .pestana.activa{background:var(--tinta);border-color:var(--tinta);color:#fff}
+
+  .caja{background:#fff;border:1px solid var(--linea);border-radius:12px;padding:14px;margin-bottom:10px}
+  .caja h3{margin:0 0 8px;font-size:15px}
+  .ayuda{font-size:12.5px;color:var(--gris);line-height:1.5;margin:4px 0}
+  .fila-form{display:flex;gap:8px;flex-wrap:wrap;align-items:end}
+  .fila-form label{font-size:12px;font-weight:700;display:flex;flex-direction:column;gap:3px}
+  .fila-form input, .fila-form select{padding:8px 10px;border:1.5px solid var(--linea);border-radius:8px;background:var(--papel);min-width:160px}
+  .btn{padding:8px 14px;border-radius:8px;border:none;background:var(--rojo);color:#fff;font-weight:700;cursor:pointer}
+  .btn:disabled{background:#D8CFC3;cursor:default}
+  .btn.sec{background:#fff;color:var(--tinta);border:1.5px solid var(--linea)}
+  .btn.chico{padding:4px 10px;font-size:12px}
+
+  .tabla-wrap{background:#fff;border:1px solid var(--celda);border-radius:10px;overflow:auto;max-height:calc(100vh - 120px)}
+  table{border-collapse:collapse;width:max-content;min-width:100%}
+  th{position:sticky;top:0;z-index:2;background:#EFE9DD;text-align:left;font-size:11.5px;font-weight:700;padding:7px 8px;border:1px solid var(--celda);white-space:nowrap}
+  td{padding:5px 8px;border:1px solid var(--celda);font-size:12.5px;vertical-align:middle;background:#fff}
+  td.nombre{font-weight:600;min-width:210px}
+  td .chico{display:block;font-size:11px;color:var(--gris);font-weight:400}
+  tr.bloqueado td{background:#FBEEEC}
+  tr.inactivo td{background:#F1EEE8;color:var(--gris-claro)}
+  td input[type=text], td input[type=date], td select{width:100%;min-width:110px;padding:5px 7px;border:1px solid var(--linea);border-radius:6px;background:#fff;font-size:12.5px}
+  td input.cambiado{border-color:var(--dorado);background:#FFF8E8}
+  .interruptor{display:inline-flex;align-items:center;gap:6px;cursor:pointer;font-size:12px;font-weight:600;white-space:nowrap}
+  .interruptor input{width:16px;height:16px;margin:0}
+  .permisos{display:flex;gap:4px;flex-wrap:wrap;max-width:330px}
+  .permisos label{display:inline-flex;gap:4px;align-items:center;font-size:11.5px;border:1px solid var(--linea);border-radius:6px;padding:3px 6px;cursor:pointer;white-space:nowrap}
+  .permisos label.si{background:var(--verde-fondo);border-color:var(--verde);color:var(--verde);font-weight:700}
+  .etiqueta{display:inline-block;font-size:11px;font-weight:700;padding:2px 7px;border-radius:8px;white-space:nowrap}
+  .etiqueta.vigente{background:var(--verde-fondo);color:var(--verde)}
+  .etiqueta.bloq{background:var(--rojo);color:#fff}
+  .etiqueta.admin{background:var(--tinta);color:#fff}
+  .etiqueta.lic{background:#FFF3D6;color:#6B4A0E}
+  .temporal{display:flex;gap:4px;flex-wrap:wrap;align-items:center}
+  .temporal input{width:auto;min-width:0}
+  .vacio{padding:24px;text-align:center;color:var(--gris)}
+  #aviso{position:fixed;left:50%;bottom:calc(20px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);background:#222;color:#fff;
+    padding:10px 16px;border-radius:10px;font-size:13.5px;font-weight:600;z-index:99;display:none;max-width:90vw}
+  .antes{color:var(--gris-claro);text-decoration:line-through}
+  .despues{color:var(--verde);font-weight:600}
+</style>
+</head>
+<body>
+<div id="pantallaLogin">
+  <div id="cargandoSesion" style="text-align:center;color:#6A635C;font-size:15px;font-weight:600">Cargando MEGA ALEGRA…</div>
+  <div class="caja-login" id="cajaLogin" hidden>
+    <h2>MEGA ALEGRA · Personal</h2>
+    <label for="loginCorreo" style="font-size:13px;font-weight:700">Correo</label>
+    <input type="email" id="loginCorreo" autocomplete="username">
+    <label for="loginClave" style="font-size:13px;font-weight:700">Contraseña</label>
+    <input type="password" id="loginClave" autocomplete="current-password">
+    <button class="btn" id="btnEntrar" style="width:100%;padding:11px">Entrar</button>
+    <div id="msgLogin"></div>
+  </div>
+</div>
+<div id="aviso"></div>
+
+<div id="app" hidden>
+  <div class="barra-sesion"><span id="usuarioSesion"></span><button id="btnSalir">Salir</button></div>
+  <nav class="menu-drives" aria-label="Drives">
+    <a href="drive1.html">Drive 1 · Registro de casos</a>
+    <a href="index.html">Drive 2 · Agenda diaria</a>
+    <a href="permisos.html" class="actual" aria-current="page">Personal y permisos</a>
+  </nav>
+
+  <header>
+    <h1>Personal y permisos</h1>
+    <p id="subtitulo">Quién puede registrar, editar y ver cada sección</p>
+  </header>
+
+  <div class="pestanas" role="tablist">
+    <button class="pestana activa" data-pestana="personal" role="tab">Personal</button>
+    <button class="pestana solo-admin" data-pestana="defensores" role="tab">Defensores</button>
+    <button class="pestana solo-admin" data-pestana="cambios" role="tab">Registro de cambios</button>
+  </div>
+
+  <!-- ===== Personal ===== -->
+  <section id="secPersonal">
+    <div class="caja solo-admin">
+      <h3>Agregar persona al personal</h3>
+      <div class="fila-form">
+        <label>Correo con el que entra<input type="email" id="nCorreo" placeholder="nombre@minjus.gob.pe"></label>
+        <label>Nombre<input type="text" id="nNombre" placeholder="APELLIDOS, Nombres"></label>
+        <label>Rol<select id="nRol"><option value="abogado">Abogado</option><option value="asistente">Asistente</option></select></label>
+        <label>Área<input type="text" id="nArea" placeholder="Ej. Asistencia Legal"></label>
+        <button class="btn" id="btnAgregarStaff">Agregar</button>
+      </div>
+      <p class="ayuda">Después, créale su cuenta en Firebase → <b>Authentication</b> → <b>Agregar usuario</b>, con el <b>mismo correo</b>. Sin esa cuenta no podrá entrar.</p>
+    </div>
+    <p class="ayuda" id="ayudaPersonal"></p>
+    <div class="tabla-wrap"><table>
+      <thead><tr id="encPersonal"></tr></thead>
+      <tbody id="cuerpoPersonal"></tbody>
+    </table></div>
+  </section>
+
+  <!-- ===== Defensores ===== -->
+  <section id="secDefensores" hidden>
+    <div class="caja">
+      <h3>Agregar defensor</h3>
+      <div class="fila-form">
+        <label>Área<select id="dArea"><option>Asistencia Legal</option><option>Defensa de Víctimas</option><option>Equipo multidisciplinario</option></select></label>
+        <label>Nombre<input type="text" id="dNombre" placeholder="APELLIDOS, Nombres"></label>
+        <label>Celular (se muestra)<input type="text" id="dCelular"></label>
+        <label>Correo<input type="text" id="dCorreo"></label>
+        <label>Sede<input type="text" id="dSede"></label>
+        <button class="btn" id="btnAgregarDef">Agregar</button>
+      </div>
+    </div>
+    <div class="fila-form" style="margin-bottom:8px">
+      <label>Área<select id="filtroAreaDef"><option value="">Todas</option><option>Asistencia Legal</option><option>Defensa de Víctimas</option><option>Equipo multidisciplinario</option></select></label>
+      <label class="interruptor" style="flex-direction:row;padding-bottom:8px"><input type="checkbox" id="verBajas"> Mostrar también los dados de baja</label>
+    </div>
+    <p class="ayuda">Cambia lo que necesites en la fila y toca <b>Guardar</b>. Dar de baja no borra su historial: sus casos antiguos siguen mostrando su nombre, pero deja de aparecer en las listas para asignar.</p>
+    <div class="tabla-wrap"><table>
+      <thead><tr><th>N°</th><th>Nombre</th><th>Área</th><th>Celular (se muestra)</th><th>Celular personal (oculto)</th><th>Correo</th><th>Sede</th><th>Notas</th><th>Activo</th><th></th></tr></thead>
+      <tbody id="cuerpoDef"></tbody>
+    </table></div>
+  </section>
+
+  <!-- ===== Registro de cambios ===== -->
+  <section id="secCambios" hidden>
+    <p class="ayuda">Los últimos 200 cambios hechos en permisos, personal y defensores. Nadie puede borrar este registro.</p>
+    <div class="tabla-wrap"><table>
+      <thead><tr><th>Cuándo</th><th>Quién</th><th>Qué</th><th>Detalle</th></tr></thead>
+      <tbody id="cuerpoCambios"></tbody>
+    </table></div>
+  </section>
+</div>
+
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
+import { getAuth, onAuthStateChanged, signInWithEmailAndPassword, signOut } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
+import { initializeFirestore, collection, doc, getDoc, getDocs, setDoc, updateDoc, deleteDoc, deleteField,
+  query, orderBy, limit, Timestamp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+
+const fbApp = initializeApp({
+  apiKey: "AIzaSyBHxewV5R3CAj-5i3AzCgfdKvwI5A3jXnA",
+  authDomain: "defensapublica-limacentro.firebaseapp.com",
+  projectId: "defensapublica-limacentro",
+  storageBucket: "defensapublica-limacentro.firebasestorage.app",
+  messagingSenderId: "595677954487",
+  appId: "1:595677954487:web:8a68160c5927bf5cf0a832"
+});
+const auth = getAuth(fbApp);
+const db = initializeFirestore(fbApp, { experimentalForceLongPolling: true });
+
+const $ = id => document.getElementById(id);
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+function avisar(t, ms = 3500){ const a = $('aviso'); a.textContent = t; a.style.display = 'block'; clearTimeout(avisar.t); avisar.t = setTimeout(() => a.style.display = 'none', ms); }
+function hoyIso(){ const d = new Date(); return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'); }
+function fechaCorta(iso){ return iso ? iso.slice(8, 10) + '/' + iso.slice(5, 7) + '/' + iso.slice(0, 4) : ''; }
+function error(err){
+  console.error(err);
+  avisar(err && err.code === 'permission-denied' ? 'Firebase no dio permiso para este cambio.' : 'No se pudo guardar. Revisa tu conexión.', 6000);
+}
+
+// Secciones que se pueden autorizar para editar (deben coincidir con las reglas de Firebase)
+const SECCIONES = [
+  ['licencias', 'Licencias'], ['turnos', 'Turnos'], ['teletrabajo', 'Teletrabajo'],
+  ['defensoriaPueblo', 'Defensoría'], ['conadis', 'CONADIS'], ['defensores', 'Defensores']
+];
+
+let yo = null;          // mi ficha de staff
+let STAFF = [];
+let DEFS = [];
+const esAdmin = () => yo && yo.esAdmin === true;
+const puedeAutorizar = () => yo && (yo.esAdmin === true || yo.puedeAutorizar === true) && yo.bloqueado !== true;
+
+// ---------- Registro de cambios ----------
+function diferencias(antes, despues){
+  const claves = [...new Set([...Object.keys(antes || {}), ...Object.keys(despues || {})])];
+  const txt = v => v && v.toDate ? fechaCorta(v.toDate().toISOString().slice(0, 10)) : (typeof v === 'object' && v !== null ? JSON.stringify(v) : String(v ?? ''));
+  return claves.filter(k => txt((antes || {})[k]) !== txt((despues || {})[k]))
+    .map(k => ({ campo: k, antes: txt((antes || {})[k]), despues: txt((despues || {})[k]) }));
+}
+async function registrarCambio(accion, coleccion, id, antes, despues){
+  try {
+    await setDoc(doc(collection(db, 'cambios')), {
+      cuandoMs: Date.now(), quien: yo.correo, quienNombre: yo.nombre || yo.correo,
+      accion, coleccion, docId: id, detalle: diferencias(antes, despues)
+    });
+  } catch (e){ console.error('No se pudo anotar en el registro de cambios', e); }
+}
+
+// ---------- Personal ----------
+async function cargarStaff(){
+  const snap = await getDocs(collection(db, 'staff'));
+  STAFF = snap.docs.map(d => ({ id: d.id, ...d.data() }))
+    .sort((a, b) => (a.rol || '').localeCompare(b.rol || '') || (a.nombre || a.id).localeCompare(b.nombre || b.id, 'es'));
+  pintarStaff();
+}
+function temporalVigente(p){
+  const h = p.permisoTemporalHasta;
+  return h && h.toDate && h.toDate() > new Date() ? h.toDate() : null;
+}
+let abiertoTemporal = null;
+function pintarStaff(){
+  const admin = esAdmin();
+  $('ayudaPersonal').innerHTML = admin
+    ? 'Los cambios con interruptor se guardan al instante. <b>Bloqueado</b>: puede entrar y ver, pero no registrar, editar ni borrar. <b>Permiso temporal</b>: un asistente trabaja como abogado hasta la fecha que elijas y se corta solo.'
+    : 'Como Responsable de Área puedes dar o retirar el <b>permiso temporal</b> a los asistentes para que trabajen como abogado hasta una fecha.';
+  $('encPersonal').innerHTML = admin
+    ? '<th>Nombre</th><th>Rol</th><th>Área</th><th>Bloqueado</th><th>Puede autorizar</th><th>Permiso temporal (asistentes)</th><th>Puede editar estas secciones</th><th>De licencia hasta</th><th></th>'
+    : '<th>Nombre</th><th>Rol</th><th>Permiso temporal</th>';
+  const lista = admin ? STAFF : STAFF.filter(p => p.rol === 'asistente');
+  $('cuerpoPersonal').innerHTML = lista.map(p => {
+    const soyYo = p.id === yo.correo;
+    const vig = temporalVigente(p);
+    const lic = p.licenciaHasta && p.licenciaHasta >= hoyIso();
+    let temporal = '—';
+    if (p.rol === 'asistente'){
+      if (abiertoTemporal === p.id){
+        temporal = `<div class="temporal"><input type="date" id="tHasta" value="${hoyIso()}" min="${hoyIso()}" aria-label="Hasta">
+          <input type="text" id="tMotivo" placeholder="Motivo (ej. cubre licencia)" style="min-width:170px">
+          <button class="btn chico" data-temp-ok="${esc(p.id)}">Autorizar</button><button class="btn sec chico" data-temp-no>Cancelar</button></div>`;
+      } else if (vig){
+        temporal = `<span class="etiqueta vigente">Como abogado hasta ${fechaCorta(vig.toISOString().slice(0, 10))}</span>
+          <span class="chico">${esc(p.permisoTemporalMotivo || '')}${p.permisoTemporalPor ? ' · autorizó ' + esc(p.permisoTemporalPor) : ''}</span>
+          <button class="btn sec chico" data-temp-quitar="${esc(p.id)}">Retirar</button>`;
+      } else {
+        temporal = `<button class="btn sec chico" data-temp-abrir="${esc(p.id)}">Autorizar como abogado…</button>`;
+      }
+    }
+    const nombre = `${esc(p.nombre || p.id)}<span class="chico">${esc(p.id)}</span>${p.esAdmin ? ' <span class="etiqueta admin">Administrador</span>' : ''}${p.bloqueado ? ' <span class="etiqueta bloq">Bloqueado</span>' : ''}${lic ? ' <span class="etiqueta lic">De licencia</span>' : ''}`;
+    if (!admin) return `<tr><td class="nombre">${nombre}</td><td>Asistente</td><td>${temporal}</td></tr>`;
+    const permisos = p.permisos || {};
+    return `<tr class="${p.bloqueado ? 'bloqueado' : ''}">
+      <td class="nombre">${nombre}</td>
+      <td><select data-campo="rol" data-id="${esc(p.id)}" ${soyYo ? 'disabled' : ''}>
+        <option value="abogado" ${p.rol === 'abogado' ? 'selected' : ''}>Abogado</option>
+        <option value="asistente" ${p.rol === 'asistente' ? 'selected' : ''}>Asistente</option></select></td>
+      <td><input type="text" data-campo="area" data-id="${esc(p.id)}" value="${esc(p.area || '')}"></td>
+      <td><label class="interruptor"><input type="checkbox" data-bool="bloqueado" data-id="${esc(p.id)}" ${p.bloqueado ? 'checked' : ''} ${soyYo ? 'disabled' : ''}> ${p.bloqueado ? 'Sí' : 'No'}</label></td>
+      <td><label class="interruptor"><input type="checkbox" data-bool="puedeAutorizar" data-id="${esc(p.id)}" ${p.puedeAutorizar || p.esAdmin ? 'checked' : ''} ${soyYo ? 'disabled' : ''}> ${p.puedeAutorizar || p.esAdmin ? 'Sí' : 'No'}</label></td>
+      <td>${temporal}</td>
+      <td><div class="permisos">${SECCIONES.map(([k, t]) => `<label class="${permisos[k] === 'editar' || p.esAdmin ? 'si' : ''}"><input type="checkbox" data-permiso="${k}" data-id="${esc(p.id)}" ${permisos[k] === 'editar' || p.esAdmin ? 'checked' : ''} ${p.esAdmin ? 'disabled' : ''}>${t}</label>`).join('')}</div></td>
+      <td><input type="date" data-campo="licenciaHasta" data-id="${esc(p.id)}" value="${esc(p.licenciaHasta || '')}"></td>
+      <td>${soyYo ? '' : `<button class="btn sec chico" data-baja="${esc(p.id)}">Dar de baja</button>`}</td>
+    </tr>`;
+  }).join('') || '<tr><td colspan="9" class="vacio">No hay personas para mostrar.</td></tr>';
+}
+
+async function cambiarStaff(id, cambios, accion){
+  const antes = { ...(STAFF.find(p => p.id === id) || {}) };
+  try {
+    await updateDoc(doc(db, 'staff', id), cambios);
+    const despues = { ...antes };
+    Object.entries(cambios).forEach(([k, v]) => { if (v && v._methodName === 'deleteField') delete despues[k]; else despues[k] = v; });
+    await registrarCambio(accion, 'staff', id, antes, despues);
+    avisar('Guardado');
+  } catch (e){ error(e); }
+  await cargarStaff();
+}
+
+$('cuerpoPersonal').addEventListener('change', e => {
+  const t = e.target, id = t.dataset.id;
+  if (!id) return;
+  if (t.dataset.bool){
+    if (t.dataset.bool === 'bloqueado' && t.checked && !confirm('¿Bloquear a ' + id + '? Podrá ver, pero no registrar, editar ni borrar nada.')){ t.checked = false; return; }
+    cambiarStaff(id, { [t.dataset.bool]: t.checked }, (t.checked ? 'Activó ' : 'Quitó ') + (t.dataset.bool === 'bloqueado' ? 'bloqueo' : 'permiso para autorizar'));
+  } else if (t.dataset.permiso){
+    const p = STAFF.find(x => x.id === id);
+    const permisos = { ...(p.permisos || {}) };
+    if (t.checked) permisos[t.dataset.permiso] = 'editar'; else delete permisos[t.dataset.permiso];
+    cambiarStaff(id, { permisos }, (t.checked ? 'Dio' : 'Quitó') + ' permiso de edición: ' + t.dataset.permiso);
+  } else if (t.dataset.campo){
+    const v = t.dataset.campo === 'area' ? t.value.trim() : t.value;
+    cambiarStaff(id, { [t.dataset.campo]: v }, 'Cambió ' + t.dataset.campo);
+  }
+});
+$('cuerpoPersonal').addEventListener('click', async e => {
+  const t = e.target;
+  if (t.dataset.tempAbrir){ abiertoTemporal = t.dataset.tempAbrir; pintarStaff(); return; }
+  if (t.dataset.tempNo !== undefined){ abiertoTemporal = null; pintarStaff(); return; }
+  if (t.dataset.tempOk){
+    const hasta = $('tHasta').value, motivo = $('tMotivo').value.trim();
+    if (!hasta){ avisar('Elige hasta qué fecha.'); return; }
+    if (!motivo){ avisar('Escribe el motivo (queda en el registro).'); return; }
+    abiertoTemporal = null;
+    await cambiarStaff(t.dataset.tempOk, {
+      permisoTemporalHasta: Timestamp.fromDate(new Date(hasta + 'T23:59:59')),
+      permisoTemporalPor: yo.nombre || yo.correo, permisoTemporalMotivo: motivo
+    }, 'Dio permiso temporal de abogado hasta ' + fechaCorta(hasta));
+    return;
+  }
+  if (t.dataset.tempQuitar){
+    await cambiarStaff(t.dataset.tempQuitar, { permisoTemporalHasta: deleteField(), permisoTemporalPor: deleteField(), permisoTemporalMotivo: deleteField() }, 'Retiró el permiso temporal');
+    return;
+  }
+  if (t.dataset.baja){
+    const id = t.dataset.baja;
+    if (!confirm('¿Dar de baja a ' + id + '? Ya no podrá entrar a MEGA ALEGRA. Su historial se conserva.\n\nRecuerda también inhabilitar su cuenta en Firebase → Authentication.')) return;
+    const antes = STAFF.find(p => p.id === id);
+    try { await deleteDoc(doc(db, 'staff', id)); await registrarCambio('Dio de baja al personal', 'staff', id, antes, {}); avisar('Dado de baja'); }
+    catch (err){ error(err); }
+    await cargarStaff();
+  }
+});
+$('btnAgregarStaff').onclick = async () => {
+  const correo = $('nCorreo').value.trim().toLowerCase();
+  const nombre = $('nNombre').value.trim(), rol = $('nRol').value, area = $('nArea').value.trim();
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(correo)){ avisar('Escribe un correo válido.'); return; }
+  if (!nombre){ avisar('Escribe el nombre.'); return; }
+  if (STAFF.some(p => p.id === correo)){ avisar('Ese correo ya está en el personal.'); return; }
+  try {
+    const datos = { correo, nombre, rol, area };
+    await setDoc(doc(db, 'staff', correo), datos);
+    await registrarCambio('Agregó al personal', 'staff', correo, {}, datos);
+    ['nCorreo', 'nNombre', 'nArea'].forEach(i => $(i).value = '');
+    avisar('Agregado. Ahora créale su cuenta en Authentication con ese correo.', 7000);
+  } catch (e){ error(e); }
+  await cargarStaff();
+};
+
+// ---------- Defensores ----------
+async function cargarDefs(){
+  const snap = await getDocs(collection(db, 'defensores'));
+  DEFS = snap.docs.map(d => ({ id: d.id, ...d.data() }))
+    .sort((a, b) => (a.area || '').localeCompare(b.area || '') || (a.orden ?? 999) - (b.orden ?? 999) || (a.nombre || '').localeCompare(b.nombre || '', 'es'));
+  pintarDefs();
+}
+const CAMPOS_DEF = ['nombre', 'celular', 'celularPersonal', 'correo', 'sede', 'notas'];
+function pintarDefs(){
+  const area = $('filtroAreaDef').value, bajas = $('verBajas').checked;
+  const lista = DEFS.filter(d => (!area || d.area === area) && (bajas || d.activo !== false));
+  $('cuerpoDef').innerHTML = lista.map(d => `<tr class="${d.activo === false ? 'inactivo' : ''}" data-fila="${esc(d.id)}">
+      <td>${d.orden ?? ''}</td>
+      ${['nombre'].map(c => `<td class="nombre"><input type="text" data-def="${c}" value="${esc(d[c] || '')}"></td>`).join('')}
+      <td>${esc(d.area || '')}</td>
+      ${['celular', 'celularPersonal', 'correo', 'sede', 'notas'].map(c => `<td><input type="text" data-def="${c}" value="${esc(d[c] || '')}" style="min-width:${c === 'sede' ? 260 : 140}px"></td>`).join('')}
+      <td><label class="interruptor"><input type="checkbox" data-activo ${d.activo !== false ? 'checked' : ''}> ${d.activo !== false ? 'Sí' : 'De baja'}</label></td>
+      <td><button class="btn chico" data-guardar-def disabled>Guardar</button></td>
+    </tr>`).join('') || '<tr><td colspan="10" class="vacio">No hay defensores para mostrar.</td></tr>';
+}
+$('filtroAreaDef').onchange = pintarDefs;
+$('verBajas').onchange = pintarDefs;
+$('cuerpoDef').addEventListener('input', e => {
+  const fila = e.target.closest('tr'); if (!fila || !e.target.dataset.def) return;
+  e.target.classList.add('cambiado');
+  fila.querySelector('[data-guardar-def]').disabled = false;
+});
+$('cuerpoDef').addEventListener('change', async e => {
+  if (e.target.dataset.activo === undefined) return;
+  const id = e.target.closest('tr').dataset.fila, activo = e.target.checked;
+  const d = DEFS.find(x => x.id === id);
+  if (!activo && !confirm('¿Dar de baja a ' + d.nombre + '? Dejará de aparecer para asignar casos; su historial se conserva.')){ e.target.checked = true; return; }
+  try {
+    await updateDoc(doc(db, 'defensores', id), { activo, actualizadoEn: new Date().toISOString() });
+    await registrarCambio(activo ? 'Reactivó defensor' : 'Dio de baja defensor', 'defensores', id, { activo: d.activo !== false }, { activo });
+    avisar('Guardado');
+  } catch (err){ error(err); }
+  await cargarDefs();
+});
+$('cuerpoDef').addEventListener('click', async e => {
+  if (e.target.dataset.guardarDef === undefined) return;
+  const fila = e.target.closest('tr'), id = fila.dataset.fila;
+  const d = DEFS.find(x => x.id === id);
+  const cambios = {};
+  fila.querySelectorAll('[data-def]').forEach(i => { const v = i.value.trim(); if ((d[i.dataset.def] || '') !== v) cambios[i.dataset.def] = i.dataset.def === 'correo' ? v.toLowerCase() : v; });
+  if (!Object.keys(cambios).length) return;
+  try {
+    await updateDoc(doc(db, 'defensores', id), { ...cambios, actualizadoEn: new Date().toISOString() });
+    const antes = {}; Object.keys(cambios).forEach(k => antes[k] = d[k] || '');
+    await registrarCambio('Editó defensor ' + (d.nombre || id), 'defensores', id, antes, cambios);
+    avisar('Guardado');
+  } catch (err){ error(err); }
+  await cargarDefs();
+});
+$('btnAgregarDef').onclick = async () => {
+  const nombre = $('dNombre').value.trim(), area = $('dArea').value;
+  if (!nombre){ avisar('Escribe el nombre.'); return; }
+  const id = nombre.toUpperCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^A-Z0-9]+/g, '_').replace(/^_|_$/g, '');
+  if (DEFS.some(d => d.id === id)){ avisar('Ya existe un defensor con ese nombre. Si estaba de baja, reactívalo en la lista.', 6000); return; }
+  const orden = Math.max(0, ...DEFS.filter(d => d.area === area).map(d => d.orden || 0)) + 1;
+  const datos = { nombre, area, celular: $('dCelular').value.trim(), celularPersonal: '', correo: $('dCorreo').value.trim().toLowerCase(),
+    sede: $('dSede').value.trim(), notas: '', activo: true, orden, rol: 'defensor', actualizadoEn: new Date().toISOString() };
+  try {
+    await setDoc(doc(db, 'defensores', id), datos);
+    await registrarCambio('Agregó defensor', 'defensores', id, {}, datos);
+    ['dNombre', 'dCelular', 'dCorreo', 'dSede'].forEach(i => $(i).value = '');
+    avisar('Defensor agregado al final de la lista de ' + area);
+  } catch (err){ error(err); }
+  await cargarDefs();
+};
+
+// ---------- Registro de cambios ----------
+async function cargarCambios(){
+  $('cuerpoCambios').innerHTML = '<tr><td colspan="4" class="vacio">Cargando…</td></tr>';
+  try {
+    const snap = await getDocs(query(collection(db, 'cambios'), orderBy('cuandoMs', 'desc'), limit(200)));
+    $('cuerpoCambios').innerHTML = snap.docs.map(x => {
+      const c = x.data(), f = new Date(c.cuandoMs);
+      const cuando = f.toLocaleDateString('es-PE') + ' ' + f.toLocaleTimeString('es-PE', { hour: '2-digit', minute: '2-digit' });
+      const det = (c.detalle || []).map(d => `<div><b>${esc(d.campo)}:</b> ${d.antes ? `<span class="antes">${esc(d.antes)}</span> → ` : ''}<span class="despues">${esc(d.despues) || '(vacío)'}</span></div>`).join('');
+      return `<tr><td style="white-space:nowrap">${cuando}</td><td>${esc(c.quienNombre || c.quien)}</td><td>${esc(c.accion)}<span class="chico">${esc(c.coleccion)} · ${esc(c.docId)}</span></td><td>${det}</td></tr>`;
+    }).join('') || '<tr><td colspan="4" class="vacio">Todavía no hay cambios registrados.</td></tr>';
+  } catch (e){ console.error(e); $('cuerpoCambios').innerHTML = '<tr><td colspan="4" class="vacio">No se pudo leer el registro (' + esc(e.code || e.message) + ').</td></tr>'; }
+}
+
+// ---------- Pestañas ----------
+document.querySelector('.pestanas').addEventListener('click', e => {
+  const p = e.target.dataset.pestana; if (!p) return;
+  document.querySelectorAll('.pestana').forEach(b => b.classList.toggle('activa', b.dataset.pestana === p));
+  $('secPersonal').hidden = p !== 'personal';
+  $('secDefensores').hidden = p !== 'defensores';
+  $('secCambios').hidden = p !== 'cambios';
+  if (p === 'defensores') cargarDefs();
+  if (p === 'cambios') cargarCambios();
+});
+
+// ---------- Sesión ----------
+$('btnEntrar').onclick = async () => {
+  try { await signInWithEmailAndPassword(auth, $('loginCorreo').value.trim().toLowerCase(), $('loginClave').value); }
+  catch (e){ $('msgLogin').textContent = 'No se pudo entrar (' + e.code + ').'; }
+};
+$('btnSalir').onclick = () => signOut(auth);
+onAuthStateChanged(auth, async user => {
+  if (!user){ $('app').hidden = true; $('pantallaLogin').hidden = false; $('cargandoSesion').hidden = true; $('cajaLogin').hidden = false; return; }
+  try {
+    const correo = (user.email || '').toLowerCase();
+    const ficha = await getDoc(doc(db, 'staff', correo));
+    if (!ficha.exists()){ $('msgLogin').textContent = 'Tu correo no está autorizado.'; $('cargandoSesion').hidden = true; $('cajaLogin').hidden = false; await signOut(auth); return; }
+    yo = { correo, ...ficha.data() };
+    $('pantallaLogin').hidden = true; $('app').hidden = false;
+    $('usuarioSesion').textContent = (yo.nombre || correo) + (esAdmin() ? ' · administrador' : puedeAutorizar() ? ' · puede autorizar asistentes' : '');
+    if (!puedeAutorizar()){
+      document.querySelector('.pestanas').hidden = true;
+      $('secPersonal').innerHTML = '<div class="caja"><p>Esta sección es solo para el administrador y los Responsables de Área.</p></div>';
+      return;
+    }
+    if (!esAdmin()) document.querySelectorAll('.solo-admin').forEach(x => x.hidden = true);
+    $('subtitulo').textContent = esAdmin() ? 'Quién puede registrar, editar y ver cada sección' : 'Permiso temporal para asistentes';
+    await cargarStaff();
+  } catch (e){ console.error(e); $('msgLogin').textContent = 'No se pudo cargar tu acceso (' + (e.code || e.message) + ').'; $('cargandoSesion').hidden = true; $('cajaLogin').hidden = false; }
+});
+</script>
+</body>
+</html>

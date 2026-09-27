@@ -101,6 +101,7 @@
   .vacio{padding:28px;text-align:center;color:var(--gris);font-size:14px}
   .ver-mas{display:block;margin:10px auto;padding:8px 16px;border-radius:8px;border:1px solid var(--linea);background:#fff;font-weight:600;cursor:pointer}
   .solo-lectura .solo-abogado{display:none !important}
+  .bloqueado .celda-num-doc input{pointer-events:none;background:#F1EEE8;border-color:#D9D2C5}
 
   /* Ventanas */
   .fondo-modal{position:fixed;inset:0;background:rgba(36,30,27,.45);display:flex;align-items:flex-end;justify-content:center;z-index:50}
@@ -190,6 +191,7 @@
   <nav class="menu-drives" aria-label="Drives">
     <a href="drive1.html" class="actual" aria-current="page">Drive 1 · Registro de casos</a>
     <a href="index.html">Drive 2 · Agenda diaria</a>
+    <a href="permisos.html" id="enlacePermisos" hidden>Personal y permisos</a>
     <span class="separador" aria-hidden="true"></span>
     <span class="rotulo">Hojas de Google (mientras se migran):</span>
     <a class="hoja" href="https://docs.google.com/spreadsheets/d/1OMk8U5HRbSnDuVAg72yR9kGt8808u7TfV9c1cA5P5Zg" target="_blank" rel="noopener">Drive 1 ↗</a>
@@ -455,7 +457,7 @@ const RESPUESTAS = ['Usuario no contesta', 'No desea patrocinio', 'Solicita ofic
 const RESULTADOS_CAMBIO = ['En evaluación', 'Procede (reasignado)', 'No procede (continúa)'];
 const DILIGENCIAS = ['Prueba anticipada', 'Audiencia única', 'Cámara Gesell', 'Inspección', 'Control de sobreseimiento',
   'Control de acusación', 'Juicio oral', 'Otra'];
-const PERSONAL_ADMIN = ['MENA RENGIFO, Sirle', 'CAYCHO COYOCUSI, Jhonatan', 'AQUINO LAZO, Yuriko'];
+let ASISTENTES = []; // se llena desde staff (rol asistente); los de licencia salen en gris
 const MATERIAS_AL = [
   ['Derecho de Familia', ['Alimentos y filiación', 'Aumento y prorrateo de alimentos', 'Reducción, exoneración o extinción de pensión alimenticia',
     'Tenencia y régimen de visita (a favor de NNA)', 'Separación convencional y divorcio ulterior', 'Tenencia y custodia', 'Régimen de visitas',
@@ -844,7 +846,9 @@ function llenarDirigido(valor){
   const grupo = (titulo, lista) => `<optgroup label="${titulo}">${lista.map(n => `<option>${esc(n)}</option>`).join('')}</optgroup>`;
   const nombres = area => DEFENSORES.filter(d => d.area === area).map(d => d.nombre);
   $('fDirigido').innerHTML = '<option value="">— Nadie en particular —</option>' +
-    grupo('Personal administrativo', PERSONAL_ADMIN) +
+    `<optgroup label="Personal administrativo">${ASISTENTES.map(a => a.deLicencia
+      ? `<option disabled>${esc(a.nombre)} (de licencia hasta ${fechaCorta(a.licenciaHasta)})</option>`
+      : `<option>${esc(a.nombre)}</option>`).join('')}</optgroup>` +
     grupo('Asistencia Legal', nombres('Asistencia Legal')) +
     grupo('Defensa de Víctimas', nombres('Defensa de Víctimas')) +
     grupo('Equipo multidisciplinario', nombres('Equipo multidisciplinario')) +
@@ -1209,6 +1213,17 @@ $('loginClave').addEventListener('keydown', e => { if (e.key === 'Enter') entrar
 $('btnSalir').onclick = () => signOut(auth);
 document.addEventListener('keydown', e => { if (e.key === 'Escape'){ $('fondoForm').hidden = true; $('fondoHist').hidden = true; } });
 
+
+// Rol efectivo: bloqueado = solo mira; asistente con permiso temporal vigente = trabaja como abogado
+function rolEfectivo(f){
+  if (f.bloqueado === true) return { rol: 'bloqueado', nota: ' · bloqueado: solo puede ver' };
+  if (f.rol === 'asistente' && f.permisoTemporalHasta && f.permisoTemporalHasta.toDate && f.permisoTemporalHasta.toDate() > new Date()){
+    const h = f.permisoTemporalHasta.toDate();
+    return { rol: 'abogado', nota: ' · permiso temporal de abogado hasta ' + String(h.getDate()).padStart(2, '0') + '/' + String(h.getMonth() + 1).padStart(2, '0') };
+  }
+  return { rol: f.rol || '', nota: '' };
+}
+
 onAuthStateChanged(auth, async user => {
   if (!user){
     usuario = null; if (cortarAnio) cortarAnio();
@@ -1221,12 +1236,21 @@ onAuthStateChanged(auth, async user => {
   try {
     const ficha = await getDoc(doc(db, 'staff', correo));
     if (!ficha.exists()){ msgLogin.textContent = 'Tu correo no está autorizado en MEGA ALEGRA.'; await signOut(auth); return; }
-    usuario = { correo, nombre: ficha.data().nombre || correo, rol: ficha.data().rol || '' };
+    const efectivo = rolEfectivo(ficha.data());
+    usuario = { correo, nombre: ficha.data().nombre || correo, rol: efectivo.rol, nota: efectivo.nota };
+    $('enlacePermisos').hidden = !(ficha.data().esAdmin === true || ficha.data().puedeAutorizar === true);
+    try {
+      const snapStaff = await getDocs(collection(db, 'staff'));
+      ASISTENTES = snapStaff.docs.map(d => d.data()).filter(x => x.rol === 'asistente')
+        .map(x => ({ nombre: x.nombre || x.correo, licenciaHasta: x.licenciaHasta || '', deLicencia: !!x.licenciaHasta && x.licenciaHasta >= hoyIso() }))
+        .sort((a, b) => a.nombre.localeCompare(b.nombre, 'es'));
+    } catch (e){ console.error(e); }
     const snapDef = await getDocs(collection(db, 'defensores'));
     DEFENSORES = snapDef.docs.map(d => ({ id: d.id, ...d.data() })).filter(d => d.activo !== false)
       .sort((a, b) => (a.area || '').localeCompare(b.area || '') || (a.orden ?? 999) - (b.orden ?? 999) || (a.nombre || '').localeCompare(b.nombre || '', 'es'));
     document.body.classList.toggle('solo-lectura', usuario.rol !== 'abogado');
-    $('usuarioSesion').textContent = usuario.nombre + (usuario.rol === 'abogado' ? ' · puede registrar y editar' : ' · anota N° de memo, oficio y carta');
+    $('usuarioSesion').textContent = usuario.nombre + (usuario.rol === 'abogado' ? ' · puede registrar y editar' : usuario.rol === 'bloqueado' ? '' : ' · anota N° de memo, oficio y carta') + usuario.nota;
+    if (usuario.rol === 'bloqueado') document.body.classList.add('bloqueado');
     $('pantallaLogin').hidden = true; $('app').hidden = false;
     pintarAnios(); escucharAnio(anioElegido);
   } catch (err){
