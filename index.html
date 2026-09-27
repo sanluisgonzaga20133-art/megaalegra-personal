@@ -166,7 +166,17 @@
     font-size:13px;padding:6px 0;border-bottom:1px dashed var(--linea);
   }
   .detalle-item:last-child{border-bottom:none}
-  .detalle-acciones{display:flex;gap:10px;flex:none}
+  .detalle-acciones{display:flex;gap:10px;flex:none;flex-wrap:wrap}
+  /* El detalle se queda a la vista aunque la tabla sea más ancha que la pantalla */
+  .detalle-caja{position:sticky;left:0;max-width:min(1000px, calc(100vw - 60px));padding-top:8px}
+  .detalle-titulo{display:flex;justify-content:space-between;align-items:center;gap:10px;
+    font-size:13px;padding:6px 0 8px;border-bottom:2px solid var(--linea);margin-bottom:2px}
+  .detalle-titulo b{color:var(--tinta)}
+  .btn-cerrar-detalle{background:#fff;border:1px solid var(--linea);border-radius:6px;padding:3px 10px;font-size:12px;font-weight:600;cursor:pointer}
+  .btn-reasignar{background:none;border:none;font-size:12px;font-weight:600;cursor:pointer;padding:0}
+  [data-filtro]{cursor:pointer}
+  .mini-dia[data-filtro]:hover, .mini-total[data-filtro]:hover{outline:1.5px solid var(--azul)}
+  .filtro-activo{outline:2px solid var(--azul);outline-offset:-2px}
   .btn-editar, .btn-borrar{
     background:none;border:none;font-size:12px;font-weight:600;cursor:pointer;padding:0;
   }
@@ -759,15 +769,42 @@ function construirMapaDia(propiasDefensor, mesRef){
     if (nivel > 0) clases.push('n' + nivel);
     if (esNoLaborable(f)) clases.push('finde');
     if (f === hoy) clases.push('hoy');
-    html += `<span class="${clases.join(' ')}" title="${formateaCorta(f)}: ${n} caso${n === 1 ? '' : 's'}">${Number(f.slice(8))}</span>`;
+    html += `<span class="${clases.join(' ')}" data-filtro="dia" data-valor="${f}" title="${formateaCorta(f)}: ${n} caso${n === 1 ? '' : 's'} — toca para ver la lista">${Number(f.slice(8))}</span>`;
     const esDomingo = new Date(f + 'T00:00:00').getDay() === 0;
     if (esDomingo || i === dias.length - 1){
       nSemana++;
-      html += `<span class="mini-total" title="TS${nSemana}: total de la semana">${totalSemana}</span>`;
+      html += `<span class="mini-total" data-filtro="semana" data-valor="${claveSemana(f)}" data-etiqueta="TS${nSemana}" title="TS${nSemana}: total de la semana — toca para ver la lista">${totalSemana}</span>`;
       totalSemana = 0;
     }
   });
   return `<div class="mini-cal"><div class="mini-cal-fila">${html}</div></div>`;
+}
+
+// ---------- Qué lista se ve al tocar una casilla ----------
+let filtroDetalle = { tipo: 'mes' };
+function filtrarDetalle(lista, f){
+  switch (f.tipo){
+    case 'dia': return lista.filter(a => a.fecha === f.valor);
+    case 'semana': return lista.filter(a => claveSemana(a.fecha) === f.valor);
+    case 'cat': return lista.filter(a => a.categoria === f.valor);
+    case 'total': { const t = AREA.totales.find(x => x.nombre === f.valor); return t ? lista.filter(t.f) : lista; }
+    case 'reasig': return [];
+    default: return lista.slice();
+  }
+}
+function etiquetaFiltro(f){
+  switch (f.tipo){
+    case 'dia': return (f.valor === hoyIso() ? 'Hoy ' : '') + formateaCorta(f.valor) + '/' + f.valor.slice(0, 4);
+    case 'semana': {
+      const lunes = new Date(f.valor + 'T00:00:00'), domingo = new Date(lunes); domingo.setDate(lunes.getDate() + 6);
+      const iso = x => x.getFullYear() + '-' + String(x.getMonth() + 1).padStart(2, '0') + '-' + String(x.getDate()).padStart(2, '0');
+      return (f.etiqueta ? f.etiqueta + ': ' : '') + 'semana del ' + formateaCorta(iso(lunes)) + ' al ' + formateaCorta(iso(domingo));
+    }
+    case 'cat': return f.valor + ' (mes)';
+    case 'total': return f.valor + ' (mes)';
+    case 'reasig': return 'Reasignaciones del mes';
+    default: return 'Todo el mes';
+  }
 }
 
 function pintarTabla(){
@@ -816,17 +853,17 @@ function pintarTabla(){
     const nDia = propias.filter(a => a.fecha === diaElegido).length;
     const celdasTotales = AREA.totales.map(t => {
       const n = propias.filter(t.f).length;
-      return `<td class="num celda-total ${n === 0 ? 'cero' : ''}" data-defensor="${d.id}">${n || '·'}</td>`;
+      return `<td class="num celda-total ${n === 0 ? 'cero' : ''}" data-defensor="${d.id}" data-filtro="total" data-valor="${t.nombre}">${n || '·'}</td>`;
     }).join('');
     const celdaHoy = nDia === 0
-      ? `<td class="num cero" data-defensor="${d.id}">·</td>`
-      : `<td class="num" data-defensor="${d.id}"><span class="badge-hoy ${claseColorHoy(nDia)}">${nDia}</span></td>`;
+      ? `<td class="num cero" data-defensor="${d.id}" data-filtro="dia" data-valor="${diaElegido}">·</td>`
+      : `<td class="num" data-defensor="${d.id}" data-filtro="dia" data-valor="${diaElegido}"><span class="badge-hoy ${claseColorHoy(nDia)}">${nDia}</span></td>`;
     const ref = REFERENCIA_MES_ANTERIOR[d.id] || {};
     const celdasRef = AREA.referencias.map(r => `<td class="num ref-col">${ref[r.clave] ?? '—'}</td>`).join('');
 
     const celdasCategoria = categoriasEnColumna().map(c => {
       const n = propias.filter(a => a.categoria === c).length;
-      return `<td class="num ${n === 0 ? 'cero' : ''}" data-defensor="${d.id}">${n || '·'}</td>`;
+      return `<td class="num ${n === 0 ? 'cero' : ''}" data-defensor="${d.id}" data-filtro="cat" data-valor="${c}">${n || '·'}</td>`;
     }).join('');
 
     const esResponsable = d.nota && d.nota.includes('Responsable');
@@ -838,8 +875,8 @@ function pintarTabla(){
     ].filter(Boolean).join(' ');
 
     const celdaReasig = (entraron === 0 && salieron === 0)
-      ? '<td class="num celda-total cero" data-defensor="' + d.id + '">·</td>'
-      : `<td class="num celda-total" data-defensor="${d.id}" style="font-size:12px">${entraron > 0 ? '<span style="color:var(--verde)">+' + entraron + '</span>' : ''}${entraron > 0 && salieron > 0 ? ' / ' : ''}${salieron > 0 ? '<span style="color:var(--rojo-oscuro)">−' + salieron + '</span>' : ''}</td>`;
+      ? '<td class="num celda-total cero" data-defensor="' + d.id + '" data-filtro="reasig">·</td>'
+      : `<td class="num celda-total" data-defensor="${d.id}" data-filtro="reasig" style="font-size:12px">${entraron > 0 ? '<span style="color:var(--verde)">+' + entraron + '</span>' : ''}${entraron > 0 && salieron > 0 ? ' / ' : ''}${salieron > 0 ? '<span style="color:var(--rojo-oscuro)">−' + salieron + '</span>' : ''}</td>`;
 
     const fila = document.createElement('tr');
     if (clasesFila) fila.className = clasesFila;
@@ -856,7 +893,7 @@ function pintarTabla(){
       ${celdasRef}
       ${celdasCategoria}
       ${celdasTotales}
-      <td class="num celda-total" data-defensor="${d.id}">${totalMes}</td>
+      <td class="num celda-total" data-defensor="${d.id}" data-filtro="mes">${totalMes}</td>
       ${celdaReasig}
       <td data-defensor="${d.id}">${construirMapaDia(propias, diaElegido)}</td>
     `;
@@ -868,9 +905,15 @@ function pintarTabla(){
     filaDetalle.hidden = d.id !== detalleAbiertoId;
     const td = document.createElement('td');
     td.colSpan = categoriasEnColumna().length + AREA.totales.length + AREA.referencias.length + 5;
-    td.innerHTML = propias.length === 0
-      ? '<div class="detalle-vacio">Sin asignaciones registradas este mes todavía.</div>'
-      : propias.slice().reverse()
+    // Solo los casos de la casilla que se tocó (día, semana, materia, total o todo el mes)
+    const filtro = d.id === detalleAbiertoId ? filtroDetalle : { tipo: 'mes' };
+    const listaFiltrada = filtrarDetalle(propias, filtro)
+      .sort((x, y) => y.fecha.localeCompare(x.fecha) || ((y.creadoEn && y.creadoEn.seconds) || 9e12) - ((x.creadoEn && x.creadoEn.seconds) || 9e12));
+    const soloReasig = filtro.tipo === 'reasig';
+    const cabecera = `<div class="detalle-titulo"><span><b>${d.nombre}</b> · ${etiquetaFiltro(filtro)} · ${soloReasig ? 'reasignaciones' : listaFiltrada.length + ' caso' + (listaFiltrada.length === 1 ? '' : 's')}</span><button class="btn-cerrar-detalle" data-cerrar-detalle>✕ Cerrar</button></div>`;
+    td.innerHTML = soloReasig ? '' : listaFiltrada.length === 0
+      ? '<div class="detalle-vacio">No hay casos en esta selección.</div>'
+      : listaFiltrada
           .map(a => {
             if (a.id === idPorBorrar){
               return `<div class="detalle-item"><span>¿Borrar el caso del ${a.fecha} (${a.categoria})?</span><span class="detalle-acciones"><button class="btn-borrar-si" data-id="${a.id}">Sí, borrar</button><button class="btn-borrar-no">Cancelar</button></span></div>`;
@@ -884,7 +927,11 @@ function pintarTabla(){
             return `<div class="detalle-item"><span>${a.fecha} — ${a.categoria}${a.especifica ? ' (' + a.especifica + ' → Drive 1)' : ''}${Object.keys(CASILLAS_TODAS).filter(k => a[k]).map(k => ' · ' + (k === 'adultoMayor' ? '👵 ' : '') + CASILLAS_TODAS[k].split(' (')[0]).join('')} · ${a.origen}${etiquetaReasig}</span><span class="detalle-acciones"><button class="btn-editar" data-id="${a.id}">✎ Editar</button><button class="btn-reasignar" data-id="${a.id}">🔁 Reasignar</button><button class="btn-borrar" data-id="${a.id}">🗑 Borrar</button></span></div>`;
           })
           .join('');
-    td.innerHTML += seccionReasignaciones(d.id, mesDelDia);
+    if (filtro.tipo === 'mes' || soloReasig){
+      const secReasig = seccionReasignaciones(d.id, mesDelDia);
+      td.innerHTML += secReasig || (soloReasig ? '<div class="detalle-vacio">Sin reasignaciones este mes.</div>' : '');
+    }
+    td.innerHTML = '<div class="detalle-caja">' + cabecera + td.innerHTML + '</div>';
     filaDetalle.appendChild(td);
     cuerpo.appendChild(filaDetalle);
   });
@@ -1048,9 +1095,16 @@ document.getElementById('cuerpoTabla').addEventListener('click', function(e){
   }
   const btnBorrarNo = e.target.closest('.btn-borrar-no');
   if (btnBorrarNo){ idPorBorrar = null; idReasigPorBorrar = null; idPorReasignar = null; pintarTabla(); return; }
+  if (e.target.closest('[data-cerrar-detalle]')){ detalleAbiertoId = null; idPorBorrar = null; idPorReasignar = null; pintarTabla(); return; }
   const celda = e.target.closest('td[data-defensor]');
   if (celda){
-    detalleAbiertoId = detalleAbiertoId === celda.dataset.defensor ? null : celda.dataset.defensor;
+    const origenFiltro = e.target.closest('[data-filtro]');
+    const nuevo = origenFiltro
+      ? { tipo: origenFiltro.dataset.filtro, valor: origenFiltro.dataset.valor || '', etiqueta: origenFiltro.dataset.etiqueta || '' }
+      : { tipo: 'mes' };
+    const mismo = detalleAbiertoId === celda.dataset.defensor && filtroDetalle.tipo === nuevo.tipo && (filtroDetalle.valor || '') === nuevo.valor;
+    detalleAbiertoId = mismo ? null : celda.dataset.defensor;
+    filtroDetalle = nuevo;
     idPorBorrar = null;
     idPorReasignar = null;
     pintarTabla();
