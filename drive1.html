@@ -159,7 +159,8 @@
 <body>
 
 <div id="pantallaLogin">
-  <div class="caja-login">
+  <div id="cargandoSesion" style="text-align:center;color:#6A635C;font-size:15px;font-weight:600">Cargando MEGA ALEGRA…</div>
+  <div class="caja-login" id="cajaLogin" hidden>
     <h2>MEGA ALEGRA · Personal</h2>
     <p style="margin:0 0 14px;color:var(--gris);font-size:13.5px">Registro de casos (Drive 1)</p>
     <label class="campo" for="loginCorreo">Correo</label>
@@ -736,7 +737,24 @@ function opcionesSimples(cont, lista, alElegir){
   cont.onclick = e => { const o = e.target.closest('.opcion'); if (!o) return; marcar(cont, o.dataset.v); alElegir(o.dataset.v); };
 }
 function marcar(cont, v){ [...cont.children].forEach(c => c.classList.toggle('activo', c.dataset.v === v)); }
-opcionesSimples($('optOrigen'), ORIGENES, v => { origen = v; actualizarObligatorios(); });
+opcionesSimples($('optOrigen'), ORIGENES, v => { origen = v; actualizarObligatorios(); referenciaAutomatica(); });
+// Al elegir el origen, el documento de referencia se escribe solo con la fecha (se puede corregir a mano)
+const PREFIJO_ORIGEN = {
+  'Correo electrónico': 'CORREO ELECTRÓNICO DE FECHA ',
+  'Correo Fono Alegra': 'FONO ALEGRA DE FECHA ',
+  'Presencial (formato)': 'FORMATO DE PATROCINIO DE FECHA '
+};
+let ultimaReferenciaAuto = '';
+function referenciaAutomatica(){
+  const actual = $('fCodigo').value.trim().toUpperCase();
+  const esAuto = !actual || actual === ultimaReferenciaAuto;
+  if (!esAuto) return; // si ya escribiste algo propio, no se toca
+  const pref = PREFIJO_ORIGEN[origen];
+  ultimaReferenciaAuto = pref ? pref + fechaCorta($('fFecha').value || hoyIso()) : '';
+  $('fCodigo').value = ultimaReferenciaAuto;
+  if (origen === 'Mesa de partes virtual') $('fCodigo').focus();
+}
+$('fFecha').addEventListener('change', referenciaAutomatica);
 opcionesSimples($('optResultado'), RESULTADOS_CAMBIO, v => { resultadoCambio = v; actualizarAbogadoLabel(); });
 $('optPrioridad').onclick = e => { const o = e.target.closest('.opcion'); if (!o) return; prioridad = o.dataset.v; marcar($('optPrioridad'), prioridad); };
 $('optTipoRegistro').onclick = e => { const o = e.target.closest('.opcion'); if (!o) return; ponerModo(o.dataset.v); };
@@ -869,7 +887,7 @@ function elegirPadre(r){
 }
 
 function limpiarForm(){
-  editandoId = null; padre = null; origen = ''; prioridad = 'normal'; resultadoCambio = '';
+  editandoId = null; padre = null; origen = ''; prioridad = 'normal'; resultadoCambio = ''; ultimaReferenciaAuto = '';
   ['fNumDoc', 'fCodigo', 'fUsuario', 'fCarpeta', 'fResumen', 'fDistrital', 'fProveido', 'fDiligenciaOtra', 'fSupNota', 'fDilHora', 'fDilFecha', 'fPlazoFecha', 'fPlazoHora', 'fSupFecha']
     .forEach(i => $(i).value = '');
   ['fHacerMemo', 'fHacerOficio', 'fHacerCarta', 'fNoHacer', 'fOcultar'].forEach(i => $(i).checked = false);
@@ -1089,6 +1107,7 @@ onAuthStateChanged(auth, async user => {
   if (!user){
     usuario = null; if (cortarAnio) cortarAnio();
     $('app').hidden = true; $('pantallaLogin').hidden = false; msgLogin.textContent = '';
+    $('cargandoSesion').hidden = true; $('cajaLogin').hidden = false;
     return;
   }
   const correo = (user.email || '').toLowerCase();
@@ -1107,6 +1126,7 @@ onAuthStateChanged(auth, async user => {
   } catch (err){
     console.error(err);
     msgLogin.textContent = 'No se pudo cargar tu acceso (' + (err.code || err.message) + ').';
+    $('cargandoSesion').hidden = true; $('cajaLogin').hidden = false;
   }
 });
 </script>
