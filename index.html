@@ -643,12 +643,91 @@ let idReasigPorBorrar = null;
 function nombreDe(id){ const d = DEFENSORES.find(x => x.id === id); return d ? d.nombre : id; }
 // Quién ve hoy el caso (para el Drive 1). La asignación/carga siempre se queda en defensorId.
 function titularActual(r){ return r.abogadoActualId || r.defensorId; }
+// ---------- Sincronización con el Drive 1 (colección "casos") ----------
+// Cada caso nuevo de la Agenda crea su fila en el Drive 1 con el MISMO identificador,
+// así editar, reasignar o borrar en un lado se refleja en el otro.
+const ORIGEN_A_DRIVE1 = {
+  'Mesa de partes virtual': 'Mesa de partes virtual',
+  'Correo institucional': 'Correo electrónico',
+  'Fono Alegra': 'Correo Fono Alegra',
+  'Turno presencial (Turno Consulta)': 'Presencial (formato)',
+  'Turno presencial (Patrocinio presencial)': 'Presencial (formato)',
+  'Turno presencial': 'Presencial (formato)'
+};
+const PREFIJO_REFERENCIA = {
+  'Correo electrónico': 'CORREO ELECTRÓNICO DE FECHA ',
+  'Correo Fono Alegra': 'FONO ALEGRA DE FECHA ',
+  'Presencial (formato)': 'FORMATO DE PATROCINIO DE FECHA '
+};
+function fechaLarga(iso){ return iso.slice(8, 10) + '/' + iso.slice(5, 7) + '/' + iso.slice(0, 4); }
+function materiaParaDrive1(a){
+  if (a.especifica) return a.especifica;
+  return ['Otras materias', 'Otras', 'Atención', 'Asistencia Legal', 'Víctimas'].includes(a.categoria) ? '' : a.categoria;
+}
+function datosDrive1(a){
+  const origen = ORIGEN_A_DRIVE1[a.origen] || '';
+  const turno = (a.origen === 'Turno de flagrancia' || a.origen === 'Turno peritos') ? a.origen : '';
+  return { fecha: a.fecha, anio: Number(a.fecha.slice(0, 4)), mes: a.fecha.slice(0, 7), origen, turno,
+    codigo: PREFIJO_REFERENCIA[origen] ? PREFIJO_REFERENCIA[origen] + fechaLarga(a.fecha) : '',
+    materia: materiaParaDrive1(a) };
+}
+function crearFilaDrive1(id, a){
+  const d = DEFENSORES.find(x => x.id === a.defensorId) || {};
+  setDoc(doc(db, 'casos', id), {
+    ...datosDrive1(a), tipoDoc: 'Caso nuevo', padreId: null, asignacionId: id, desdeAgenda: true, porCompletar: true,
+    codigoNorm: '', numDoc: '', usuario: '', area: a.area || AREA_NOMBRE, carpeta: '',
+    abogadoId: a.defensorId, abogadoNombre: d.nombre || '', abogadoCelular: d.celular || '', abogadoCorreo: d.correo || '',
+    diligencia: '', dilFecha: '', dilHora: '', prioridad: 'normal',
+    hacer: { memo: false, oficio: false, carta: false, noHacer: false },
+    proveido: '', dirigidoA: '', plazoHoras: null, plazoVence: '', supFecha: '', supNota: '', ocultarPublico: false,
+    creadoPor: usuario.correo, creadoEn: serverTimestamp(), creadoEnMs: Date.now()
+  }).catch(err => { console.error(err); avisar('Se registró en la Agenda, pero no se pudo crear su fila en el Drive 1.', 6000); });
+}
+// Al editar en la Agenda: solo se actualiza en el Drive 1 lo que cambió (no se pisan los datos que ya completaste allá)
+async function actualizarFilaDrive1(id, antes, despues){
+  try {
+    const ref = doc(db, 'casos', id);
+    const snap = await getDoc(ref);
+    if (!snap.exists()) return;
+    const cambios = {};
+    const d1a = datosDrive1(antes), d1d = datosDrive1(despues);
+    if (antes.fecha !== despues.fecha) Object.assign(cambios, { fecha: d1d.fecha, anio: d1d.anio, mes: d1d.mes });
+    if (antes.origen !== despues.origen){
+      cambios.origen = d1d.origen; cambios.turno = d1d.turno;
+      if (!snap.data().codigo || snap.data().codigo === d1a.codigo) cambios.codigo = d1d.codigo;
+    }
+    if (d1a.materia !== d1d.materia) cambios.materia = d1d.materia;
+    if (Object.keys(cambios).length) await updateDoc(ref, cambios);
+  } catch (err){ console.error(err); }
+}
+async function ponerAbogadoActualDrive1(casoId, defId){
+  try {
+    const ref = doc(db, 'casos', casoId);
+    const snap = await getDoc(ref);
+    if (!snap.exists()) return;
+    const d = DEFENSORES.find(x => x.id === defId) || {};
+    const esElOriginal = !defId || defId === snap.data().abogadoId;
+    await updateDoc(ref, esElOriginal
+      ? { abogadoActualId: deleteField(), abogadoActualNombre: deleteField(), abogadoActualCelular: deleteField(), abogadoActualCorreo: deleteField() }
+      : { abogadoActualId: defId, abogadoActualNombre: d.nombre || '', abogadoActualCelular: d.celular || '', abogadoActualCorreo: d.correo || '' });
+  } catch (err){ console.error(err); }
+}
+async function borrarFilaDrive1(id){
+  const ref = doc(db, 'casos', id);
+  const snap = await getDoc(ref);
+  if (!snap.exists()) return;
+  const hijos = await getDocs(query(collection(db, 'casos'), where('padreId', '==', id)));
+  if (!hijos.empty){ avisar('Se borró de la Agenda, pero en el Drive 1 el caso tiene antecedentes y se conservó.', 7000); return; }
+  await deleteDoc(ref);
+}
+
 function reasignarRegistro(registro, nuevoId){
   const fecha = hoyIso();
   setDoc(doc(collection(db, 'reasignaciones')), { fecha, mes: fecha.slice(0, 7), deId: titularActual(registro), aId: nuevoId,
     casoId: registro.id, referencia: 'Caso asignado el ' + registro.fecha + ' (' + registro.categoria + ')', nota: '', ...marcaCreacion() })
     .catch(errorAlGuardar);
   updateDoc(doc(db, 'asignaciones', registro.id), { abogadoActualId: nuevoId }).catch(errorAlGuardar);
+  ponerAbogadoActualDrive1(registro.id, nuevoId);
   registro.abogadoActualId = nuevoId;
   avisar('Reasignación registrada');
 }
@@ -663,7 +742,7 @@ function seccionReasignaciones(defId, mes){
       }
       const texto = r.aId === defId
         ? `<b style="color:var(--verde)">+ entró</b> de ${nombreDe(r.deId)}`
-        : `<b style="color:var(--rojo-oscuro)">− salió</b> a ${nombreDe(r.aId)}`;
+        : `<b style="color:var(--rojo-oscuro)">− salió</b> a ${r.aId ? nombreDe(r.aId) : (r.destino || 'otra dependencia')}`;
       return `<div class="detalle-item"><span>${r.fecha} — ${r.referencia || 'sin referencia'} · ${texto}${r.nota ? ' · ' + r.nota : ''}</span><span class="detalle-acciones"><button class="btn-borrar-reasig" data-rid="${r.id}" style="${estiloBtn}">🗑 Borrar</button></span></div>`;
     }).join('');
 }
@@ -707,6 +786,7 @@ async function borrarCaso(id){
     const ligadas = await getDocs(query(collection(db, 'reasignaciones'), where('casoId', '==', id)));
     await Promise.all(ligadas.docs.map(d => deleteDoc(d.ref)));
     await deleteDoc(doc(db, 'asignaciones', id));
+    await borrarFilaDrive1(id);
     avisar('Caso borrado');
   } catch (err){ errorAlGuardar(err); }
 }
@@ -1050,8 +1130,9 @@ function registrarRapido(defensorId){
   }
   const fecha = document.getElementById('selDia').value || hoyIso();
   const ref = doc(collection(db, 'asignaciones'));
-  setDoc(ref, { defensorId, area: AREA_NOMBRE, fecha, mes: fecha.slice(0, 7), categoria: AREA.categoriaDefault, especifica: '',
-    origen: 'Mesa de partes virtual', ...casillasVacias(), ...marcaCreacion() }).catch(errorAlGuardar);
+  const nueva = { defensorId, area: AREA_NOMBRE, fecha, mes: fecha.slice(0, 7), categoria: AREA.categoriaDefault, especifica: '',
+    origen: 'Mesa de partes virtual', ...casillasVacias() };
+  setDoc(ref, { ...nueva, ...marcaCreacion() }).then(() => crearFilaDrive1(ref.id, nueva)).catch(errorAlGuardar);
   ultimaAccion = { id: ref.id };
   document.getElementById('btnDeshacer').disabled = false;
   pintarTabla();
@@ -1078,6 +1159,7 @@ document.getElementById('cuerpoTabla').addEventListener('click', function(e){
           if (caso.exists()){
             await updateDoc(caso.ref, { abogadoActualId: r.deId === caso.data().defensorId ? deleteField() : r.deId });
           }
+          if (r.aId) await ponerAbogadoActualDrive1(r.casoId, r.deId);
         }
         await deleteDoc(doc(db, 'reasignaciones', rid));
         avisar('Reasignación borrada');
@@ -1450,15 +1532,18 @@ document.getElementById('btnGuardar').addEventListener('click', () => {
     const cambios = { fecha, mes: fecha.slice(0, 7), categoria: categoriaElegida, especifica: especifica || '',
       origen: origenElegido, ...leerCasillas(), ...extraEquipo,
       editadoPor: usuario.correo, editadoEn: serverTimestamp() };
-    updateDoc(doc(db, 'asignaciones', idEditando), cambios).catch(errorAlGuardar);
+    const antes = { ...(buscarRegistro(idEditando) || {}) };
+    const idCambio = idEditando;
+    updateDoc(doc(db, 'asignaciones', idEditando), cambios)
+      .then(() => actualizarFilaDrive1(idCambio, antes, { ...antes, ...cambios })).catch(errorAlGuardar);
     const enBusqueda = ultimaBusqueda.find(a => a.id === idEditando);
     if (enBusqueda){ Object.assign(enBusqueda, cambios); pintarResultadosBusqueda(); }
   } else {
     const fecha = document.getElementById('campoFecha').value || hoyIso();
     const ref = doc(collection(db, 'asignaciones'));
-    setDoc(ref, { defensorId: defensorActivo, area: AREA_NOMBRE, fecha, mes: fecha.slice(0, 7), categoria: categoriaElegida,
-      especifica: especifica || '', origen: origenElegido, ...leerCasillas(), ...extraEquipo,
-      ...marcaCreacion() }).catch(errorAlGuardar);
+    const nueva = { defensorId: defensorActivo, area: AREA_NOMBRE, fecha, mes: fecha.slice(0, 7), categoria: categoriaElegida,
+      especifica: especifica || '', origen: origenElegido, ...leerCasillas(), ...extraEquipo };
+    setDoc(ref, { ...nueva, ...marcaCreacion() }).then(() => crearFilaDrive1(ref.id, nueva)).catch(errorAlGuardar);
     ultimaAccion = { id: ref.id };
     document.getElementById('btnDeshacer').disabled = false;
   }
@@ -1550,7 +1635,7 @@ async function cargarDefensoresArea(){
   __log('Defensores de ' + AREA_NOMBRE + ' leídos: ' + snap.size);
   DEFENSORES = snap.docs.map(d => ({ id: d.id, ...d.data() }))
     .filter(d => d.activo !== false)
-    .map(d => ({ id: d.id, nombre: d.nombre, nota: d.notas || '', orden: d.orden }))
+    .map(d => ({ id: d.id, nombre: d.nombre, nota: d.notas || '', orden: d.orden, celular: d.celular || '', correo: d.correo || '' }))
     .sort((a, b) => (a.orden ?? 999) - (b.orden ?? 999) || a.nombre.localeCompare(b.nombre, 'es'));
 }
 async function cambiarArea(nombre){
