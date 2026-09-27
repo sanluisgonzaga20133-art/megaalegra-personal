@@ -145,6 +145,15 @@
 
   #aviso{position:fixed;left:50%;bottom:calc(20px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);background:#222;color:#fff;
     padding:10px 16px;border-radius:10px;font-size:13.5px;font-weight:600;z-index:99;display:none;max-width:90vw}
+
+  /* Menú de navegación entre drives (igual en todas las páginas) */
+  .menu-drives{display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin:0 0 10px;padding:6px;background:#fff;border:1px solid #E6DECF;border-radius:12px}
+  .menu-drives a{padding:7px 12px;border-radius:8px;font-size:13.5px;font-weight:600;color:#241E1B;text-decoration:none;white-space:nowrap}
+  .menu-drives a:hover{background:#F7F2EA}
+  .menu-drives a.actual{background:#241E1B;color:#fff}
+  .menu-drives .separador{width:1px;align-self:stretch;background:#E6DECF;margin:0 4px}
+  .menu-drives .rotulo{font-size:12px;color:#6A635C;padding:0 4px}
+  .menu-drives a.hoja{color:#2C6478;font-weight:500}
 </style>
 </head>
 <body>
@@ -166,11 +175,18 @@
 <div id="app" hidden>
   <div class="barra-sesion">
     <span id="usuarioSesion"></span>
-    <span style="display:flex;gap:8px">
-      <a href="index.html">← Agenda diaria (Drive 2)</a>
-      <button id="btnSalir">Salir</button>
-    </span>
+    <button id="btnSalir">Salir</button>
   </div>
+  <nav class="menu-drives" aria-label="Drives">
+    <a href="drive1.html" class="actual" aria-current="page">Drive 1 · Registro de casos</a>
+    <a href="index.html">Drive 2 · Agenda diaria</a>
+    <span class="separador" aria-hidden="true"></span>
+    <span class="rotulo">Hojas de Google (mientras se migran):</span>
+    <a class="hoja" href="https://docs.google.com/spreadsheets/d/1OMk8U5HRbSnDuVAg72yR9kGt8808u7TfV9c1cA5P5Zg" target="_blank" rel="noopener">Drive 1 ↗</a>
+    <a class="hoja" href="https://docs.google.com/spreadsheets/d/1VPHB4XQyR-LeAVD42FovV7T1txzzCGvqSz5YgCyz6iI" target="_blank" rel="noopener">Drive 2 ↗</a>
+    <a class="hoja" href="https://docs.google.com/spreadsheets/d/1vdRtVAkiTeRWeJGDo9QwTKhf5gwhZ81uTvbvAENyGp0" target="_blank" rel="noopener">Drive 3 · Fono Alegra ↗</a>
+    <a class="hoja" href="https://docs.google.com/spreadsheets/d/1-oGexf5LrH5CDsmUCX2pebTIBq4eANhPAuHvDQ0xCZY" target="_blank" rel="noopener">Drive 4 · Consolidación ↗</a>
+  </nav>
 
   <header>
     <h1>Registro de casos</h1>
