@@ -295,7 +295,8 @@
 </head>
 <body>
 <div id="pantallaLogin">
-  <div class="caja-login">
+  <div id="cargandoSesion" style="text-align:center;color:#6A635C;font-size:15px;font-weight:600">Cargando MEGA ALEGRA…</div>
+  <div class="caja-login" id="cajaLogin" hidden>
     <h2>MEGA ALEGRA · Personal</h2>
     <p style="margin:0 0 16px;color:var(--gris);font-size:13.5px">Agenda diaria de asignaciones · Asistencia Legal</p>
     <label class="campo" for="loginCorreo">Correo</label>
@@ -332,6 +333,8 @@
       __log('Firebase NO cargó en 12 s (posible bloqueo de www.gstatic.com)');
       document.getElementById('msgLogin').textContent =
         'No se pudo cargar Firebase. Puede que la red bloquee www.gstatic.com: prueba con otra red y avísame.';
+      document.getElementById('cargandoSesion').hidden = true;
+      document.getElementById('cajaLogin').hidden = false;
     }
   }, 12000);
 </script>
@@ -1629,6 +1632,9 @@ onAuthStateChanged(auth, async user => {
     mesEscuchado = null;
     document.getElementById('app').hidden = true;
     document.getElementById('pantallaLogin').hidden = false;
+    // Solo se pide contraseña si de verdad no hay sesión abierta
+    document.getElementById('cargandoSesion').hidden = true;
+    document.getElementById('cajaLogin').hidden = false;
     return;
   }
   const correo = (user.email || '').toLowerCase();
