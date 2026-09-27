@@ -291,6 +291,13 @@
   .menu-drives .separador{width:1px;align-self:stretch;background:#E6DECF;margin:0 4px}
   .menu-drives .rotulo{font-size:12px;color:#6A635C;padding:0 4px}
   .menu-drives a.hoja{color:#2C6478;font-weight:500}
+
+  /* Botón ✕ para cerrar ventanas: queda fijo arriba aunque bajes */
+  .modal{position:relative}
+  .btn-x{position:sticky;top:0;float:right;z-index:5;width:36px;height:36px;margin:-8px -10px 0 8px;border-radius:50%;
+    border:1.5px solid #E6DECF;background:#fff;color:#241E1B;font-size:17px;font-weight:700;line-height:1;cursor:pointer;
+    box-shadow:0 2px 6px rgba(36,30,27,.12)}
+  .btn-x:hover{background:#FBEEEC;border-color:#D91023;color:#A10C1A}
 </style>
 </head>
 <body>
@@ -417,6 +424,7 @@
 
 <div class="fondo-modal" id="fondoInforme" hidden>
   <div class="modal informe">
+    <button type="button" class="btn-x" data-cerrar-modal aria-label="Cerrar">✕</button>
     <h2>Vista previa del informe mensual</h2>
     <p class="sub">Así saldrá el Excel que adjuntas al informe para el Director Distrital.</p>
     <div class="hoja-informe" id="hojaInforme"></div>
@@ -429,6 +437,7 @@
 
 <div class="fondo-modal" id="fondoReasig" hidden>
   <div class="modal">
+    <button type="button" class="btn-x" data-cerrar-modal aria-label="Cerrar">✕</button>
     <h2>Registrar reasignación</h2>
     <p class="sub">Para cualquier caso: de este mes, de meses o años anteriores, o que nunca se registró en la app. No suma como caso nuevo.</p>
     <label class="campo" for="reFecha">Fecha de la reasignación</label>
@@ -454,6 +463,7 @@
 
 <div class="fondo-modal" id="fondoModal" hidden>
   <div class="modal">
+    <button type="button" class="btn-x" data-cerrar-modal aria-label="Cerrar">✕</button>
     <h2 id="modalNombre">Nueva asignación</h2>
     <p class="sub" id="modalSub"></p>
 
@@ -1761,6 +1771,12 @@ onAuthStateChanged(auth, async user => {
         : 'No se pudo cargar tu acceso (' + (err.code || err.message) + ').';
     await signOut(auth);
   }
+});
+
+// Cualquier ✕ cierra la ventana en la que está
+document.addEventListener('click', e => {
+  const x = e.target.closest('[data-cerrar-modal]');
+  if (x){ const f = x.closest('.fondo-modal'); if (f) f.hidden = true; }
 });
 </script>
 </body>
