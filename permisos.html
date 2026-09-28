@@ -128,6 +128,14 @@
       </div>
       <p class="ayuda">Después, créale su cuenta en Firebase → <b>Authentication</b> → <b>Agregar usuario</b>, con el <b>mismo correo</b>. Sin esa cuenta no podrá entrar.</p>
     </div>
+    <div class="caja solo-admin">
+      <h3>Avisos del Drive 1</h3>
+      <div class="fila-form">
+        <button class="btn sec" id="btnAvisosTodosOff">Apagar avisos para todos</button>
+        <button class="btn sec" id="btnAvisosTodosOn">Encender avisos para todos</button>
+      </div>
+      <p class="ayuda">Los avisos son las ventanitas de abajo a la derecha (al entrar, a las 8:00, 12:00 y 15:00, lo urgente al instante y la felicitación). Para cada persona puedes encenderlos o apagarlos en la columna <b>Avisos</b>. La barra de pendientes de arriba se sigue viendo siempre.</p>
+    </div>
     <p class="ayuda" id="ayudaPersonal"></p>
     <div class="tabla-wrap"><table>
       <thead><tr id="encPersonal"></tr></thead>
@@ -249,7 +257,40 @@ async function cargarStaff(){
     avisar('No se pudo cargar la lista del personal (' + (e.code || e.message) + ').', 7000);
   }
   pintarStaff();
+  if (esAdmin() && STAFF.length) await sincronizarAsistentes();
 }
+// El Drive 1 necesita la lista de asistentes, pero los abogados no pueden leer las fichas del personal.
+// Por eso se copia aquí solo lo necesario (nombre y licencia) a la colección "asistentes".
+async function sincronizarAsistentes(){
+  try {
+    const snap = await getDocs(collection(db, 'asistentes'));
+    const actuales = new Map(snap.docs.map(d => [d.id, d.data()]));
+    const deseados = STAFF.filter(p => p.rol === 'asistente');
+    const tareas = [];
+    deseados.forEach(p => {
+      const datos = { correo: p.id, nombre: p.nombre || p.id, licenciaHasta: p.licenciaHasta || '' };
+      const a = actuales.get(p.id) || {};
+      if (a.correo !== datos.correo || a.nombre !== datos.nombre || (a.licenciaHasta || '') !== datos.licenciaHasta)
+        tareas.push(setDoc(doc(db, 'asistentes', p.id), datos, { merge: true }));
+    });
+    actuales.forEach((_, id) => { if (!deseados.some(p => p.id === id)) tareas.push(deleteDoc(doc(db, 'asistentes', id))); });
+    await Promise.all(tareas);
+  } catch (e){
+    console.error(e);
+    avisar('No se pudo actualizar la lista de asistentes del Drive 1 (' + (e.code || e.message) + '). ¿Ya publicaste las reglas nuevas?', 8000);
+  }
+}
+async function avisosParaTodos(encender){
+  if (!confirm((encender ? '¿Encender' : '¿Apagar') + ' los avisos del Drive 1 para todo el personal?')) return;
+  try {
+    await Promise.all(STAFF.map(p => updateDoc(doc(db, 'staff', p.id), { avisos: encender })));
+    await registrarCambio((encender ? 'Encendió' : 'Apagó') + ' los avisos para todos', 'staff', 'todos', {}, {});
+    avisar(encender ? 'Avisos encendidos para todos' : 'Avisos apagados para todos');
+  } catch (e){ error(e); }
+  await cargarStaff();
+}
+$('btnAvisosTodosOff').onclick = () => avisosParaTodos(false);
+$('btnAvisosTodosOn').onclick = () => avisosParaTodos(true);
 function temporalVigente(p){
   const h = p.permisoTemporalHasta;
   return h && h.toDate && h.toDate() > new Date() ? h.toDate() : null;
@@ -261,7 +302,7 @@ function pintarStaff(){
     ? 'Los cambios con interruptor se guardan al instante. <b>Bloqueado</b>: puede entrar y ver, pero no registrar, editar ni borrar. <b>Permiso temporal</b>: un asistente trabaja como abogado hasta la fecha que elijas y se corta solo. Los <b>Drives están cerrados</b> para todos: en cada columna eliges a quién das <b>Ver</b>, <b>Anotar N° de memos, oficios y cartas</b> (Drive 1) o <b>Editar</b>. El permiso temporal de un asistente le abre Drive 1 y Drive 2 como abogado hasta su fecha.'
     : 'Como Responsable de Área puedes dar o retirar el <b>permiso temporal</b> a los asistentes para que trabajen como abogado hasta una fecha.';
   $('encPersonal').innerHTML = admin
-    ? `<th>Nombre</th><th>Rol</th><th>Área</th><th>Bloqueado</th><th>Puede autorizar</th><th>Permiso temporal (asistentes)</th>${DRIVES.map(d => `<th>${d[1]}</th>`).join('')}<th>Puede editar estas pestañas</th><th>De licencia hasta</th><th></th>`
+    ? `<th>Nombre</th><th>Rol</th><th>Área</th><th>Bloqueado</th><th>Puede autorizar</th><th>Avisos</th><th>Permiso temporal (asistentes)</th>${DRIVES.map(d => `<th>${d[1]}</th>`).join('')}<th>Puede editar estas pestañas</th><th>De licencia hasta</th><th></th>`
     : '<th>Nombre</th><th>Rol</th><th>Permiso temporal</th>';
   const lista = admin ? STAFF : STAFF.filter(p => p.rol === 'asistente');
   $('cuerpoPersonal').innerHTML = lista.map(p => {
@@ -293,6 +334,7 @@ function pintarStaff(){
       <td><input type="text" data-campo="area" data-id="${esc(p.id)}" value="${esc(p.area || '')}"></td>
       <td><label class="interruptor"><input type="checkbox" data-bool="bloqueado" data-id="${esc(p.id)}" ${p.bloqueado ? 'checked' : ''} ${soyYo ? 'disabled' : ''}> ${p.bloqueado ? 'Sí' : 'No'}</label></td>
       <td><label class="interruptor"><input type="checkbox" data-bool="puedeAutorizar" data-id="${esc(p.id)}" ${p.puedeAutorizar || p.esAdmin ? 'checked' : ''} ${soyYo ? 'disabled' : ''}> ${p.puedeAutorizar || p.esAdmin ? 'Sí' : 'No'}</label></td>
+      <td><label class="interruptor"><input type="checkbox" data-bool="avisos" data-id="${esc(p.id)}" ${p.avisos !== false ? 'checked' : ''}> ${p.avisos !== false ? 'Encendidos' : 'Apagados'}</label></td>
       <td>${temporal}</td>
       ${DRIVES.map(([k, , niveles]) => p.esAdmin ? '<td><span class="chico">Editar (administrador)</span></td>'
         : `<td><select data-drive="${k}" data-id="${esc(p.id)}" class="${permisos[k] ? 'cambiado' : ''}">
@@ -322,7 +364,8 @@ $('cuerpoPersonal').addEventListener('change', e => {
   if (!id) return;
   if (t.dataset.bool){
     if (t.dataset.bool === 'bloqueado' && t.checked && !confirm('¿Bloquear a ' + id + '? Podrá ver, pero no registrar, editar ni borrar nada.')){ t.checked = false; return; }
-    cambiarStaff(id, { [t.dataset.bool]: t.checked }, (t.checked ? 'Activó ' : 'Quitó ') + (t.dataset.bool === 'bloqueado' ? 'bloqueo' : 'permiso para autorizar'));
+    const que = { bloqueado: 'bloqueo', puedeAutorizar: 'permiso para autorizar', avisos: 'avisos del Drive 1' }[t.dataset.bool];
+    cambiarStaff(id, { [t.dataset.bool]: t.checked }, (t.checked ? 'Activó ' : 'Quitó ') + que);
   } else if (t.dataset.drive){
     const p = STAFF.find(x => x.id === id);
     const permisos = { ...(p.permisos || {}) };

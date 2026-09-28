@@ -167,6 +167,44 @@
 
   /* Sin acceso a esta sección */
   #sinAcceso{background:#fff;border:1px solid #E6DECF;border-radius:12px;padding:24px;text-align:center;font-size:15px;color:#6A635C}
+
+  /* Estado de memo, plazo y supervisión dentro de la tabla (se ve sobre cualquier color de fila) */
+  .insignia{display:inline-block;margin-top:3px;font-size:10.5px;font-weight:700;padding:1px 6px;border-radius:6px;white-space:nowrap}
+  .insignia.mal{background:#FFE1E1;color:#8A0B16;border:1px solid var(--rojo)}
+  .insignia.pronto{background:#FFF3D6;color:#6B4A0E;border:1px solid #E8C872}
+  .insignia.ok{background:var(--verde-fondo);color:var(--verde);border:1px solid var(--verde)}
+  .mini-accion{display:block;margin-top:4px;background:#fff;color:var(--tinta);border:1px solid var(--celda);border-radius:6px;padding:2px 7px;font-size:11px;font-weight:700;cursor:pointer}
+
+  /* Barra de pendientes arriba */
+  .barra-pend{background:#fff;border:1px solid var(--linea);border-radius:12px;margin-bottom:10px}
+  .barra-pend-resumen{display:flex;gap:8px;flex-wrap:wrap;align-items:center;width:100%;background:none;border:none;padding:8px 10px;cursor:pointer;text-align:left;font-size:13px;color:var(--tinta)}
+  .barra-pend-resumen .titulo{font-weight:700;margin-right:4px}
+  .barra-pend-resumen .ver{margin-left:auto;color:var(--azul);font-weight:700;font-size:12.5px}
+  .contador{display:inline-flex;gap:5px;align-items:center;padding:3px 9px;border-radius:14px;background:var(--papel);border:1px solid var(--linea);font-weight:600}
+  .contador b{font-variant-numeric:tabular-nums}
+  .contador.mal{background:#FFE1E1;border-color:var(--rojo);color:#8A0B16}
+  .contador.cero{color:var(--gris-claro)}
+  .detalle-pend{border-top:1px solid var(--linea);padding:6px 10px 10px;max-height:50vh;overflow:auto}
+  .detalle-pend h4{margin:10px 0 4px;font-size:12.5px;color:var(--gris)}
+  .linea-pend{display:block;width:100%;text-align:left;background:#fff;border:1px solid var(--linea);border-radius:8px;padding:6px 9px;margin-top:4px;font-size:12.5px;cursor:pointer;color:var(--tinta)}
+  .linea-pend:hover{border-color:var(--azul)}
+  .linea-pend.urgente{background:#1d1d1d;color:#fff;border-color:#1d1d1d}
+  .linea-pend.muy-urgente{background:var(--rojo);color:#fff;border-color:var(--rojo)}
+  .linea-pend .ir{float:right;font-weight:700;opacity:.8}
+
+  /* Avisos abajo a la derecha */
+  #avisosEsquina{position:fixed;right:max(16px, env(safe-area-inset-right,0px));bottom:calc(16px + env(safe-area-inset-bottom,0px));
+    display:flex;flex-direction:column;gap:8px;z-index:98;width:min(380px, calc(100vw - 32px));max-height:80vh;overflow:auto}
+  .toast{background:#fff;color:var(--tinta);border:1px solid var(--celda);border-left:5px solid #E8C872;border-radius:10px;padding:9px 11px;
+    box-shadow:0 6px 18px rgba(36,30,27,.18);font-size:12.5px}
+  .toast.urgente{background:#1d1d1d;color:#fff;border-color:#1d1d1d}
+  .toast.muy-urgente{background:var(--rojo);color:#fff;border-color:var(--rojo-oscuro)}
+  .toast.felicitacion{border-left-color:var(--verde);background:var(--verde-fondo);color:var(--verde)}
+  .toast .cab{display:flex;justify-content:space-between;gap:8px;align-items:flex-start;font-weight:700;font-size:13px;margin-bottom:3px}
+  .toast .cerrar{background:none;border:none;color:inherit;font-size:15px;font-weight:700;cursor:pointer;padding:0 2px;line-height:1}
+  .toast .linea{display:block;width:100%;text-align:left;background:none;border:none;border-top:1px dashed rgba(128,128,128,.35);padding:4px 0;color:inherit;font-size:12.5px;cursor:pointer}
+  .toast .linea:first-of-type{border-top:none}
+  .toast .mas{margin-top:3px;font-size:11.5px;opacity:.85}
 </style>
 </head>
 <body>
@@ -185,6 +223,7 @@
   </div>
 </div>
 <div id="aviso"></div>
+<div id="avisosEsquina" aria-live="polite"></div>
 
 <div id="app" hidden>
   <div class="barra-sesion">
@@ -217,6 +256,12 @@
       <button class="btn-registrar" id="btnDescargar">Descargar Excel</button>
     </div>
   </header>
+
+  <!-- Barra de pendientes: contadores; al tocarla se abre el detalle y cada línea lleva a su fila -->
+  <div class="barra-pend" id="barraPendientes" hidden>
+    <button class="barra-pend-resumen" id="btnBarraPend" aria-expanded="false" aria-controls="detallePend"></button>
+    <div class="detalle-pend" id="detallePend" hidden></div>
+  </div>
 
   <div class="barra-busqueda">
     <div class="anios" id="anios"></div>
@@ -377,6 +422,12 @@
         <label><input type="checkbox" id="fHacerCarta"> Hacer carta</label>
         <label><input type="checkbox" id="fNoHacer"> No hacer memo</label>
       </div>
+      <div id="bloqueAsistente" hidden>
+        <label class="campo" for="fAsistente">Asistente que lo proyecta <span class="obl">*</span></label>
+        <select id="fAsistente"></select>
+        <div class="ayuda" id="ayudaAsistente"></div>
+        <button type="button" class="mini-accion" id="btnNoVino" hidden></button>
+      </div>
       <label class="campo" for="fProveido">Proveído</label>
       <textarea id="fProveido" class="may" placeholder="Indicaciones o texto para el memo, oficio o carta"></textarea>
       <div class="rejilla">
@@ -461,7 +512,7 @@ const RESPUESTAS = ['Usuario no contesta', 'No desea patrocinio', 'Solicita ofic
 const RESULTADOS_CAMBIO = ['En evaluación', 'Procede (reasignado)', 'No procede (continúa)'];
 const DILIGENCIAS = ['Prueba anticipada', 'Audiencia única', 'Cámara Gesell', 'Inspección', 'Control de sobreseimiento',
   'Control de acusación', 'Juicio oral', 'Otra'];
-let ASISTENTES = []; // se llena desde staff (rol asistente); los de licencia salen en gris
+let ASISTENTES = []; // se llena desde la colección "asistentes" (solo nombre, licencia y "no vino hoy"; sin permisos)
 const MATERIAS_AL = [
   ['Derecho de Familia', ['Alimentos y filiación', 'Aumento y prorrateo de alimentos', 'Reducción, exoneración o extinción de pensión alimenticia',
     'Tenencia y régimen de visita (a favor de NNA)', 'Separación convencional y divorcio ulterior', 'Tenencia y custodia', 'Régimen de visitas',
@@ -511,6 +562,77 @@ function errorAlGuardar(err){
   avisar(err && err.code === 'permission-denied' ? 'Firebase no dio permiso para guardar. Revisa que tu correo esté en staff.' : 'No se pudo guardar. Revisa tu conexión e inténtalo de nuevo.', 6000);
 }
 function ordinal(n){ return n + 'ª'; }
+function isoDe(d){ return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'); }
+
+// ---------------- Asistentes, feriados y días hábiles ----------------
+async function cargarAsistentes(){
+  try {
+    const snap = await getDocs(collection(db, 'asistentes'));
+    const hoy = hoyIso();
+    ASISTENTES = snap.docs.map(d => ({ correo: d.id, ...d.data() }))
+      .map(x => ({ correo: x.correo, nombre: x.nombre || x.correo, licenciaHasta: x.licenciaHasta || '',
+        deLicencia: !!x.licenciaHasta && x.licenciaHasta >= hoy, noVinoHoy: x.noVinoFecha === hoy }))
+      .sort((a, b) => a.nombre.localeCompare(b.nombre, 'es'));
+    if (!ASISTENTES.length) avisar('La lista de asistentes está vacía. El administrador debe abrir “Personal y permisos” una vez para crearla.', 8000);
+  } catch (e){
+    console.error(e);
+    avisar('No se pudo cargar la lista de asistentes (' + (e.code || e.message) + ').', 8000);
+  }
+}
+let FERIADOS = new Set();
+function aIso(v){
+  if (!v) return '';
+  if (v.toDate) return isoDe(v.toDate());
+  if (typeof v !== 'string') return '';
+  let m = v.match(/^\d{4}-\d{2}-\d{2}/);
+  if (m) return m[0];
+  m = v.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+  return m ? m[3] + '-' + m[2].padStart(2, '0') + '-' + m[1].padStart(2, '0') : '';
+}
+async function cargarFeriados(){
+  try {
+    const snap = await getDocs(collection(db, 'feriados'));
+    const lista = new Set();
+    // Acepta el feriado como id del documento ("2026-12-25") o en un campo fecha/dia
+    snap.docs.forEach(d => { const f = d.data(); [d.id, f.fecha, f.dia, f.date].forEach(v => { const iso = aIso(v); if (iso) lista.add(iso); }); });
+    FERIADOS = lista;
+    if (!lista.size) console.warn('La colección feriados está vacía: solo se descuentan sábados y domingos.');
+  } catch (e){ console.error('No se pudieron leer los feriados', e); }
+}
+function esHabil(iso){ const dow = new Date(iso + 'T00:00:00').getDay(); return dow !== 0 && dow !== 6 && !FERIADOS.has(iso); }
+function diasHabilesHasta(desde, hasta){
+  let n = 0;
+  const d = new Date(desde + 'T00:00:00'), fin = new Date(hasta + 'T00:00:00');
+  while (d <= fin){ if (esHabil(isoDe(d))) n++; d.setDate(d.getDate() + 1); }
+  return n;
+}
+// El asistente tiene 4 días hábiles para proyectar (el día en que se le asigna es el día 1); desde el 5.º, atraso
+const DIAS_PROYECTAR = 4;
+function estadoProyeccion(r){
+  const dia = Math.max(1, diasHabilesHasta(r.asistenteFecha || r.fecha, hoyIso()));
+  const atraso = Math.max(0, dia - DIAS_PROYECTAR);
+  return { dia, atraso, texto: atraso ? 'ATRASADO ' + atraso + (atraso === 1 ? ' día' : ' días') : 'Día ' + dia + ' de ' + DIAS_PROYECTAR };
+}
+function duracion(ms){
+  const h = Math.floor(ms / 3600000);
+  if (h < 1) return Math.max(1, Math.round(ms / 60000)) + ' min';
+  if (h < 48) return h + ' h';
+  return Math.floor(h / 24) + ' días';
+}
+function estadoPlazo(r){
+  const ms = new Date(r.plazoVence) - Date.now();
+  return { vencido: ms < 0, pronto: ms >= 0 && ms < 24 * 3600000, texto: ms < 0 ? 'Vencido hace ' + duracion(-ms) : 'Vence en ' + duracion(ms) };
+}
+function estadoSupervision(r){
+  const hoy = hoyIso();
+  if (r.supFecha > hoy) return { toca: false, atrasada: false, texto: '' };
+  const dias = Math.round((new Date(hoy + 'T00:00:00') - new Date(r.supFecha + 'T00:00:00')) / 86400000);
+  return { toca: true, atrasada: dias > 0, texto: dias > 0 ? 'Atrasada ' + dias + (dias === 1 ? ' día' : ' días') : 'Hoy' };
+}
+function faltaProyectar(r){
+  const h = r.hacer || {};
+  return [h.memo && !r.memoNum ? 'memo' : '', h.oficio && !r.oficioNum ? 'oficio' : '', h.carta && !r.oficioNum ? 'carta' : ''].filter(Boolean);
+}
 
 let usuario = null;
 let DEFENSORES = []; // todas las áreas
@@ -532,7 +654,23 @@ function escucharAnio(anio){
     });
     $('estadoCarga').textContent = '';
     pintar();
+    if (usuario && usuario.esAdmin) completarMarcasAvisos();
   }, err => { console.error(err); $('estadoCarga').textContent = 'No se pudo leer el registro (' + err.code + ').'; });
+}
+// Marcas que usan los avisos para encontrar lo pendiente sin leer todo el registro
+function marcasAvisos(r){
+  return { pendienteProyectar: tienePendiente(r), plazoAbierto: !!r.plazoVence && !r.plazoCumplido, supAbierta: !!r.supFecha && !r.supHecha };
+}
+// Casos registrados antes de los avisos: el administrador les pone las marcas al abrir su año
+const marcasRevisadas = new Set();
+function completarMarcasAvisos(){
+  cache.forEach(r => {
+    if (marcasRevisadas.has(r.id)) return;
+    marcasRevisadas.add(r.id);
+    const m = marcasAvisos(r);
+    const falta = Object.keys(m).some(k => r[k] === undefined && m[k]);
+    if (falta) updateDoc(doc(db, COL, r.id), m).catch(err => console.error('No se pudo marcar', r.id, err));
+  });
 }
 function cargarTodos(){
   if (todosCargados) return Promise.resolve();
@@ -561,7 +699,7 @@ function ordenRegistro(a, b){ return a.fecha.localeCompare(b.fecha) || (a.creado
 function textoBusqueda(r){
   return norm([r.codigo, codigoNorm(r.codigo), codigoNorm(r.padreCodigo), r.numDoc, r.usuario, r.abogadoNombre, r.carpeta, r.materia, r.origen, r.tipoDoc, r.proveido,
     r.memoNum, r.oficioNum, r.resumen, r.respuesta, r.distrital, r.dirigidoA, r.padreCodigo, r.padreUsuario, r.estado,
-    r.diligencia, r.supNota].join(' | '));
+    r.diligencia, r.supNota, r.asistenteNombre].join(' | '));
 }
 
 // ---------------- Pintar la tabla ----------------
@@ -634,9 +772,30 @@ function pintar(){
     const celdaOficio = h.noHacer ? ''
       : `<input data-campo="oficioNum" data-id="${r.id}" value="${esc(r.oficioNum || '')}" placeholder="${h.oficio || h.carta ? 'Pendiente' : ''}" class="${(h.oficio || h.carta) && !r.oficioNum ? 'pendiente' : ''}" aria-label="N° de oficio o carta">${h.oficio || h.carta ? `<span class="chico">${[h.oficio ? 'Oficio' : '', h.carta ? 'Carta' : ''].filter(Boolean).join(' y ')}</span>` : ''}`;
 
-    const plazo = r.plazoVence ? `${fechaCorta(r.plazoVence.slice(0, 10))} ${r.plazoVence.slice(11, 16)}<span class="chico">${r.plazoHoras ? r.plazoHoras + ' h' : 'fecha fija'}</span>` : '';
+    let plazo = r.plazoVence ? `${fechaCorta(r.plazoVence.slice(0, 10))} ${r.plazoVence.slice(11, 16)}<span class="chico">${r.plazoHoras ? r.plazoHoras + ' h' : 'fecha fija'}</span>` : '';
+    if (r.plazoVence){
+      if (r.plazoCumplido) plazo += '<span class="insignia ok">✓ Cumplido</span>';
+      else {
+        const ep = estadoPlazo(r);
+        if (ep.vencido || ep.pronto) plazo += `<span class="insignia ${ep.vencido ? 'mal' : 'pronto'}">${ep.texto}</span>`;
+        plazo += `<button class="mini-accion solo-abogado" data-plazo-ok="${r.id}">✓ Cumplido</button>`;
+      }
+    }
     const dilig = r.diligencia ? `${esc(r.diligencia)}${r.dilFecha ? `<span class="chico">${fechaCorta(r.dilFecha)} ${esc(r.dilHora || '')}</span>` : ''}` : '';
-    const sup = r.supFecha ? `${fechaCorta(r.supFecha)}<span class="chico">${esc(r.supNota || '')}</span>` : '';
+    let sup = r.supFecha ? `${fechaCorta(r.supFecha)}<span class="chico">${esc(r.supNota || '')}</span>` : '';
+    if (r.supFecha){
+      if (r.supHecha) sup += '<span class="insignia ok">✓ Hecha</span>';
+      else {
+        const es = estadoSupervision(r);
+        if (es.toca) sup += `<span class="insignia ${es.atrasada ? 'mal' : 'pronto'}">${es.texto}</span>`;
+        sup += `<button class="mini-accion solo-abogado" data-sup-ok="${r.id}">✓ Hecha</button>`;
+      }
+    }
+    let proyecta = '';
+    if (r.asistenteNombre && (h.memo || h.oficio || h.carta)){
+      proyecta = `<span class="chico">Proyecta: ${esc(r.asistenteNombre)}</span>`;
+      if (tienePendiente(r)){ const e = estadoProyeccion(r); proyecta += `<span class="insignia ${e.atraso ? 'mal' : 'ok'}">${e.texto}</span>`; }
+    }
 
     const acciones = idPorBorrar === r.id
       ? `<div class="confirmar">¿Borrar? <button class="si" data-borrar-si="${r.id}">Sí</button><button class="no" data-borrar-no>No</button></div>`
@@ -657,7 +816,7 @@ function pintar(){
       <td>${dilig}</td>
       <td>${estado}</td>
       <td class="verde">${esc(r.proveido)}</td>
-      <td class="verde celda-num-doc">${celdaMemo}</td>
+      <td class="verde celda-num-doc">${celdaMemo}${proyecta}</td>
       <td class="verde celda-num-doc">${celdaOficio}</td>
       <td>${esc(r.dirigidoA)}</td>
       <td>${plazo}</td>
@@ -681,13 +840,31 @@ $('cuerpo').addEventListener('click', e => {
   if (t.dataset.borrar){ idPorBorrar = t.dataset.borrar; pintar(); return; }
   if (t.dataset.borrarNo !== undefined){ idPorBorrar = null; pintar(); return; }
   if (t.dataset.borrarSi){ borrar(t.dataset.borrarSi); return; }
+  if (t.dataset.plazoOk){
+    updateDoc(doc(db, COL, t.dataset.plazoOk), { plazoCumplido: true, plazoAbierto: false, plazoCumplidoPor: usuario.correo, plazoCumplidoFecha: hoyIso() })
+      .then(() => avisar('Plazo marcado como cumplido')).catch(errorAlGuardar);
+    return;
+  }
+  if (t.dataset.supOk){
+    updateDoc(doc(db, COL, t.dataset.supOk), { supHecha: true, supAbierta: false, supHechaPor: usuario.correo, supHechaFecha: hoyIso() })
+      .then(() => avisar('Supervisión marcada como hecha')).catch(errorAlGuardar);
+    return;
+  }
 });
 $('cuerpo').addEventListener('change', e => {
   const t = e.target;
   if (t.dataset.campo){
     const valor = may(t.value);
+    const r = cache.get(t.dataset.id) || {};
     const cambios = { [t.dataset.campo]: valor, [t.dataset.campo + 'Fecha']: valor ? hoyIso() : '', [t.dataset.campo + 'Por']: usuario.correo };
-    updateDoc(doc(db, COL, t.dataset.id), cambios).then(() => avisar(valor ? 'Guardado: ' + valor : 'Número borrado')).catch(errorAlGuardar);
+    cambios.pendienteProyectar = tienePendiente({ ...r, ...cambios });
+    // Felicitación: el asistente asignado termina lo que le faltaba dentro de sus 4 días hábiles
+    const cumpleATiempo = valor && !cambios.pendienteProyectar && tienePendiente(r) && r.asistenteCorreo === usuario.correo && !estadoProyeccion(r).atraso;
+    const diaCumplido = cumpleATiempo ? estadoProyeccion(r).dia : 0;
+    updateDoc(doc(db, COL, t.dataset.id), cambios).then(() => {
+      avisar(valor ? 'Guardado: ' + valor : 'Número borrado');
+      if (cumpleATiempo) felicitar(r, diaCumplido);
+    }).catch(errorAlGuardar);
   }
   if (t.dataset.ocultar){
     updateDoc(doc(db, COL, t.dataset.ocultar), { ocultarPublico: t.checked }).catch(errorAlGuardar);
@@ -810,7 +987,10 @@ function referenciaAutomatica(){
 }
 $('fFecha').addEventListener('change', referenciaAutomatica);
 opcionesSimples($('optResultado'), RESULTADOS_CAMBIO, v => { resultadoCambio = v; actualizarAbogadoLabel(); });
-$('optPrioridad').onclick = e => { const o = e.target.closest('.opcion'); if (!o) return; prioridad = o.dataset.v; marcar($('optPrioridad'), prioridad); };
+$('optPrioridad').onclick = e => {
+  const o = e.target.closest('.opcion'); if (!o) return; prioridad = o.dataset.v; marcar($('optPrioridad'), prioridad);
+  if (!$('bloqueAsistente').hidden && !asistenteManual) sugerirAsistente();
+};
 $('optTipoRegistro').onclick = e => { const o = e.target.closest('.opcion'); if (!o) return; ponerModo(o.dataset.v); };
 
 $('fTipoDoc').innerHTML = TIPOS_DOC.map(t => `<option>${t}</option>`).join('');
@@ -822,8 +1002,8 @@ $('fDirigido').onchange = () => $('fDirigidoOtro').hidden = !$('fDirigido').valu
 $('fMateria').onchange = () => $('fMateriaOtra').hidden = $('fMateria').value !== 'Otra';
 $('fArea').onchange = () => { llenarMaterias(); llenarAbogados(); };
 $('fTipoDoc').onchange = actualizarBloquesTipo;
-$('fNoHacer').onchange = () => { if ($('fNoHacer').checked) ['fHacerMemo', 'fHacerOficio', 'fHacerCarta'].forEach(i => $(i).checked = false); };
-['fHacerMemo', 'fHacerOficio', 'fHacerCarta'].forEach(i => $(i).addEventListener('change', () => { if ($(i).checked) $('fNoHacer').checked = false; }));
+$('fNoHacer').onchange = () => { if ($('fNoHacer').checked) ['fHacerMemo', 'fHacerOficio', 'fHacerCarta'].forEach(i => $(i).checked = false); actualizarBloqueAsistente(); };
+['fHacerMemo', 'fHacerOficio', 'fHacerCarta'].forEach(i => $(i).addEventListener('change', () => { if ($(i).checked) $('fNoHacer').checked = false; actualizarBloqueAsistente(); }));
 
 function llenarMaterias(valor){
   const area = $('fArea').value;
@@ -849,10 +1029,8 @@ function llenarAbogados(valor){
 function llenarDirigido(valor){
   const grupo = (titulo, lista) => `<optgroup label="${titulo}">${lista.map(n => `<option>${esc(n)}</option>`).join('')}</optgroup>`;
   const nombres = area => DEFENSORES.filter(d => d.area === area).map(d => d.nombre);
+  // "Dirigido a" es solo el destinatario del documento; el asistente que lo proyecta va en su propio campo
   $('fDirigido').innerHTML = '<option value="">— Nadie en particular —</option>' +
-    `<optgroup label="Personal administrativo">${ASISTENTES.map(a => a.deLicencia
-      ? `<option disabled>${esc(a.nombre)} (de licencia hasta ${fechaCorta(a.licenciaHasta)})</option>`
-      : `<option>${esc(a.nombre)}</option>`).join('')}</optgroup>` +
     grupo('Asistencia Legal', nombres('Asistencia Legal')) +
     grupo('Defensa de Víctimas', nombres('Defensa de Víctimas')) +
     grupo('Equipo multidisciplinario', nombres('Equipo multidisciplinario')) +
@@ -862,6 +1040,86 @@ function llenarDirigido(valor){
   $('fDirigidoOtro').value = valor && !existe ? valor : '';
   $('fDirigidoOtro').hidden = !$('fDirigido').value.startsWith('OTRA');
 }
+
+// ---------------- Asistente que proyecta y sugerencia del reparto ----------------
+// Solo es sugerencia: lunes Caycho, martes Yuriko, miércoles y jueves Mena, viernes alterna memo por memo
+// entre Caycho y Yuriko; lo urgente va a Mena o Yuriko. Siempre se puede elegir a otro.
+let asistenteManual = false;
+let turnoSugerencia = 0;
+function pendientesDe(correo){ let n = 0; pendMemo.forEach(r => { if (r.asistenteCorreo === correo && tienePendiente(r)) n++; }); return n; }
+function asistentePorNombre(clave){ return ASISTENTES.find(a => norm(a.nombre).includes(clave)); }
+function disponible(a){ return !!a && !a.deLicencia && !a.noVinoHoy; }
+function porMenosPendientes(lista){ return lista.slice().sort((a, b) => pendientesDe(a.correo) - pendientesDe(b.correo)); }
+function llenarAsistentes(valor, nombreSiFalta){
+  const txt = a => `${esc(a.nombre)} (${pendientesDe(a.correo)} pendiente${pendientesDe(a.correo) === 1 ? '' : 's'})` +
+    (a.deLicencia ? ' · de licencia hasta ' + fechaCorta(a.licenciaHasta) : '') + (a.noVinoHoy ? ' · no vino hoy' : '');
+  let html = '<option value="">— Elegir asistente —</option>' + ASISTENTES.map(a => `<option value="${esc(a.correo)}">${txt(a)}</option>`).join('');
+  if (valor && !ASISTENTES.some(a => a.correo === valor)) html += `<option value="${esc(valor)}">${esc(nombreSiFalta || valor)}</option>`;
+  $('fAsistente').innerHTML = html;
+  $('fAsistente').value = valor || '';
+  actualizarBotonNoVino();
+}
+function actualizarBloqueAsistente(){
+  const proyecta = $('fHacerMemo').checked || $('fHacerOficio').checked || $('fHacerCarta').checked;
+  $('bloqueAsistente').hidden = !proyecta;
+  if (proyecta && !asistenteManual) sugerirAsistente();
+}
+async function sugerirAsistente(){
+  const turno = ++turnoSugerencia;
+  const hoy = hoyIso(), dow = new Date().getDay();
+  const caycho = asistentePorNombre('caycho'), yuriko = asistentePorNombre('yuriko'), mena = asistentePorNombre('mena');
+  const DIAS = ['domingo', 'lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábado'];
+  let deseado = null, motivo = '';
+  if (prioridad !== 'normal'){
+    deseado = porMenosPendientes([mena, yuriko].filter(disponible))[0] || null;
+    motivo = 'caso ' + prioridad + ': Mena o Yuriko, el que tenga menos pendientes';
+  } else if (dow === 1){ deseado = caycho; motivo = 'lunes'; }
+  else if (dow === 2){ deseado = yuriko; motivo = 'martes'; }
+  else if (dow === 3 || dow === 4){ deseado = mena; motivo = DIAS[dow]; }
+  else if (dow === 5){
+    // Viernes: al que no recibió el último memo de hoy entre Caycho y Yuriko
+    let ultimo = null;
+    try {
+      const snap = await getDocs(query(collection(db, COL), where('asistenteFecha', '==', hoy)));
+      ultimo = snap.docs.map(d => ({ id: d.id, ...d.data() }))
+        .filter(x => x.id !== editandoId && [caycho && caycho.correo, yuriko && yuriko.correo].includes(x.asistenteCorreo))
+        .sort((a, b) => (a.asistenteEnMs || 0) - (b.asistenteEnMs || 0)).pop();
+    } catch (e){ console.error(e); }
+    deseado = ultimo && caycho && ultimo.asistenteCorreo === caycho.correo ? yuriko : caycho;
+    motivo = 'viernes, alternando memo por memo entre Caycho y Yuriko';
+  } else motivo = 'fin de semana';
+  if (turno !== turnoSugerencia || asistenteManual) return; // ya cambió algo mientras se consultaba
+  let sugerido = disponible(deseado) ? deseado : null;
+  if (!sugerido){
+    sugerido = porMenosPendientes(ASISTENTES.filter(disponible))[0] || null;
+    if (deseado) motivo += ` — ${deseado.nombre} ${deseado.deLicencia ? 'está de licencia' : 'no vino hoy'}; va quien tiene menos pendientes`;
+    else if (prioridad !== 'normal') motivo += ' — ninguno está disponible; va quien tiene menos pendientes';
+    else motivo += ': quien tiene menos pendientes';
+  }
+  if (sugerido) $('fAsistente').value = sugerido.correo;
+  $('ayudaAsistente').innerHTML = sugerido
+    ? `Sugerido: <b>${esc(sugerido.nombre)}</b> (${esc(motivo)}). Puedes elegir a otro.`
+    : 'No hay asistente disponible para sugerir. Elige uno de la lista.';
+  actualizarBotonNoVino();
+}
+$('fAsistente').onchange = () => { asistenteManual = true; actualizarBotonNoVino(); };
+function actualizarBotonNoVino(){
+  const a = ASISTENTES.find(x => x.correo === $('fAsistente').value);
+  $('btnNoVino').hidden = !a;
+  if (a) $('btnNoVino').textContent = a.noVinoHoy ? `Quitar “no vino hoy” a ${a.nombre}` : `Marcar: ${a.nombre} no vino hoy`;
+}
+$('btnNoVino').onclick = async () => {
+  const a = ASISTENTES.find(x => x.correo === $('fAsistente').value);
+  if (!a) return;
+  try {
+    await updateDoc(doc(db, 'asistentes', a.correo), { noVinoFecha: a.noVinoHoy ? '' : hoyIso(), noVinoPor: usuario.correo });
+    avisar(a.noVinoHoy ? 'Se quitó “no vino hoy”' : a.nombre + ' no se sugerirá hoy');
+    const marcoAusente = !a.noVinoHoy;
+    await cargarAsistentes();
+    llenarAsistentes(marcoAusente ? '' : a.correo);
+    if (marcoAusente){ asistenteManual = false; sugerirAsistente(); }
+  } catch (err){ errorAlGuardar(err); }
+};
 
 function ponerModo(m){
   modo = m;
@@ -954,6 +1212,8 @@ function limpiarForm(){
   $('fDiligenciaOtra').hidden = true; $('bloquePlazoOtro').hidden = true;
   marcar($('optOrigen'), ''); marcar($('optResultado'), ''); marcar($('optPrioridad'), 'normal');
   llenarMaterias(); llenarAbogados(); llenarDirigido();
+  asistenteManual = false; turnoSugerencia++;
+  llenarAsistentes(''); $('bloqueAsistente').hidden = true; $('ayudaAsistente').textContent = '';
   $('errorForm').hidden = true;
   $('btnGuardarForm').disabled = false;
   actualizarObligatorios();
@@ -993,6 +1253,14 @@ function abrirForm({ editarId = null, padreId = null } = {}){
     const h = r.hacer || {};
     $('fHacerMemo').checked = !!h.memo; $('fHacerOficio').checked = !!h.oficio; $('fHacerCarta').checked = !!h.carta; $('fNoHacer').checked = !!h.noHacer;
     $('fProveido').value = r.proveido || ''; llenarDirigido(r.dirigidoA);
+    // Casos anteriores: si en "Dirigido a" quedó el nombre de un asistente, pasa a "Asistente que lo proyecta"
+    let asisCorreo = r.asistenteCorreo || '', asisNombre = r.asistenteNombre || '';
+    const viejo = !asisCorreo && r.dirigidoA ? ASISTENTES.find(a => norm(a.nombre) === norm(r.dirigidoA)) : null;
+    if (viejo){ asisCorreo = viejo.correo; asisNombre = viejo.nombre; llenarDirigido(''); }
+    llenarAsistentes(asisCorreo, asisNombre);
+    asistenteManual = !!asisCorreo;
+    $('bloqueAsistente').hidden = !(h.memo || h.oficio || h.carta);
+    if (!$('bloqueAsistente').hidden && !asisCorreo) sugerirAsistente();
     if (r.plazoHoras){ $('fPlazo').value = String(r.plazoHoras); }
     else if (r.plazoVence){ $('fPlazo').value = 'otro'; $('bloquePlazoOtro').hidden = false; $('fPlazoFecha').value = r.plazoVence.slice(0, 10); $('fPlazoHora').value = r.plazoVence.slice(11, 16); }
     $('fSupFecha').value = r.supFecha || ''; $('fSupNota').value = r.supNota || '';
@@ -1002,17 +1270,26 @@ function abrirForm({ editarId = null, padreId = null } = {}){
     ponerModo('nuevo');
   }
   $('fondoForm').hidden = false;
+  // Refresca licencias y "no vino hoy" por si cambiaron desde que se abrió la página
+  cargarAsistentes().then(() => {
+    if ($('fondoForm').hidden) return;
+    const elegido = $('fAsistente').value, nombre = ($('fAsistente').selectedOptions[0] || {}).textContent;
+    llenarAsistentes(elegido, nombre);
+    if (!$('bloqueAsistente').hidden && !asistenteManual) sugerirAsistente();
+  });
 }
 $('btnRegistrar').onclick = () => abrirForm();
 $('btnCancelarForm').onclick = () => $('fondoForm').hidden = true;
 
-function vencimientoPlazo(){
+function vencimientoPlazo(previo){
   const p = $('fPlazo').value;
   if (!p) return { plazoHoras: null, plazoVence: '' };
   if (p === 'otro'){
     if (!$('fPlazoFecha').value) return { plazoHoras: null, plazoVence: '' };
     return { plazoHoras: null, plazoVence: $('fPlazoFecha').value + 'T' + ($('fPlazoHora').value || '17:00') };
   }
+  // Al editar sin cambiar el plazo, se conserva el vencimiento original (no vuelve a contar desde ahora)
+  if (previo && previo.plazoVence && String(previo.plazoHoras) === p) return { plazoHoras: previo.plazoHoras, plazoVence: previo.plazoVence };
   const d = new Date(Date.now() + Number(p) * 3600 * 1000);
   const iso = d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0') + 'T' + String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0');
   return { plazoHoras: Number(p), plazoVence: iso };
@@ -1065,6 +1342,17 @@ async function sincronizarMovimiento(id, datos){
   } catch (err){ console.error(err); avisar('Se guardó en el Drive 1, pero no se pudo registrar el movimiento en la Agenda.', 6000); }
 }
 
+// Al registrar el informe del defensor, los plazos abiertos de ese caso quedan cumplidos
+async function cerrarPlazosDelCaso(raizId, informeId){
+  try {
+    const hijos = await getDocs(query(collection(db, COL), where('padreId', '==', raizId)));
+    const raiz = await getDoc(doc(db, COL, raizId));
+    const familia = [...(raiz.exists() ? [raiz] : []), ...hijos.docs].filter(d => d.id !== informeId);
+    await Promise.all(familia.filter(d => d.data().plazoVence && !d.data().plazoCumplido).map(d =>
+      updateDoc(d.ref, { plazoCumplido: true, plazoAbierto: false, plazoCumplidoPor: 'INFORME DEL DEFENSOR', plazoCumplidoFecha: hoyIso() })));
+  } catch (err){ console.error(err); avisar('Se registró el informe, pero no se pudo cerrar el plazo del caso. Márcalo con “✓ Cumplido”.', 7000); }
+}
+
 $('btnGuardarForm').onclick = async () => {
   const error = t => { $('errorForm').textContent = t; $('errorForm').hidden = false; };
   $('errorForm').hidden = true;
@@ -1086,6 +1374,14 @@ $('btnGuardarForm').onclick = async () => {
   if (tipoDoc === 'Solicitud de cambio de abogado' && !resultadoCambio) return error('Elige el resultado de la solicitud de cambio.');
   if ($('fPlazo').value === 'otro' && !$('fPlazoFecha').value) return error('Elige la fecha del plazo.');
 
+  const previoForm = editandoId ? { ...(cache.get(editandoId) || {}) } : null;
+  const hacer = { memo: $('fHacerMemo').checked, oficio: $('fHacerOficio').checked, carta: $('fHacerCarta').checked, noHacer: $('fNoHacer').checked };
+  const proyecta = hacer.memo || hacer.oficio || hacer.carta;
+  const correoAsis = $('fAsistente').value;
+  const asis = ASISTENTES.find(a => a.correo === correoAsis)
+    || (correoAsis && previoForm && correoAsis === previoForm.asistenteCorreo ? { correo: correoAsis, nombre: previoForm.asistenteNombre } : null);
+  if (proyecta && !asis && ASISTENTES.length && tienePendiente({ ...(previoForm || {}), hacer })) return error('Elige el asistente que lo proyecta.');
+
   const dirigido = $('fDirigido').value.startsWith('OTRA') ? may($('fDirigidoOtro').value) : $('fDirigido').value;
   const diligencia = $('fDiligencia').value === 'Otra' ? may($('fDiligenciaOtra').value) : $('fDiligencia').value;
   const fecha = $('fFecha').value;
@@ -1096,12 +1392,22 @@ $('btnGuardarForm').onclick = async () => {
     abogadoId: abog.id, abogadoNombre: abog.nombre, abogadoCelular: abog.celular || '', abogadoCorreo: abog.correo || '',
     diligencia, dilFecha: diligencia ? $('fDilFecha').value : '', dilHora: diligencia ? $('fDilHora').value : '',
     prioridad,
-    hacer: { memo: $('fHacerMemo').checked, oficio: $('fHacerOficio').checked, carta: $('fHacerCarta').checked, noHacer: $('fNoHacer').checked },
+    hacer,
     proveido: may($('fProveido').value), dirigidoA: dirigido,
-    ...vencimientoPlazo(),
+    ...vencimientoPlazo(previoForm),
     supFecha: $('fSupFecha').value, supNota: may($('fSupNota').value),
     ocultarPublico: $('fOcultar').checked
   };
+  // Asistente que proyecta: si cambia, cuenta de nuevo sus 4 días desde hoy
+  if (proyecta && asis){
+    Object.assign(datos, { asistenteCorreo: asis.correo, asistenteNombre: asis.nombre });
+    if (!previoForm || previoForm.asistenteCorreo !== asis.correo)
+      Object.assign(datos, { asistentePor: usuario.correo, asistenteFecha: hoyIso(), asistenteEnMs: Date.now() });
+  } else if (!proyecta) Object.assign(datos, { asistenteCorreo: '', asistenteNombre: '' });
+  // Un plazo o una supervisión con otra fecha vuelve a quedar abierto
+  if (!previoForm || datos.plazoVence !== (previoForm.plazoVence || '')) datos.plazoCumplido = false;
+  if (!previoForm || datos.supFecha !== (previoForm.supFecha || '')) datos.supHecha = false;
+  Object.assign(datos, marcasAvisos({ ...(previoForm || {}), ...datos }));
   if (esAnt){
     Object.assign(datos, {
       padreId: padre.id, padreCodigo: padre.codigo || '', padreUsuario: padre.usuario || '',
@@ -1141,6 +1447,7 @@ $('btnGuardarForm').onclick = async () => {
     if (!esAnt) await sincronizarAgenda(idFila, previo, datos);
     else await sincronizarMovimiento(idFila, datos);
     if (esAnt) await recalcularEstado(padre.id);
+    if (esAnt && !editandoId && tipoDoc === 'Informe del defensor') await cerrarPlazosDelCaso(padre.id, idFila);
     $('fondoForm').hidden = true;
     avisar(editandoId ? 'Cambios guardados' : 'Registrado');
     if (!editandoId && Number(fecha.slice(0, 4)) !== anioElegido) avisar('Registrado en ' + fecha.slice(0, 4) + '. Cambia de año para verlo.', 5000);
@@ -1192,7 +1499,8 @@ $('btnDescargar').onclick = async () => {
       'Diligencia': r.diligencia, 'Fecha diligencia': fechaCorta(r.dilFecha), 'Hora': r.dilHora,
       'Prioridad': (r.prioridad || 'normal').toUpperCase(),
       'Hacer': (r.hacer || {}).noHacer ? 'NO HACER MEMO' : ['memo', 'oficio', 'carta'].filter(k => (r.hacer || {})[k]).join(', ').toUpperCase(),
-      'Proveído': r.proveido, 'Memo': r.memoNum || '', 'Oficio / Carta': r.oficioNum || '', 'Dirigido a': r.dirigidoA,
+      'Proveído': r.proveido, 'Memo': r.memoNum || '', 'Oficio / Carta': r.oficioNum || '',
+      'Asistente que lo proyecta': r.asistenteNombre || '', 'Dirigido a': r.dirigidoA,
       'Plazo vence': r.plazoVence ? fechaCorta(r.plazoVence.slice(0, 10)) + ' ' + r.plazoVence.slice(11, 16) : '',
       'Supervisión': r.supFecha ? fechaCorta(r.supFecha) + ' ' + (r.supNota || '') : '',
       'No mostrar en app pública': r.ocultarPublico ? 'SÍ' : ''
@@ -1202,6 +1510,187 @@ $('btnDescargar').onclick = async () => {
     XLSX.writeFile(libro, 'Drive1_' + desde + '_al_' + hasta + '.xlsx');
   } catch (err){ console.error(err); avisar('No se pudo descargar (' + (err.code || err.message) + ').', 6000); }
 };
+
+// ---------------- Avisos: barra de pendientes arriba y avisos abajo a la derecha ----------------
+// Se escuchan en vivo solo los casos marcados como pendientes (en todos los años)
+const pendMemo = new Map(), pendPlazo = new Map(), pendSup = new Map();
+let cortesAvisos = [], relojAvisos = null, avisoEntradaHecho = false;
+const urgentesAvisados = new Set();
+const HORAS_AVISO = ['08:00', '12:00', '15:00'];
+let horasMostradas = { fecha: '', lista: [] };
+
+// Quién ve qué: el administrador ve todo; el asistente, lo suyo; quien asignó, lo que asignó.
+// Plazos y supervisiones: quien registró el caso (y el administrador).
+function esMioMemo(r){ return usuario.esAdmin || r.asistenteCorreo === usuario.correo || r.asistentePor === usuario.correo; }
+function esMioSeguimiento(r){ return usuario.esAdmin || r.creadoPor === usuario.correo; }
+function claseUrgencia(r){ return r.prioridad === 'muy urgente' ? 'muy-urgente' : r.prioridad === 'urgente' ? 'urgente' : ''; }
+function identificarCaso(r, num){
+  const n = num && num[r.id];
+  const cual = r.codigo || (n ? 'N° ' + n + ' (' + r.anio + ')' : 'caso del ' + fechaCorta(r.fecha));
+  return cual + ' · ' + (r.usuario || r.padreUsuario || 'sin usuario');
+}
+function itemsAvisos(){
+  const num = numeracion(), items = [];
+  pendMemo.forEach(r => {
+    if (!esMioMemo(r)) return;
+    const falta = faltaProyectar(r);
+    if (!falta.length) return;
+    const e = estadoProyeccion(r);
+    items.push({ tipo: 'memo', r, grave: e.atraso > 0, atencion: true,
+      texto: `${identificarCaso(r, num)} · Falta proyectar ${falta.join(' y ')}${r.asistenteNombre ? ' · ' + r.asistenteNombre : ' · sin asistente'} · ${e.texto}` });
+  });
+  pendPlazo.forEach(r => {
+    if (!esMioSeguimiento(r) || !r.plazoVence || r.plazoCumplido) return;
+    const e = estadoPlazo(r);
+    items.push({ tipo: 'plazo', r, grave: e.vencido, atencion: e.vencido || e.pronto,
+      texto: `${identificarCaso(r, num)} · Falta el informe de ${r.abogadoActualNombre || r.abogadoNombre || 'el defensor'} (plazo ${r.plazoHoras ? r.plazoHoras + ' h' : 'al ' + fechaCorta(r.plazoVence.slice(0, 10))}) · ${e.texto}` });
+  });
+  pendSup.forEach(r => {
+    if (!esMioSeguimiento(r) || !r.supFecha || r.supHecha) return;
+    const e = estadoSupervision(r);
+    if (!e.toca) return;
+    items.push({ tipo: 'sup', r, grave: e.atrasada, atencion: true,
+      texto: `${identificarCaso(r, num)} · Supervisión: ${r.supNota || 'revisar el caso'} · ${e.texto}` });
+  });
+  // Primero lo muy urgente, luego lo urgente, luego lo atrasado o vencido
+  const peso = it => (it.r.prioridad === 'muy urgente' ? 0 : it.r.prioridad === 'urgente' ? 1 : 2) * 2 + (it.grave ? 0 : 1);
+  return items.sort((a, b) => peso(a) - peso(b));
+}
+
+function pintarBarra(){
+  if (!usuario) return;
+  const items = itemsAvisos();
+  const memos = items.filter(i => i.tipo === 'memo'), plazos = items.filter(i => i.tipo === 'plazo'), sups = items.filter(i => i.tipo === 'sup');
+  const atrasados = memos.filter(i => i.grave).length, vencidos = plazos.filter(i => i.grave).length;
+  const cont = (texto, n, mal) => `<span class="contador ${n === 0 ? 'cero' : mal ? 'mal' : ''}">${texto} <b>${n}</b></span>`;
+  $('btnBarraPend').innerHTML = `<span class="titulo">${usuario.esAdmin ? 'Pendientes de todos' : 'Mis pendientes'}</span>` +
+    cont('Memos, oficios y cartas por proyectar', memos.length, false) + cont('Atrasados', atrasados, true) +
+    cont('Plazos de informe', plazos.length, vencidos > 0) + (vencidos ? cont('Vencidos', vencidos, true) : '') +
+    cont('Supervisiones', sups.length, sups.some(i => i.grave)) +
+    `<span class="ver">${$('detallePend').hidden ? 'Ver detalle ▾' : 'Ocultar ▴'}</span>`;
+  const seccion = (titulo, lista) => lista.length ? `<h4>${titulo}</h4>` + lista.map(i =>
+    `<button class="linea-pend ${claseUrgencia(i.r)}" data-ir="${i.r.id}"><span class="ir">Ir a la fila →</span>${i.r.prioridad && i.r.prioridad !== 'normal' ? '<b>' + i.r.prioridad.toUpperCase() + '</b> · ' : ''}${esc(i.texto)}</button>`).join('') : '';
+  $('detallePend').innerHTML = (seccion('Memos, oficios y cartas por proyectar', memos) + seccion('Plazos de informe', plazos) + seccion('Supervisiones', sups))
+    || '<p class="ayuda">No tienes pendientes. ✓</p>';
+  $('barraPendientes').hidden = false;
+}
+$('btnBarraPend').onclick = () => {
+  $('detallePend').hidden = !$('detallePend').hidden;
+  $('btnBarraPend').setAttribute('aria-expanded', String(!$('detallePend').hidden));
+  pintarBarra();
+};
+$('detallePend').addEventListener('click', e => { const b = e.target.closest('[data-ir]'); if (b) irAFila(b.dataset.ir); });
+
+// Lleva a la fila del caso: cambia de año si hace falta, quita filtros y la resalta
+async function irAFila(id){
+  const r = pendMemo.get(id) || pendPlazo.get(id) || pendSup.get(id) || cache.get(id);
+  if (!r) return;
+  $('txtBuscar').value = ''; $('filtroArea').value = ''; $('filtroPendientes').checked = false; $('filtroCompletar').checked = false;
+  if (r.anio && r.anio !== anioElegido){ anioElegido = r.anio; limiteFilas = 200; pintarAnios(); escucharAnio(r.anio); }
+  pintar();
+  for (let i = 0; i < 60; i++){
+    const idx = filasAMostrar().findIndex(x => x.id === id);
+    if (idx >= limiteFilas){ limiteFilas = idx + 50; pintar(); }
+    const fila = $('fila-' + id);
+    if (fila){
+      fila.scrollIntoView({ block: 'center', behavior: 'smooth' });
+      fila.classList.remove('destacada'); void fila.offsetWidth; fila.classList.add('destacada');
+      return;
+    }
+    await new Promise(res => setTimeout(res, 150));
+  }
+  avisar('No se encontró la fila de ese caso.');
+}
+
+// Avisos abajo a la derecha
+function mostrarToast({ clase = '', titulo, lineas = [], mas = '', segundos = 0, grupo = '' }){
+  const t = document.createElement('div');
+  t.className = 'toast ' + clase;
+  if (grupo) t.dataset.grupo = grupo;
+  t.setAttribute('role', 'status');
+  t.innerHTML = `<div class="cab"><span>${esc(titulo)}</span><button class="cerrar" aria-label="Cerrar aviso">✕</button></div>` +
+    lineas.map(l => l.id ? `<button class="linea" data-ir="${l.id}">${esc(l.texto)}</button>` : `<div>${esc(l.texto)}</div>`).join('') +
+    (mas ? `<div class="mas">${esc(mas)}</div>` : '');
+  $('avisosEsquina').appendChild(t);
+  if (segundos) setTimeout(() => t.remove(), segundos * 1000);
+}
+$('avisosEsquina').addEventListener('click', e => {
+  if (e.target.closest('.cerrar')){ e.target.closest('.toast').remove(); return; }
+  const b = e.target.closest('[data-ir]');
+  if (b) irAFila(b.dataset.ir);
+});
+function avisosActivos(){ return usuario && usuario.avisos; }
+// Resumen: cada caso urgente o muy urgente en su propio aviso; lo demás, juntos en uno
+function mostrarAvisosProgramados(titulo){
+  if (!avisosActivos()) return;
+  document.querySelectorAll('#avisosEsquina [data-grupo="programado"]').forEach(x => x.remove());
+  const items = itemsAvisos().filter(i => i.atencion);
+  if (!items.length) return;
+  const urgentes = items.filter(i => claseUrgencia(i.r)), normales = items.filter(i => !claseUrgencia(i.r));
+  urgentes.slice(0, 5).forEach(i => mostrarToast({ clase: claseUrgencia(i.r), grupo: 'programado',
+    titulo: i.r.prioridad.toUpperCase(), lineas: [{ id: i.r.id, texto: i.texto }] }));
+  const resto = [...urgentes.slice(5), ...normales];
+  if (resto.length) mostrarToast({ grupo: 'programado', titulo: titulo + ' (' + resto.length + ')',
+    lineas: resto.slice(0, 6).map(i => ({ id: i.r.id, texto: i.texto })),
+    mas: resto.length > 6 ? 'y ' + (resto.length - 6) + ' más: mira la barra de pendientes arriba.' : '' });
+}
+function horaActual(){ const d = new Date(); return String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0'); }
+function revisarHorario(){
+  const hoy = hoyIso(), ahora = horaActual();
+  if (horasMostradas.fecha !== hoy) horasMostradas = { fecha: hoy, lista: [] };
+  const tocan = HORAS_AVISO.filter(h => h <= ahora && !horasMostradas.lista.includes(h));
+  if (tocan.length){
+    horasMostradas.lista.push(...tocan);
+    if (avisoEntradaHecho) mostrarAvisosProgramados('Pendientes de las ' + tocan[tocan.length - 1]);
+  }
+  pintarBarra(); // los días de atraso y los plazos cambian con la hora
+}
+// Urgente y muy urgente avisan al instante, apenas aparecen o cambian
+function avisarUrgentesNuevos(){
+  itemsAvisos().forEach(i => {
+    const clase = claseUrgencia(i.r);
+    if (!clase) return;
+    const clave = i.tipo + '|' + i.r.id + '|' + i.r.prioridad;
+    if (urgentesAvisados.has(clave)) return;
+    urgentesAvisados.add(clave);
+    if (avisoEntradaHecho && avisosActivos()) mostrarToast({ clase, titulo: 'Nuevo · ' + i.r.prioridad.toUpperCase(), lineas: [{ id: i.r.id, texto: i.texto }] });
+  });
+}
+function felicitar(r, dia){
+  if (!avisosActivos()) return;
+  mostrarToast({ clase: 'felicitacion', segundos: 12, titulo: '¡Felicitaciones, ' + (r.asistenteNombre || usuario.nombre) + '!',
+    lineas: [{ texto: 'Cumpliste a tiempo (día ' + dia + ' de ' + DIAS_PROYECTAR + ') con ' + identificarCaso(r, numeracion()) + '.' }] });
+}
+
+function iniciarAvisos(){
+  detenerAvisos(); // por si quedó algo de una sesión anterior
+  const cargados = new Set();
+  const escuchar = (campo, mapa) => onSnapshot(query(collection(db, COL), where(campo, '==', true)), snap => {
+    snap.docChanges().forEach(ch => {
+      if (ch.type === 'removed') mapa.delete(ch.doc.id);
+      else mapa.set(ch.doc.id, { id: ch.doc.id, ...ch.doc.data() });
+    });
+    cargados.add(campo);
+    if (cargados.size < 3) return;
+    pintarBarra();
+    avisarUrgentesNuevos();
+    if (!avisoEntradaHecho){
+      // Al entrar: se muestran los pendientes y las horas ya pasadas de hoy quedan cubiertas
+      avisoEntradaHecho = true;
+      horasMostradas = { fecha: hoyIso(), lista: HORAS_AVISO.filter(h => h <= horaActual()) };
+      mostrarAvisosProgramados('Tus pendientes');
+    }
+  }, err => { console.error(err); avisar('No se pudieron leer los pendientes (' + err.code + ').', 6000); });
+  cortesAvisos = [escuchar('pendienteProyectar', pendMemo), escuchar('plazoAbierto', pendPlazo), escuchar('supAbierta', pendSup)];
+  relojAvisos = setInterval(revisarHorario, 30000);
+}
+function detenerAvisos(){
+  cortesAvisos.forEach(f => f()); cortesAvisos = [];
+  clearInterval(relojAvisos); relojAvisos = null;
+  pendMemo.clear(); pendPlazo.clear(); pendSup.clear(); urgentesAvisados.clear();
+  avisoEntradaHecho = false;
+  $('avisosEsquina').innerHTML = ''; $('barraPendientes').hidden = true;
+}
 
 // ---------------- Sesión ----------------
 const msgLogin = $('msgLogin');
@@ -1243,6 +1732,7 @@ function rolEfectivo(f){
 onAuthStateChanged(auth, async user => {
   if (!user){
     usuario = null; if (cortarAnio) cortarAnio();
+    detenerAvisos();
     $('app').hidden = true; $('pantallaLogin').hidden = false; msgLogin.textContent = '';
     $('cargandoSesion').hidden = true; $('cajaLogin').hidden = false;
     return;
@@ -1255,7 +1745,8 @@ onAuthStateChanged(auth, async user => {
     const efectivo = rolEfectivo(ficha.data());
     const nivel = nivelSeccion(ficha.data(), 'drive1');
     usuario = { correo, nombre: ficha.data().nombre || correo, rol: nivel === 'editar' ? 'abogado' : nivel === 'memos' ? 'asistente' : 'bloqueado',
-      nota: efectivo.nota + (nivel === 'ver' && ficha.data().bloqueado !== true ? ' · solo puede ver' : '') };
+      nota: efectivo.nota + (nivel === 'ver' && ficha.data().bloqueado !== true ? ' · solo puede ver' : ''),
+      esAdmin: ficha.data().esAdmin === true, avisos: ficha.data().avisos !== false };
     const navD2 = document.querySelector('.menu-drives a[href="index.html"]');
     if (navD2) navD2.hidden = nivelSeccion(ficha.data(), 'drive2') === 'sin';
     if (nivel === 'sin'){
@@ -1266,12 +1757,8 @@ onAuthStateChanged(auth, async user => {
       return;
     }
     $('enlacePermisos').hidden = !(ficha.data().esAdmin === true || ficha.data().puedeAutorizar === true);
-    try {
-      const snapStaff = await getDocs(collection(db, 'staff'));
-      ASISTENTES = snapStaff.docs.map(d => d.data()).filter(x => x.rol === 'asistente')
-        .map(x => ({ nombre: x.nombre || x.correo, licenciaHasta: x.licenciaHasta || '', deLicencia: !!x.licenciaHasta && x.licenciaHasta >= hoyIso() }))
-        .sort((a, b) => a.nombre.localeCompare(b.nombre, 'es'));
-    } catch (e){ console.error(e); }
+    // La lista de asistentes sale de "asistentes" (sin permisos), así no hace falta leer las fichas del personal
+    await Promise.all([cargarAsistentes(), cargarFeriados()]);
     const snapDef = await getDocs(collection(db, 'defensores'));
     DEFENSORES = snapDef.docs.map(d => ({ id: d.id, ...d.data() })).filter(d => d.activo !== false)
       .sort((a, b) => (a.area || '').localeCompare(b.area || '') || (a.orden ?? 999) - (b.orden ?? 999) || (a.nombre || '').localeCompare(b.nombre || '', 'es'));
@@ -1280,6 +1767,7 @@ onAuthStateChanged(auth, async user => {
     if (usuario.rol === 'bloqueado') document.body.classList.add('bloqueado');
     $('pantallaLogin').hidden = true; $('app').hidden = false;
     pintarAnios(); escucharAnio(anioElegido);
+    iniciarAvisos();
   } catch (err){
     console.error(err);
     msgLogin.textContent = 'No se pudo cargar tu acceso (' + (err.code || err.message) + ').';
