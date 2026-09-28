@@ -173,7 +173,7 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
 import { getAuth, onAuthStateChanged, signInWithEmailAndPassword, signOut } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
 import { initializeFirestore, collection, doc, getDoc, getDocs, setDoc, updateDoc, deleteDoc, deleteField,
-  query, orderBy, limit, Timestamp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+  query, where, orderBy, limit, Timestamp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 
 const fbApp = initializeApp({
   apiKey: "AIzaSyBHxewV5R3CAj-5i3AzCgfdKvwI5A3jXnA",
@@ -233,10 +233,21 @@ async function registrarCambio(accion, coleccion, id, antes, despues){
 }
 
 // ---------- Personal ----------
+// El administrador lee a todo el personal. Quien solo puede autorizar pide ÚNICAMENTE a los asistentes,
+// porque las reglas de Firebase no le dejan ver a los abogados ni sus permisos.
 async function cargarStaff(){
-  const snap = await getDocs(collection(db, 'staff'));
-  STAFF = snap.docs.map(d => ({ id: d.id, ...d.data() }))
-    .sort((a, b) => (a.rol || '').localeCompare(b.rol || '') || (a.nombre || a.id).localeCompare(b.nombre || b.id, 'es'));
+  try {
+    const consulta = esAdmin()
+      ? collection(db, 'staff')
+      : query(collection(db, 'staff'), where('rol', '==', 'asistente'));
+    const snap = await getDocs(consulta);
+    STAFF = snap.docs.map(d => ({ id: d.id, ...d.data() }))
+      .sort((a, b) => (a.rol || '').localeCompare(b.rol || '') || (a.nombre || a.id).localeCompare(b.nombre || b.id, 'es'));
+  } catch (e){
+    console.error(e);
+    STAFF = [];
+    avisar('No se pudo cargar la lista del personal (' + (e.code || e.message) + ').', 7000);
+  }
   pintarStaff();
 }
 function temporalVigente(p){
