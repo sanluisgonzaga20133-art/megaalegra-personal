@@ -177,20 +177,34 @@
 
   /* Barra de pendientes arriba */
   .barra-pend{background:#fff;border:1px solid var(--linea);border-radius:12px;margin-bottom:10px}
-  .barra-pend-resumen{display:flex;gap:8px;flex-wrap:wrap;align-items:center;width:100%;background:none;border:none;padding:8px 10px;cursor:pointer;text-align:left;font-size:13px;color:var(--tinta)}
+  .barra-pend-resumen{display:flex;gap:8px;flex-wrap:wrap;align-items:center;width:100%;padding:8px 10px;font-size:13px;color:var(--tinta)}
   .barra-pend-resumen .titulo{font-weight:700;margin-right:4px}
-  .barra-pend-resumen .ver{margin-left:auto;color:var(--azul);font-weight:700;font-size:12.5px}
   .contador{display:inline-flex;gap:5px;align-items:center;padding:3px 9px;border-radius:14px;background:var(--papel);border:1px solid var(--linea);font-weight:600}
   .contador b{font-variant-numeric:tabular-nums}
   .contador.mal{background:#FFE1E1;border-color:var(--rojo);color:#8A0B16}
   .contador.cero{color:var(--gris-claro)}
-  .detalle-pend{border-top:1px solid var(--linea);padding:6px 10px 10px;max-height:50vh;overflow:auto}
-  .detalle-pend h4{margin:10px 0 4px;font-size:12.5px;color:var(--gris)}
   .linea-pend{display:block;width:100%;text-align:left;background:#fff;border:1px solid var(--linea);border-radius:8px;padding:6px 9px;margin-top:4px;font-size:12.5px;cursor:pointer;color:var(--tinta)}
   .linea-pend:hover{border-color:var(--azul)}
   .linea-pend.urgente{background:#1d1d1d;color:#fff;border-color:#1d1d1d}
   .linea-pend.muy-urgente{background:var(--rojo);color:#fff;border-color:var(--rojo)}
   .linea-pend .ir{float:right;font-weight:700;opacity:.8}
+  .linea-pend .tiempo{font-weight:700;white-space:nowrap}
+  .linea-pend.grave .tiempo{color:#8A0B16}
+  .linea-pend.urgente .tiempo, .linea-pend.muy-urgente .tiempo{color:inherit}
+  .linea-pend.parpadea{animation:parpadeo 1s ease-in-out 3}
+  @keyframes parpadeo{50%{opacity:.35}}
+
+  /* Ventanitas de pendientes arriba a la derecha (debajo de los formularios) */
+  #ventanitas{position:fixed;top:calc(52px + env(safe-area-inset-top,0px));right:max(16px, env(safe-area-inset-right,0px));z-index:40;
+    width:min(360px, calc(100vw - 32px));max-height:calc(100vh - 68px - env(safe-area-inset-top,0px));overflow:auto;display:flex;flex-direction:column;gap:8px}
+  .ventanita{background:#fff;color:var(--tinta);border:1px solid var(--celda);border-left:5px solid #E8C872;border-radius:10px;box-shadow:0 6px 18px rgba(36,30,27,.18);font-size:12.5px}
+  .ventanita.grave{border-left-color:var(--rojo)}
+  .ventanita .cab{display:flex;align-items:center;gap:6px;padding:6px 8px 6px 10px}
+  .ventanita .titulo-v{flex:1;background:none;border:none;text-align:left;font:inherit;font-weight:700;font-size:13px;color:inherit;cursor:pointer;padding:2px 0}
+  .ventanita .titulo-v .malos{color:#8A0B16}
+  .ventanita .min{background:#fff;border:1px solid var(--celda);border-radius:6px;width:28px;height:26px;font-weight:700;font-size:14px;line-height:1;cursor:pointer;color:var(--tinta)}
+  .ventanita .cuerpo{max-height:30vh;overflow:auto;padding:0 8px 8px}
+  .ventanita .cuerpo .linea-pend:first-child{margin-top:0}
 
   /* Avisos abajo a la derecha */
   #avisosEsquina{position:fixed;right:max(16px, env(safe-area-inset-right,0px));bottom:calc(16px + env(safe-area-inset-bottom,0px));
@@ -224,6 +238,7 @@
 </div>
 <div id="aviso"></div>
 <div id="avisosEsquina" aria-live="polite"></div>
+<div id="ventanitas" aria-label="Pendientes" hidden></div>
 
 <div id="app" hidden>
   <div class="barra-sesion">
@@ -257,10 +272,9 @@
     </div>
   </header>
 
-  <!-- Barra de pendientes: contadores; al tocarla se abre el detalle y cada línea lleva a su fila -->
+  <!-- Barra de pendientes: solo contadores; el detalle está en las ventanitas de arriba a la derecha -->
   <div class="barra-pend" id="barraPendientes" hidden>
-    <button class="barra-pend-resumen" id="btnBarraPend" aria-expanded="false" aria-controls="detallePend"></button>
-    <div class="detalle-pend" id="detallePend" hidden></div>
+    <div class="barra-pend-resumen" id="btnBarraPend"></div>
   </div>
 
   <div class="barra-busqueda">
@@ -1529,57 +1543,95 @@ function identificarCaso(r, num){
   const cual = r.codigo || (n ? 'N° ' + n + ' (' + r.anio + ')' : 'caso del ' + fechaCorta(r.fecha));
   return cual + ' · ' + (r.usuario || r.padreUsuario || 'sin usuario');
 }
+// Cada aviso: caso (código o N° · usuario), abogado, qué falta y tiempo restante o vencido.
+// "demora" sirve para ordenar: lo más atrasado arriba; entre lo que está a tiempo, lo que vence antes.
 function itemsAvisos(){
   const num = numeracion(), items = [];
+  const abogadoDe = r => r.abogadoActualNombre || r.abogadoNombre || 'sin abogado';
   pendMemo.forEach(r => {
     if (!esMioMemo(r)) return;
     const falta = faltaProyectar(r);
     if (!falta.length) return;
     const e = estadoProyeccion(r);
-    items.push({ tipo: 'memo', r, grave: e.atraso > 0, atencion: true,
-      texto: `${identificarCaso(r, num)} · Falta proyectar ${falta.join(' y ')}${r.asistenteNombre ? ' · ' + r.asistenteNombre : ' · sin asistente'} · ${e.texto}` });
+    items.push({ tipo: 'memo', r, grave: e.atraso > 0, demora: e.atraso > 0 ? e.atraso : e.dia - DIAS_PROYECTAR,
+      caso: identificarCaso(r, num), abogado: abogadoDe(r),
+      detalle: `Falta proyectar ${falta.join(' y ')} · ${r.asistenteNombre || 'sin asistente'}`, tiempo: e.texto });
   });
   pendPlazo.forEach(r => {
     if (!esMioSeguimiento(r) || !r.plazoVence || r.plazoCumplido) return;
     const e = estadoPlazo(r);
-    items.push({ tipo: 'plazo', r, grave: e.vencido, atencion: e.vencido || e.pronto,
-      texto: `${identificarCaso(r, num)} · Falta el informe de ${r.abogadoActualNombre || r.abogadoNombre || 'el defensor'} (plazo ${r.plazoHoras ? r.plazoHoras + ' h' : 'al ' + fechaCorta(r.plazoVence.slice(0, 10))}) · ${e.texto}` });
+    items.push({ tipo: 'plazo', r, grave: e.vencido, demora: -(new Date(r.plazoVence) - Date.now()),
+      caso: identificarCaso(r, num), abogado: abogadoDe(r),
+      detalle: `Informe (plazo ${r.plazoHoras ? r.plazoHoras + ' h' : 'al ' + fechaCorta(r.plazoVence.slice(0, 10))})`, tiempo: e.texto });
   });
   pendSup.forEach(r => {
     if (!esMioSeguimiento(r) || !r.supFecha || r.supHecha) return;
-    const e = estadoSupervision(r);
-    if (!e.toca) return;
-    items.push({ tipo: 'sup', r, grave: e.atrasada, atencion: true,
-      texto: `${identificarCaso(r, num)} · Supervisión: ${r.supNota || 'revisar el caso'} · ${e.texto}` });
+    const dias = Math.round((new Date(hoyIso() + 'T00:00:00') - new Date(r.supFecha + 'T00:00:00')) / 86400000);
+    const tiempo = dias > 0 ? 'Atrasada ' + dias + (dias === 1 ? ' día' : ' días') : dias === 0 ? 'Hoy' : (dias === -1 ? 'Falta 1 día' : 'Faltan ' + (-dias) + ' días');
+    items.push({ tipo: 'sup', r, grave: dias > 0, demora: dias,
+      caso: identificarCaso(r, num), abogado: abogadoDe(r),
+      detalle: `Supervisión: ${r.supNota || 'revisar el caso'}`, tiempo });
   });
-  // Primero lo muy urgente, luego lo urgente, luego lo atrasado o vencido
-  const peso = it => (it.r.prioridad === 'muy urgente' ? 0 : it.r.prioridad === 'urgente' ? 1 : 2) * 2 + (it.grave ? 0 : 1);
-  return items.sort((a, b) => peso(a) - peso(b));
+  // Primero lo vencido o atrasado (el de más tiempo arriba), luego muy urgente, urgente y el resto
+  const prio = it => it.r.prioridad === 'muy urgente' ? 0 : it.r.prioridad === 'urgente' ? 1 : 2;
+  return items.sort((a, b) => (b.grave - a.grave) || (a.grave ? b.demora - a.demora : (prio(a) - prio(b)) || (b.demora - a.demora)));
 }
 
+// Contadores de arriba: uno por ventanita, cada uno cuenta lo suyo
 function pintarBarra(){
   if (!usuario) return;
   const items = itemsAvisos();
-  const memos = items.filter(i => i.tipo === 'memo'), plazos = items.filter(i => i.tipo === 'plazo'), sups = items.filter(i => i.tipo === 'sup');
-  const atrasados = memos.filter(i => i.grave).length, vencidos = plazos.filter(i => i.grave).length;
-  const cont = (texto, n, mal) => `<span class="contador ${n === 0 ? 'cero' : mal ? 'mal' : ''}">${texto} <b>${n}</b></span>`;
+  const cont = (texto, lista, singular, plural) => {
+    const malos = lista.filter(i => i.grave).length;
+    return `<span class="contador ${!lista.length ? 'cero' : malos ? 'mal' : ''}">${texto} <b>${lista.length}</b>${malos ? ' (' + malos + ' ' + (malos === 1 ? singular : plural) + ')' : ''}</span>`;
+  };
   $('btnBarraPend').innerHTML = `<span class="titulo">${usuario.esAdmin ? 'Pendientes de todos' : 'Mis pendientes'}</span>` +
-    cont('Memos, oficios y cartas por proyectar', memos.length, false) + cont('Atrasados', atrasados, true) +
-    cont('Plazos de informe', plazos.length, vencidos > 0) + (vencidos ? cont('Vencidos', vencidos, true) : '') +
-    cont('Supervisiones', sups.length, sups.some(i => i.grave)) +
-    `<span class="ver">${$('detallePend').hidden ? 'Ver detalle ▾' : 'Ocultar ▴'}</span>`;
-  const seccion = (titulo, lista) => lista.length ? `<h4>${titulo}</h4>` + lista.map(i =>
-    `<button class="linea-pend ${claseUrgencia(i.r)}" data-ir="${i.r.id}"><span class="ir">Ir a la fila →</span>${i.r.prioridad && i.r.prioridad !== 'normal' ? '<b>' + i.r.prioridad.toUpperCase() + '</b> · ' : ''}${esc(i.texto)}</button>`).join('') : '';
-  $('detallePend').innerHTML = (seccion('Memos, oficios y cartas por proyectar', memos) + seccion('Plazos de informe', plazos) + seccion('Supervisiones', sups))
-    || '<p class="ayuda">No tienes pendientes. ✓</p>';
+    VENTANAS.map(v => cont(v.titulo, items.filter(i => i.tipo === v.tipo), v.singular, v.plural)).join('');
   $('barraPendientes').hidden = false;
+  pintarVentanitas(items);
 }
-$('btnBarraPend').onclick = () => {
-  $('detallePend').hidden = !$('detallePend').hidden;
-  $('btnBarraPend').setAttribute('aria-expanded', String(!$('detallePend').hidden));
-  pintarBarra();
-};
-$('detallePend').addEventListener('click', e => { const b = e.target.closest('[data-ir]'); if (b) irAFila(b.dataset.ir); });
+
+// Ventanitas arriba a la derecha: se ven sin hacer clic; se pueden minimizar
+const VENTANAS = [
+  { tipo: 'plazo', titulo: 'Informes con plazo', singular: 'vencido', plural: 'vencidos' },
+  { tipo: 'sup', titulo: 'Supervisiones', singular: 'atrasada', plural: 'atrasadas' },
+  { tipo: 'memo', titulo: 'Pendientes de los asistentes', singular: 'atrasado', plural: 'atrasados' }
+];
+const minimizadas = new Set(), porParpadear = new Set();
+function pintarVentanitas(items){
+  const caja = $('ventanitas');
+  if (!avisosActivos()){ caja.innerHTML = ''; caja.hidden = true; return; }
+  // Se guarda dónde estaba cada lista para no devolverla arriba al repintar
+  const scroll = {};
+  caja.querySelectorAll('[data-ventana]').forEach(s => { scroll[s.dataset.ventana] = s.querySelector('.cuerpo').scrollTop; });
+  caja.innerHTML = VENTANAS.map(v => {
+    const lista = items.filter(i => i.tipo === v.tipo);
+    if (!lista.length) return '';
+    const malos = lista.filter(i => i.grave).length, mini = minimizadas.has(v.tipo);
+    return `<section class="ventanita ${malos ? 'grave' : ''}" data-ventana="${v.tipo}" aria-label="${v.titulo}">
+      <div class="cab"><button class="titulo-v" data-alternar="${v.tipo}" aria-expanded="${!mini}">${v.titulo} <b>${lista.length}</b>${malos ? ' <span class="malos">· ' + malos + ' ' + (malos === 1 ? v.singular : v.plural) + '</span>' : ''}</button>
+      <button class="min" data-alternar="${v.tipo}" aria-label="${mini ? 'Abrir' : 'Minimizar'} ${v.titulo}" title="${mini ? 'Abrir' : 'Minimizar'}">${mini ? '+' : '—'}</button></div>
+      <div class="cuerpo" ${mini ? 'hidden' : ''}>${lista.map(i => {
+        const clave = i.tipo + '|' + i.r.id;
+        return `<button class="linea-pend ${claseUrgencia(i.r)} ${i.grave ? 'grave' : ''} ${porParpadear.has(clave) ? 'parpadea' : ''}" data-ir="${i.r.id}" title="Ir a la fila">` +
+          `${i.r.prioridad && i.r.prioridad !== 'normal' ? '<b>' + i.r.prioridad.toUpperCase() + '</b> · ' : ''}${esc(i.caso)} · Abog. ${esc(i.abogado)} · ${esc(i.detalle)} · <span class="tiempo">${esc(i.tiempo)}</span></button>`;
+      }).join('')}</div></section>`;
+  }).join('');
+  porParpadear.clear();
+  caja.querySelectorAll('[data-ventana]').forEach(s => { if (scroll[s.dataset.ventana]) s.querySelector('.cuerpo').scrollTop = scroll[s.dataset.ventana]; });
+  caja.hidden = !caja.innerHTML;
+}
+$('ventanitas').addEventListener('click', e => {
+  const t = e.target.closest('[data-alternar]');
+  if (t){
+    const tipo = t.dataset.alternar;
+    if (minimizadas.has(tipo)) minimizadas.delete(tipo); else minimizadas.add(tipo);
+    pintarBarra();
+    return;
+  }
+  const b = e.target.closest('[data-ir]');
+  if (b) irAFila(b.dataset.ir);
+});
 
 // Lleva a la fila del caso: cambia de año si hace falta, quita filtros y la resalta
 async function irAFila(id){
@@ -1620,20 +1672,6 @@ $('avisosEsquina').addEventListener('click', e => {
   if (b) irAFila(b.dataset.ir);
 });
 function avisosActivos(){ return usuario && usuario.avisos; }
-// Resumen: cada caso urgente o muy urgente en su propio aviso; lo demás, juntos en uno
-function mostrarAvisosProgramados(titulo){
-  if (!avisosActivos()) return;
-  document.querySelectorAll('#avisosEsquina [data-grupo="programado"]').forEach(x => x.remove());
-  const items = itemsAvisos().filter(i => i.atencion);
-  if (!items.length) return;
-  const urgentes = items.filter(i => claseUrgencia(i.r)), normales = items.filter(i => !claseUrgencia(i.r));
-  urgentes.slice(0, 5).forEach(i => mostrarToast({ clase: claseUrgencia(i.r), grupo: 'programado',
-    titulo: i.r.prioridad.toUpperCase(), lineas: [{ id: i.r.id, texto: i.texto }] }));
-  const resto = [...urgentes.slice(5), ...normales];
-  if (resto.length) mostrarToast({ grupo: 'programado', titulo: titulo + ' (' + resto.length + ')',
-    lineas: resto.slice(0, 6).map(i => ({ id: i.r.id, texto: i.texto })),
-    mas: resto.length > 6 ? 'y ' + (resto.length - 6) + ' más: mira la barra de pendientes arriba.' : '' });
-}
 function horaActual(){ const d = new Date(); return String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0'); }
 function revisarHorario(){
   const hoy = hoyIso(), ahora = horaActual();
@@ -1641,19 +1679,18 @@ function revisarHorario(){
   const tocan = HORAS_AVISO.filter(h => h <= ahora && !horasMostradas.lista.includes(h));
   if (tocan.length){
     horasMostradas.lista.push(...tocan);
-    if (avisoEntradaHecho) mostrarAvisosProgramados('Pendientes de las ' + tocan[tocan.length - 1]);
+    if (avisoEntradaHecho) minimizadas.clear(); // a las 08:00, 12:00 y 15:00 se vuelven a abrir las que tengan pendientes
   }
   pintarBarra(); // los días de atraso y los plazos cambian con la hora
 }
-// Urgente y muy urgente avisan al instante, apenas aparecen o cambian
+// Urgente y muy urgente avisan al instante: se abre su ventanita y la línea parpadea
 function avisarUrgentesNuevos(){
   itemsAvisos().forEach(i => {
-    const clase = claseUrgencia(i.r);
-    if (!clase) return;
+    if (!claseUrgencia(i.r)) return;
     const clave = i.tipo + '|' + i.r.id + '|' + i.r.prioridad;
     if (urgentesAvisados.has(clave)) return;
     urgentesAvisados.add(clave);
-    if (avisoEntradaHecho && avisosActivos()) mostrarToast({ clase, titulo: 'Nuevo · ' + i.r.prioridad.toUpperCase(), lineas: [{ id: i.r.id, texto: i.texto }] });
+    if (avisoEntradaHecho){ minimizadas.delete(i.tipo); porParpadear.add(i.tipo + '|' + i.r.id); }
   });
 }
 function felicitar(r, dia){
@@ -1672,14 +1709,18 @@ function iniciarAvisos(){
     });
     cargados.add(campo);
     if (cargados.size < 3) return;
-    pintarBarra();
     avisarUrgentesNuevos();
     if (!avisoEntradaHecho){
-      // Al entrar: se muestran los pendientes y las horas ya pasadas de hoy quedan cubiertas
+      // Al entrar: las ventanitas se ven abiertas y las horas ya pasadas de hoy quedan cubiertas.
+      // En celular empiezan minimizadas para no tapar la tabla, salvo las que tienen algo urgente.
       avisoEntradaHecho = true;
       horasMostradas = { fecha: hoyIso(), lista: HORAS_AVISO.filter(h => h <= horaActual()) };
-      mostrarAvisosProgramados('Tus pendientes');
+      if (window.matchMedia('(max-width: 600px)').matches){
+        const conUrgente = new Set(itemsAvisos().filter(i => claseUrgencia(i.r)).map(i => i.tipo));
+        VENTANAS.forEach(v => { if (!conUrgente.has(v.tipo)) minimizadas.add(v.tipo); });
+      }
     }
+    pintarBarra();
   }, err => { console.error(err); avisar('No se pudieron leer los pendientes (' + err.code + ').', 6000); });
   cortesAvisos = [escuchar('pendienteProyectar', pendMemo), escuchar('plazoAbierto', pendPlazo), escuchar('supAbierta', pendSup)];
   relojAvisos = setInterval(revisarHorario, 30000);
@@ -1688,8 +1729,10 @@ function detenerAvisos(){
   cortesAvisos.forEach(f => f()); cortesAvisos = [];
   clearInterval(relojAvisos); relojAvisos = null;
   pendMemo.clear(); pendPlazo.clear(); pendSup.clear(); urgentesAvisados.clear();
+  minimizadas.clear(); porParpadear.clear();
   avisoEntradaHecho = false;
   $('avisosEsquina').innerHTML = ''; $('barraPendientes').hidden = true;
+  $('ventanitas').innerHTML = ''; $('ventanitas').hidden = true;
 }
 
 // ---------------- Sesión ----------------
