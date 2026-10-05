@@ -1599,8 +1599,8 @@ const VENTANAS = [
 ];
 const minimizadas = new Set(), porParpadear = new Set();
 function pintarVentanitas(items){
+  // Se ven siempre que haya pendientes; "Avisos apagados" solo quita que se reabran solas, el parpadeo y la felicitación
   const caja = $('ventanitas');
-  if (!avisosActivos()){ caja.innerHTML = ''; caja.hidden = true; return; }
   // Se guarda dónde estaba cada lista para no devolverla arriba al repintar
   const scroll = {};
   caja.querySelectorAll('[data-ventana]').forEach(s => { scroll[s.dataset.ventana] = s.querySelector('.cuerpo').scrollTop; });
@@ -1679,7 +1679,7 @@ function revisarHorario(){
   const tocan = HORAS_AVISO.filter(h => h <= ahora && !horasMostradas.lista.includes(h));
   if (tocan.length){
     horasMostradas.lista.push(...tocan);
-    if (avisoEntradaHecho) minimizadas.clear(); // a las 08:00, 12:00 y 15:00 se vuelven a abrir las que tengan pendientes
+    if (avisoEntradaHecho && avisosActivos()) minimizadas.clear(); // a las 08:00, 12:00 y 15:00 se vuelven a abrir las que tengan pendientes
   }
   pintarBarra(); // los días de atraso y los plazos cambian con la hora
 }
@@ -1690,7 +1690,7 @@ function avisarUrgentesNuevos(){
     const clave = i.tipo + '|' + i.r.id + '|' + i.r.prioridad;
     if (urgentesAvisados.has(clave)) return;
     urgentesAvisados.add(clave);
-    if (avisoEntradaHecho){ minimizadas.delete(i.tipo); porParpadear.add(i.tipo + '|' + i.r.id); }
+    if (avisoEntradaHecho && avisosActivos()){ minimizadas.delete(i.tipo); porParpadear.add(i.tipo + '|' + i.r.id); }
   });
 }
 function felicitar(r, dia){
