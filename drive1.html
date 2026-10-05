@@ -686,6 +686,26 @@ function completarMarcasAvisos(){
     if (falta) updateDoc(doc(db, COL, r.id), m).catch(err => console.error('No se pudo marcar', r.id, err));
   });
 }
+// Devoluciones guardadas antes como −1 en "reasignaciones" (sin "pasa a"): el administrador las convierte
+// en derivaciones al abrir el Drive 1 (marca el caso en la Agenda y borra el −1 viejo)
+let devolucionesConvertidas = false;
+async function convertirDevolucionesViejas(){
+  if (devolucionesConvertidas) return;
+  devolucionesConvertidas = true;
+  try {
+    const snap = await getDocs(query(collection(db, 'reasignaciones'), where('aId', '==', '')));
+    let n = 0;
+    for (const d of snap.docs){
+      const r = d.data();
+      if (!r.casoId) continue;
+      const distrital = (r.destino || '').replace(/^OTRA DISTRITAL:\s*/, '') || ((cache.get(d.id) || {}).distrital || '');
+      await marcarDerivacion(r.casoId, d.id, distrital, r.fecha);
+      await deleteDoc(d.ref);
+      n++;
+    }
+    if (n) avisar(n + (n === 1 ? ' devolución antigua pasó' : ' devoluciones antiguas pasaron') + ' a "Derivado a …" en la Agenda.', 6000);
+  } catch (err){ console.error('No se pudieron convertir las devoluciones antiguas', err); devolucionesConvertidas = false; }
+}
 function cargarTodos(){
   if (todosCargados) return Promise.resolve();
   if (cargandoTodos) return cargandoTodos;
@@ -896,6 +916,8 @@ async function borrar(id){
     if (r && r.padreId){
       // Si era una devolución o un cambio de abogado, también sale su movimiento de la Agenda
       if (await existe('reasignaciones', id)) await deleteDoc(doc(db, 'reasignaciones', id));
+      // Si era una devolución (derivación), el caso vuelve a contar en la Agenda
+      if (r.tipoDoc === TIPO_DEVOLUCION) await quitarDerivacion(idAsignacion(cache.get(r.padreId) || { id: r.padreId }), id);
       await recalcularEstado(r.padreId);
     } else if (r){
       // Caso nuevo: sale también de la Agenda (con sus reasignaciones)
@@ -1337,16 +1359,30 @@ async function sincronizarAgenda(id, previo, datos){
     if (Object.keys(cambios).length) await updateDoc(doc(db, 'asignaciones', idA), { ...cambios, editadoPor: usuario.correo, editadoEn: serverTimestamp() });
   } catch (err){ console.error(err); avisar('Se guardó en el Drive 1, pero no se pudo actualizar la Agenda.', 6000); }
 }
-// Devolución a otra distrital (−1) y cambio de abogado que procede (−1 / +1) → movimiento en la Agenda
-async function sincronizarMovimiento(id, datos){
+// Devolución a otra distrital o institución = DERIVACIÓN: no es reasignación (no va en Reasig. ni da −1);
+// el caso queda marcado "Derivado a …" en la Agenda y deja de contar como caso nuevo del defensor.
+const TIPO_DEVOLUCION = 'Devolución a otra Dirección Distrital';
+async function marcarDerivacion(idA, idDev, distrital, fecha){
+  if (!(await existe('asignaciones', idA))) return;
+  await updateDoc(doc(db, 'asignaciones', idA), { derivadoA: distrital || 'OTRA DEPENDENCIA', derivadoId: idDev, derivadoFecha: fecha || '' });
+}
+// Quita la marca solo si la puso esta misma devolución (el caso vuelve a contar)
+async function quitarDerivacion(idA, idDev){
+  const snap = await getDoc(doc(db, 'asignaciones', idA));
+  if (snap.exists() && snap.data().derivadoId === idDev)
+    await updateDoc(snap.ref, { derivadoA: deleteField(), derivadoId: deleteField(), derivadoFecha: deleteField() });
+}
+// Cambio de abogado que procede (−1 / +1) → movimiento en la Agenda; devolución → derivación
+async function sincronizarMovimiento(id, datos, previo){
   try {
     const ref = doc(db, 'reasignaciones', id);
     const anterior = (cache.get(id) || {}).abogadoAnteriorId || datos.abogadoAnteriorId || padre.abogadoId;
     const base = { fecha: datos.fecha, mes: datos.mes, casoId: idAsignacion(padre), area: padre.area || '',
       usuario: padre.usuario || '', carpeta: padre.carpeta || '', nota: '', creadoPor: usuario.correo, creadoEn: serverTimestamp() };
-    if (datos.tipoDoc === 'Devolución a otra Dirección Distrital'){
-      await setDoc(ref, { ...base, deId: anterior, aId: '', destino: 'OTRA DISTRITAL: ' + datos.distrital,
-        referencia: 'DEVUELTO A ' + datos.distrital + ' · ' + (padre.usuario || '') });
+    if (previo && previo.tipoDoc === TIPO_DEVOLUCION && datos.tipoDoc !== TIPO_DEVOLUCION) await quitarDerivacion(idAsignacion(padre), id);
+    if (datos.tipoDoc === TIPO_DEVOLUCION){
+      await marcarDerivacion(idAsignacion(padre), id, datos.distrital, datos.fecha);
+      if (await existe('reasignaciones', id)) await deleteDoc(ref); // −1 viejo de antes de este cambio
     } else if (datos.tipoDoc === 'Solicitud de cambio de abogado' && datos.resultadoCambio === 'Procede (reasignado)'){
       await setDoc(ref, { ...base, deId: anterior, aId: datos.abogadoId,
         referencia: 'CAMBIO DE ABOGADO · ' + (padre.usuario || '') });
@@ -1459,7 +1495,7 @@ $('btnGuardarForm').onclick = async () => {
     }
     const idFila = editandoId || editandoIdNuevo;
     if (!esAnt) await sincronizarAgenda(idFila, previo, datos);
-    else await sincronizarMovimiento(idFila, datos);
+    else await sincronizarMovimiento(idFila, datos, previo);
     if (esAnt) await recalcularEstado(padre.id);
     if (esAnt && !editandoId && tipoDoc === 'Informe del defensor') await cerrarPlazosDelCaso(padre.id, idFila);
     $('fondoForm').hidden = true;
@@ -1815,6 +1851,7 @@ onAuthStateChanged(auth, async user => {
     $('pantallaLogin').hidden = true; $('app').hidden = false;
     pintarAnios(); escucharAnio(anioElegido);
     iniciarAvisos();
+    if (usuario.esAdmin) convertirDevolucionesViejas();
   } catch (err){
     console.error(err);
     msgLogin.textContent = 'No se pudo cargar tu acceso (' + (err.code || err.message) + ').';

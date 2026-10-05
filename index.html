@@ -173,6 +173,8 @@
     font-size:13px;padding:6px 0 8px;border-bottom:2px solid var(--linea);margin-bottom:2px}
   .detalle-titulo b{color:var(--tinta)}
   .btn-cerrar-detalle{background:#fff;border:1px solid var(--linea);border-radius:6px;padding:3px 10px;font-size:12px;font-weight:600;cursor:pointer}
+  .derivado s{color:var(--gris)}
+  .etiqueta-derivado{color:#7A5A12;font-size:11.5px;font-weight:700;margin-left:4px}
   .btn-reasignar{background:none;border:none;font-size:12px;font-weight:600;cursor:pointer;padding:0}
   [data-filtro]{cursor:pointer}
   .mini-dia[data-filtro]:hover, .mini-total[data-filtro]:hover{outline:1.5px solid var(--azul)}
@@ -655,6 +657,12 @@ function categoriaParaEspecifica(especifica){
 const REFERENCIA_MES_ANTERIOR = {};
 
 let idReasigPorBorrar = null;
+// Derivación (devolución a otra distrital o institución, desde el Drive 1): el caso no se asumió y deja de contar como nuevo
+function cuentaComoNuevo(a){ return !a.derivadoA; }
+function filaDerivada(a, clase){
+  return `<div class="${clase} derivado"><span><s>${a.fecha} — ${a.categoria}${a.especifica ? ' (' + a.especifica + ')' : ''} · ${a.origen}</s> <b class="etiqueta-derivado">↪ Derivado a ${escHtml(a.derivadoA)}${a.derivadoFecha ? ' el ' + a.derivadoFecha : ''} · no cuenta</b></span><span class="detalle-acciones"><button class="btn-editar" data-id="${a.id}">✎ Editar</button><button class="btn-borrar" data-id="${a.id}">🗑 Borrar</button></span></div>`;
+}
+function escHtml(s){ return String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c])); }
 function nombreDe(id){ const d = DEFENSORES.find(x => x.id === id); return d ? d.nombre : id; }
 // Quién ve hoy el caso (para el Drive 1). La asignación/carga siempre se queda en defensorId.
 function titularActual(r){ return r.abogadoActualId || r.defensorId; }
@@ -747,7 +755,7 @@ function reasignarRegistro(registro, nuevoId){
   avisar('Reasignación registrada');
 }
 function seccionReasignaciones(defId, mes){
-  const lista = reasignacionesLog.filter(r => (r.deId === defId || r.aId === defId) && r.fecha.slice(0, 7) === mes);
+  const lista = reasignacionesLog.filter(r => r.aId && (r.deId === defId || r.aId === defId) && r.fecha.slice(0, 7) === mes);
   if (lista.length === 0) return '';
   const estiloBtn = 'background:none;border:none;font-size:12px;font-weight:600;cursor:pointer;padding:0;color:var(--rojo-oscuro)';
   return '<div style="margin-top:12px;font-size:12px;font-weight:700;color:#7A3B57">Reasignaciones de este mes — carga muerta, no suman a ningún total</div>' +
@@ -951,7 +959,7 @@ function pintarTabla(){
   // Sugerido: menor carga del mes, sin contar a quien está de licencia; entre iguales, evita a los Responsables de Área
   const candidatos = DEFENSORES.filter(d => !(d.nota && d.nota.toLowerCase().includes('licencia')));
   const totalesPorId = {};
-  candidatos.forEach(d => { totalesPorId[d.id] = asignaciones.filter(a => a.defensorId === d.id && a.fecha.slice(0, 7) === diaElegido.slice(0, 7)).length; });
+  candidatos.forEach(d => { totalesPorId[d.id] = asignaciones.filter(a => cuentaComoNuevo(a) && a.defensorId === d.id && a.fecha.slice(0, 7) === diaElegido.slice(0, 7)).length; });
   const noResponsables = candidatos.filter(d => !(d.nota && (d.nota.includes('Responsable') || d.nota.includes('Coordinador'))));
   const grupoPreferido = noResponsables.length > 0 ? noResponsables : candidatos;
   let sugeridoId = null;
@@ -960,12 +968,14 @@ function pintarTabla(){
   });
 
   DEFENSORES.forEach((d, idx) => {
-    const propias = asignaciones.filter(a => a.defensorId === d.id && a.fecha.slice(0, 7) === diaElegido.slice(0, 7));
+    // Los derivados a otra distrital o institución se ven tachados en el detalle, pero no cuentan
+    const delMes = asignaciones.filter(a => a.defensorId === d.id && a.fecha.slice(0, 7) === diaElegido.slice(0, 7));
+    const propias = delMes.filter(cuentaComoNuevo);
     const totalMes = propias.length;
     // Semana y Mes cuentan TODO junto (nombradas + otras) — es un solo resultado, no por partes
     const totalSemana = propias.filter(a => claveSemana(a.fecha) === semanaElegida).length;
     const mesDelDia = diaElegido.slice(0, 7);
-    const salieron = reasignacionesLog.filter(r => r.deId === d.id && r.fecha.slice(0, 7) === mesDelDia).length;
+    const salieron = reasignacionesLog.filter(r => r.aId && r.deId === d.id && r.fecha.slice(0, 7) === mesDelDia).length;
     const entraron = reasignacionesLog.filter(r => r.aId === d.id && r.fecha.slice(0, 7) === mesDelDia).length;
 
     const nDia = propias.filter(a => a.fecha === diaElegido).length;
@@ -1025,10 +1035,10 @@ function pintarTabla(){
     td.colSpan = categoriasEnColumna().length + AREA.totales.length + AREA.referencias.length + 5;
     // Solo los casos de la casilla que se tocó (día, semana, materia, total o todo el mes)
     const filtro = d.id === detalleAbiertoId ? filtroDetalle : { tipo: 'mes' };
-    const listaFiltrada = filtrarDetalle(propias, filtro)
+    const listaFiltrada = filtrarDetalle(delMes, filtro)
       .sort((x, y) => y.fecha.localeCompare(x.fecha) || ((y.creadoEn && y.creadoEn.seconds) || 9e12) - ((x.creadoEn && x.creadoEn.seconds) || 9e12));
     const soloReasig = filtro.tipo === 'reasig';
-    const cabecera = `<div class="detalle-titulo"><span><b>${d.nombre}</b> · ${etiquetaFiltro(filtro)} · ${soloReasig ? 'reasignaciones' : listaFiltrada.length + ' caso' + (listaFiltrada.length === 1 ? '' : 's')}</span><button class="btn-cerrar-detalle" data-cerrar-detalle>✕ Cerrar</button></div>`;
+    const cabecera = `<div class="detalle-titulo"><span><b>${d.nombre}</b> · ${etiquetaFiltro(filtro)} · ${soloReasig ? 'reasignaciones' : (n => n + ' caso' + (n === 1 ? '' : 's'))(listaFiltrada.filter(cuentaComoNuevo).length) + (listaFiltrada.some(a => !cuentaComoNuevo(a)) ? ' · los tachados se derivaron y no cuentan' : '')}</span><button class="btn-cerrar-detalle" data-cerrar-detalle>✕ Cerrar</button></div>`;
     td.innerHTML = soloReasig ? '' : listaFiltrada.length === 0
       ? '<div class="detalle-vacio">No hay casos en esta selección.</div>'
       : listaFiltrada
@@ -1042,6 +1052,7 @@ function pintarTabla(){
                 .map(x => `<option value="${x.id}">${x.nombre}</option>`).join('');
               return `<div class="detalle-item"><span>Reasignar a: <select id="selReasignar-${a.id}" style="font-size:12px;padding:3px 6px;border-radius:5px">${opciones}</select></span><span class="detalle-acciones"><button class="btn-reasignar-si" data-id="${a.id}">Confirmar</button><button class="btn-borrar-no">Cancelar</button></span></div>`;
             }
+            if (!cuentaComoNuevo(a)) return filaDerivada(a, 'detalle-item');
             return `<div class="detalle-item"><span>${a.fecha} — ${a.categoria}${a.especifica ? ' (' + a.especifica + ' → Drive 1)' : ''}${Object.keys(CASILLAS_TODAS).filter(k => a[k]).map(k => ' · ' + (k === 'adultoMayor' ? '👵 ' : '') + CASILLAS_TODAS[k].split(' (')[0]).join('')} · ${a.origen}${etiquetaReasig}</span><span class="detalle-acciones"><button class="btn-editar" data-id="${a.id}">✎ Editar</button><button class="btn-reasignar" data-id="${a.id}">🔁 Reasignar</button><button class="btn-borrar" data-id="${a.id}">🗑 Borrar</button></span></div>`;
           })
           .join('');
@@ -1100,6 +1111,7 @@ function pintarResultadosBusqueda(){
       const opciones = DEFENSORES.filter(x => x.id !== titularActual(a)).map(x => `<option value="${x.id}">${x.nombre}</option>`).join('');
       return `<div class="resultado-busqueda"><span>Reasignar a: <select id="selReasignar-${a.id}" style="font-size:12px;padding:3px 6px;border-radius:5px">${opciones}</select></span><span class="detalle-acciones"><button class="btn-reasignar-si" data-id="${a.id}">Confirmar</button><button class="btn-borrar-no">Cancelar</button></span></div>`;
     }
+    if (!cuentaComoNuevo(a)) return filaDerivada(a, 'resultado-busqueda');
     const etiquetaReasig = a.abogadoActualId ? ` <span style="color:#7A3B57;font-weight:600">🔁 ahora lo ve: ${nombreDe(a.abogadoActualId)} (la asignación sigue contando aquí)</span>` : '';
     return `<div class="resultado-busqueda"><span>${a.fecha} — ${a.categoria}${a.especifica ? ' (' + a.especifica + ')' : ''} · ${a.origen}${etiquetaReasig}</span><span class="detalle-acciones"><button class="btn-editar" data-id="${a.id}">✎ Editar</button><button class="btn-reasignar" data-id="${a.id}">🔁 Reasignar</button><button class="btn-borrar" data-id="${a.id}">🗑 Borrar</button></span></div>`;
   }).join('');
@@ -1234,7 +1246,7 @@ document.getElementById('cuerpoTabla').addEventListener('click', function(e){
 // Mismos datos para la vista previa y para el Excel (lo que ves es lo que se descarga)
 function datosInforme(){
   const filas = DEFENSORES.map(d => {
-    const propias = asignaciones.filter(a => a.defensorId === d.id && a.fecha.slice(0, 7) === mesElegido());
+    const propias = asignaciones.filter(a => cuentaComoNuevo(a) && a.defensorId === d.id && a.fecha.slice(0, 7) === mesElegido());
     const fila = { "Defensor": d.nombre };
     categoriasEnColumna().forEach(c => { fila[c] = propias.filter(a => a.categoria === c).length || 0; });
     AREA.totales.forEach(t => { fila[t.nombre] = propias.filter(t.f).length; });
@@ -1250,14 +1262,14 @@ function datosInforme(){
 // Segunda hoja: cuántos casos entraron por cada vía (origen), por defensor
 function datosPorOrigen(){
   const filas = DEFENSORES.map(d => {
-    const propias = asignaciones.filter(a => a.defensorId === d.id && a.fecha.slice(0, 7) === mesElegido());
+    const propias = asignaciones.filter(a => cuentaComoNuevo(a) && a.defensorId === d.id && a.fecha.slice(0, 7) === mesElegido());
     const fila = { "Defensor": d.nombre };
     ORIGENES.forEach(o => {
       fila[o] = propias.filter(a => o === ORIGEN_TURNO ? esTurnoConsulta(a) : a.origen === o).length;
     });
     AREA.casillas.forEach(k => { fila[CASILLAS_TODAS[k].split(' (')[0]] = propias.filter(a => a[k]).length; });
     fila["Total"] = propias.length;
-    const reasigMes = reasignacionesLog.filter(r => r.fecha.slice(0, 7) === mesElegido());
+    const reasigMes = reasignacionesLog.filter(r => r.aId && r.fecha.slice(0, 7) === mesElegido());
     fila["Reasig. entraron"] = reasigMes.filter(r => r.aId === d.id).length;
     fila["Reasig. salieron"] = reasigMes.filter(r => r.deId === d.id).length;
     return fila;
