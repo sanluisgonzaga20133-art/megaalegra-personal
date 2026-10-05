@@ -62,6 +62,10 @@
   tr.inactivo td{background:#F1EEE8;color:var(--gris-claro)}
   td input[type=text], td input[type=date], td select{width:100%;min-width:110px;padding:5px 7px;border:1px solid var(--linea);border-radius:6px;background:#fff;font-size:12.5px}
   td input.cambiado{border-color:var(--dorado);background:#FFF8E8}
+  .orden-def{display:flex;align-items:center;gap:3px}
+  .orden-def input{width:48px;padding:4px 5px;border:1px solid var(--linea);border-radius:6px;background:#fff;font-size:12.5px;text-align:center}
+  .orden-def button{width:26px;height:26px;padding:0;border:1px solid var(--linea);border-radius:6px;background:#fff;color:var(--tinta);font-size:11px;cursor:pointer}
+  .orden-def button:disabled{opacity:.35;cursor:default}
   .interruptor{display:inline-flex;align-items:center;gap:6px;cursor:pointer;font-size:12px;font-weight:600;white-space:nowrap}
   .interruptor input{width:16px;height:16px;margin:0}
   .permisos{display:flex;gap:4px;flex-wrap:wrap;max-width:330px}
@@ -160,6 +164,7 @@
       <label>Área<select id="filtroAreaDef"><option value="">Todas</option><option>Asistencia Legal</option><option>Defensa de Víctimas</option><option>Equipo multidisciplinario</option></select></label>
       <label class="interruptor" style="flex-direction:row;padding-bottom:8px"><input type="checkbox" id="verBajas"> Mostrar también los dados de baja</label>
     </div>
+    <p class="ayuda">El <b>N°</b> es el orden en que aparece cada defensor en la Agenda dentro de su área: muévelo con ▲ ▼ o escribe el número y presiona Enter (se guarda al instante). Al dar de baja, reactivar o agregar, los números se reacomodan solos sin huecos.</p>
     <p class="ayuda">Cambia lo que necesites en la fila y toca <b>Guardar</b>. Dar de baja no borra su historial: sus casos antiguos siguen mostrando su nombre, pero deja de aparecer en las listas para asignar.</p>
     <div class="tabla-wrap"><table>
       <thead><tr><th>N°</th><th>Nombre</th><th>Área</th><th>Celular (se muestra)</th><th>Celular personal (oculto)</th><th>Correo</th><th>Sede</th><th>Notas</th><th>Activo</th><th></th></tr></thead>
@@ -181,7 +186,7 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
 import { getAuth, onAuthStateChanged, signInWithEmailAndPassword, signOut } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
 import { initializeFirestore, collection, doc, getDoc, getDocs, setDoc, updateDoc, deleteDoc, deleteField,
-  query, where, orderBy, limit, Timestamp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+  query, where, orderBy, limit, Timestamp, writeBatch } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 
 const fbApp = initializeApp({
   apiKey: "AIzaSyBHxewV5R3CAj-5i3AzCgfdKvwI5A3jXnA",
@@ -436,8 +441,16 @@ const CAMPOS_DEF = ['nombre', 'celular', 'celularPersonal', 'correo', 'sede', 'n
 function pintarDefs(){
   const area = $('filtroAreaDef').value, bajas = $('verBajas').checked;
   const lista = DEFS.filter(d => (!area || d.area === area) && (bajas || d.activo !== false));
+  const celdaOrden = d => {
+    if (d.activo === false) return '<td>—</td>';
+    const del = activosDelArea(d.area), pos = del.indexOf(d) + 1, nom = esc(d.nombre || d.id);
+    return `<td><div class="orden-def">
+      <button data-mover="-1" aria-label="Subir a ${nom}" title="Subir" ${pos === 1 ? 'disabled' : ''}>▲</button>
+      <input type="number" min="1" max="${del.length}" value="${d.orden ?? pos}" data-orden aria-label="N° de orden de ${nom}">
+      <button data-mover="1" aria-label="Bajar a ${nom}" title="Bajar" ${pos === del.length ? 'disabled' : ''}>▼</button></div></td>`;
+  };
   $('cuerpoDef').innerHTML = lista.map(d => `<tr class="${d.activo === false ? 'inactivo' : ''}" data-fila="${esc(d.id)}">
-      <td>${d.orden ?? ''}</td>
+      ${celdaOrden(d)}
       ${['nombre'].map(c => `<td class="nombre"><input type="text" data-def="${c}" value="${esc(d[c] || '')}"></td>`).join('')}
       <td>${esc(d.area || '')}</td>
       ${['celular', 'celularPersonal', 'correo', 'sede', 'notas'].map(c => `<td><input type="text" data-def="${c}" value="${esc(d[c] || '')}" style="min-width:${c === 'sede' ? 260 : 140}px"></td>`).join('')}
@@ -458,11 +471,67 @@ $('cuerpoDef').addEventListener('change', async e => {
   const d = DEFS.find(x => x.id === id);
   if (!activo && !confirm('¿Dar de baja a ' + d.nombre + '? Dejará de aparecer para asignar casos; su historial se conserva.')){ e.target.checked = true; return; }
   try {
-    await updateDoc(doc(db, 'defensores', id), { activo, actualizadoEn: new Date().toISOString() });
-    await registrarCambio(activo ? 'Reactivó defensor' : 'Dio de baja defensor', 'defensores', id, { activo: d.activo !== false }, { activo });
+    // Al dar de baja sale de la numeración y los de abajo suben; al reactivar entra al final de su área
+    const lote = writeBatch(db), ahora = new Date().toISOString();
+    const otros = activosDelArea(d.area).filter(x => x.id !== id);
+    let mov;
+    if (activo) mov = reacomodar(lote, [...otros, d], { [id]: { activo: true } });
+    else {
+      lote.update(doc(db, 'defensores', id), { activo: false, orden: deleteField(), actualizadoEn: ahora });
+      mov = reacomodar(lote, otros);
+    }
+    await lote.commit();
+    await registrarCambio(activo ? 'Reactivó defensor' : 'Dio de baja defensor', 'defensores', id,
+      { activo: d.activo !== false, orden: d.orden ?? '' }, { activo, orden: activo ? otros.length + 1 : '' });
+    await anotarReacomodo(d.area, mov, activo ? null : id);
     avisar('Guardado');
   } catch (err){ error(err); }
   await cargarDefs();
+});
+
+// ---------- Orden de los defensores dentro de su área ----------
+// Solo cuentan los activos; siempre quedan numerados 1, 2, 3… sin huecos
+function activosDelArea(area){ return DEFS.filter(d => d.area === area && d.activo !== false); }
+// Pone en el lote los números nuevos (solo de quien cambia) y devuelve quién cambió, para el Registro de cambios
+function reacomodar(lote, lista, extra = {}){
+  const antes = {}, despues = {}, ahora = new Date().toISOString();
+  lista.forEach((d, i) => {
+    const cambia = d.orden !== i + 1;
+    if (cambia && !extra[d.id]){ antes[d.nombre || d.id] = d.orden ?? ''; despues[d.nombre || d.id] = i + 1; }
+    if (cambia || extra[d.id]) lote.update(doc(db, 'defensores', d.id), { ...(extra[d.id] || {}), orden: i + 1, actualizadoEn: ahora });
+  });
+  return { antes, despues };
+}
+async function anotarReacomodo(area, mov, sinId){
+  if (!Object.keys(mov.despues).length) return;
+  await registrarCambio('Reacomodó el orden de defensores · ' + area, 'defensores', sinId || area, mov.antes, mov.despues);
+}
+let moviendo = false;
+async function moverDef(id, puesto){
+  const d = DEFS.find(x => x.id === id);
+  if (!d || d.activo === false || moviendo) return;
+  const lista = activosDelArea(d.area).filter(x => x.id !== id);
+  puesto = Math.min(Math.max(1, Math.round(puesto) || 1), lista.length + 1);
+  lista.splice(puesto - 1, 0, d);
+  const lote = writeBatch(db), mov = reacomodar(lote, lista);
+  if (!Object.keys(mov.despues).length){ pintarDefs(); return; }
+  moviendo = true;
+  try {
+    await lote.commit();
+    await registrarCambio('Cambió el orden de defensores · ' + d.area, 'defensores', id, mov.antes, mov.despues);
+    avisar((d.nombre || id) + ' quedó en el N° ' + puesto + ' de ' + d.area);
+  } catch (err){ error(err); }
+  moviendo = false;
+  await cargarDefs();
+}
+$('cuerpoDef').addEventListener('click', e => {
+  const b = e.target.closest('[data-mover]'); if (!b) return;
+  const id = b.closest('tr').dataset.fila, d = DEFS.find(x => x.id === id);
+  moverDef(id, activosDelArea(d.area).indexOf(d) + 1 + Number(b.dataset.mover));
+});
+$('cuerpoDef').addEventListener('change', e => {
+  if (e.target.dataset.orden === undefined) return;
+  moverDef(e.target.closest('tr').dataset.fila, Number(e.target.value));
 });
 $('cuerpoDef').addEventListener('click', async e => {
   if (e.target.dataset.guardarDef === undefined) return;
@@ -484,12 +553,17 @@ $('btnAgregarDef').onclick = async () => {
   if (!nombre){ avisar('Escribe el nombre.'); return; }
   const id = nombre.toUpperCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^A-Z0-9]+/g, '_').replace(/^_|_$/g, '');
   if (DEFS.some(d => d.id === id)){ avisar('Ya existe un defensor con ese nombre. Si estaba de baja, reactívalo en la lista.', 6000); return; }
-  const orden = Math.max(0, ...DEFS.filter(d => d.area === area).map(d => d.orden || 0)) + 1;
+  // Entra al final de su área contando solo a los activos; si había huecos, se cierran en el mismo paso
+  const activos = activosDelArea(area), orden = activos.length + 1;
   const datos = { nombre, area, celular: $('dCelular').value.trim(), celularPersonal: '', correo: $('dCorreo').value.trim().toLowerCase(),
     sede: $('dSede').value.trim(), notas: '', activo: true, orden, rol: 'defensor', actualizadoEn: new Date().toISOString() };
   try {
-    await setDoc(doc(db, 'defensores', id), datos);
+    const lote = writeBatch(db);
+    lote.set(doc(db, 'defensores', id), datos);
+    const mov = reacomodar(lote, activos);
+    await lote.commit();
     await registrarCambio('Agregó defensor', 'defensores', id, {}, datos);
+    await anotarReacomodo(area, mov);
     ['dNombre', 'dCelular', 'dCorreo', 'dSede'].forEach(i => $(i).value = '');
     avisar('Defensor agregado al final de la lista de ' + area);
   } catch (err){ error(err); }

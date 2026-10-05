@@ -251,10 +251,10 @@
     <a href="permisos.html" id="enlacePermisos" hidden>Personal y permisos</a>
     <span class="separador" aria-hidden="true"></span>
     <span class="rotulo">Hojas de Google (mientras se migran):</span>
-    <a class="hoja" href="https://docs.google.com/spreadsheets/d/1OMk8U5HRbSnDuVAg72yR9kGt8808u7TfV9c1cA5P5Zg" target="_blank" rel="noopener">Drive 1 ↗</a>
-    <a class="hoja" href="https://docs.google.com/spreadsheets/d/1VPHB4XQyR-LeAVD42FovV7T1txzzCGvqSz5YgCyz6iI" target="_blank" rel="noopener">Drive 2 ↗</a>
-    <a class="hoja" href="https://docs.google.com/spreadsheets/d/1vdRtVAkiTeRWeJGDo9QwTKhf5gwhZ81uTvbvAENyGp0" target="_blank" rel="noopener">Drive 3 · Fono Alegra ↗</a>
-    <a class="hoja" href="https://docs.google.com/spreadsheets/d/1-oGexf5LrH5CDsmUCX2pebTIBq4eANhPAuHvDQ0xCZY" target="_blank" rel="noopener">Drive 4 · Consolidación ↗</a>
+    <a class="hoja" data-drive="drive1" href="https://docs.google.com/spreadsheets/d/1OMk8U5HRbSnDuVAg72yR9kGt8808u7TfV9c1cA5P5Zg" target="_blank" rel="noopener">Drive 1 ↗</a>
+    <a class="hoja" data-drive="drive2" href="https://docs.google.com/spreadsheets/d/1VPHB4XQyR-LeAVD42FovV7T1txzzCGvqSz5YgCyz6iI" target="_blank" rel="noopener">Drive 2 ↗</a>
+    <a class="hoja" data-drive="drive3" href="https://docs.google.com/spreadsheets/d/1vdRtVAkiTeRWeJGDo9QwTKhf5gwhZ81uTvbvAENyGp0" target="_blank" rel="noopener">Drive 3 · Fono Alegra ↗</a>
+    <a class="hoja" data-drive="drive4" href="https://docs.google.com/spreadsheets/d/1-oGexf5LrH5CDsmUCX2pebTIBq4eANhPAuHvDQ0xCZY" target="_blank" rel="noopener">Drive 4 · Consolidación ↗</a>
   </nav>
   <div id="sinAcceso" hidden>No tienes acceso a esta sección. Si lo necesitas, pídeselo al Coordinador.</div>
 
@@ -1792,6 +1792,10 @@ onAuthStateChanged(auth, async user => {
       esAdmin: ficha.data().esAdmin === true, avisos: ficha.data().avisos !== false };
     const navD2 = document.querySelector('.menu-drives a[href="index.html"]');
     if (navD2) navD2.hidden = nivelSeccion(ficha.data(), 'drive2') === 'sin';
+    // Enlaces a las hojas de Google: solo para quien tiene acceso a ese drive
+    let hojasVisibles = 0;
+    document.querySelectorAll('.menu-drives a.hoja[data-drive]').forEach(a => { a.hidden = nivelSeccion(ficha.data(), a.dataset.drive) === 'sin'; if (!a.hidden) hojasVisibles++; });
+    document.querySelectorAll('.menu-drives .rotulo, .menu-drives .separador').forEach(x => x.hidden = !hojasVisibles);
     if (nivel === 'sin'){
       $('usuarioSesion').textContent = usuario.nombre;
       document.querySelectorAll('#app > header, #app > .barra-busqueda, #app > .estado-carga, #app > .tabla-wrap').forEach(x => x.hidden = true);
