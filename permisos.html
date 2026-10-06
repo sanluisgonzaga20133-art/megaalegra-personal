@@ -140,6 +140,15 @@
       </div>
       <p class="ayuda">Las ventanitas de pendientes del Drive 1 (arriba a la derecha) y la barra de contadores se ven siempre. Los avisos son lo que llama la atención: que las ventanitas minimizadas se vuelvan a abrir solas a las 8:00, 12:00 y 15:00, que lo urgente se abra al instante y parpadee, y la felicitación. Para cada persona puedes encenderlos o apagarlos en la columna <b>Avisos</b>.</p>
     </div>
+    <div class="caja solo-admin">
+      <h3>Conteos rotativos</h3>
+      <div class="fila-form">
+        <label>Inicio del conteo de reasignaciones<input type="date" id="inicioReasig"></label>
+        <label>Inicio del turno de opiniones<input type="date" id="inicioOpin"></label>
+        <button class="btn" id="btnGuardarConteos">Guardar</button>
+      </div>
+      <p class="ayuda">El saldo de compensación de reasignaciones y el turno de opiniones solo cuentan desde estas fechas. Lo anterior no se borra: solo deja de contar.</p>
+    </div>
     <p class="ayuda" id="ayudaPersonal"></p>
     <div class="tabla-wrap"><table>
       <thead><tr id="encPersonal"></tr></thead>
@@ -430,6 +439,35 @@ $('btnAgregarStaff').onclick = async () => {
   await cargarStaff();
 };
 
+// ---------- Conteos rotativos: fecha de inicio (solo el administrador) ----------
+const INICIO_CONTEO_PREDETERMINADO = '2026-10-06';
+let conteos = {};
+async function cargarConteos(){
+  try {
+    const ref = doc(db, 'configuracion', 'conteos'), s = await getDoc(ref);
+    conteos = s.exists() ? s.data() : {};
+    if (!s.exists()){
+      // Primera vez: se guarda la fecha en que se activó (lo anterior eran pruebas)
+      conteos = { inicioReasignaciones: INICIO_CONTEO_PREDETERMINADO, inicioOpiniones: INICIO_CONTEO_PREDETERMINADO };
+      await setDoc(ref, { ...conteos, actualizadoPor: yo.correo, actualizadoEn: new Date().toISOString() });
+      await registrarCambio('Fijó la fecha de inicio de los conteos rotativos', 'configuracion', 'conteos', {}, conteos);
+    }
+  } catch (e){ console.error(e); avisar('No se pudo leer la fecha de inicio de los conteos (' + (e.code || e.message) + ').', 6000); }
+  $('inicioReasig').value = conteos.inicioReasignaciones || INICIO_CONTEO_PREDETERMINADO;
+  $('inicioOpin').value = conteos.inicioOpiniones || INICIO_CONTEO_PREDETERMINADO;
+}
+$('btnGuardarConteos').onclick = async () => {
+  const nuevo = { inicioReasignaciones: $('inicioReasig').value, inicioOpiniones: $('inicioOpin').value };
+  if (!nuevo.inicioReasignaciones || !nuevo.inicioOpiniones){ avisar('Elige las dos fechas.'); return; }
+  const antes = { inicioReasignaciones: conteos.inicioReasignaciones || '', inicioOpiniones: conteos.inicioOpiniones || '' };
+  try {
+    await setDoc(doc(db, 'configuracion', 'conteos'), { ...nuevo, actualizadoPor: yo.correo, actualizadoEn: new Date().toISOString() });
+    await registrarCambio('Cambió la fecha de inicio de los conteos rotativos', 'configuracion', 'conteos', antes, nuevo);
+    conteos = nuevo;
+    avisar('Guardado. La Agenda y el Drive 1 lo toman al recargar.');
+  } catch (e){ error(e); }
+};
+
 // ---------- Defensores ----------
 async function cargarDefs(){
   const snap = await getDocs(collection(db, 'defensores'));
@@ -618,6 +656,7 @@ onAuthStateChanged(auth, async user => {
     if (!esAdmin()) document.querySelectorAll('.solo-admin').forEach(x => x.hidden = true);
     $('subtitulo').textContent = esAdmin() ? 'Quién puede registrar, editar y ver cada sección' : 'Permiso temporal para asistentes';
     await cargarStaff();
+    if (esAdmin()) await cargarConteos();
   } catch (e){ console.error(e); $('msgLogin').textContent = 'No se pudo cargar tu acceso (' + (e.code || e.message) + ').'; $('cargandoSesion').hidden = true; $('cajaLogin').hidden = false; }
 });
 </script>

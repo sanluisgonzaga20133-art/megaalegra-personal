@@ -175,6 +175,9 @@
   .btn-cerrar-detalle{background:#fff;border:1px solid var(--linea);border-radius:6px;padding:3px 10px;font-size:12px;font-weight:600;cursor:pointer}
   .derivado s{color:var(--gris)}
   .etiqueta-derivado{color:#7A5A12;font-size:11.5px;font-weight:700;margin-left:4px}
+  .linea-reasig{background:#F6EEF2;border:1px solid #D9BFCB;border-radius:10px;padding:8px 12px;margin-bottom:10px;font-size:13px;color:#4A2235}
+  .linea-reasig .chico{display:block;font-size:12px;color:#6B4A5A;margin-top:2px}
+  .ayuda-sugerencia{font-size:12px;color:#7A3B57;font-weight:600;margin-top:4px}
   .btn-reasignar{background:none;border:none;font-size:12px;font-weight:600;cursor:pointer;padding:0}
   [data-filtro]{cursor:pointer}
   .mini-dia[data-filtro]:hover, .mini-total[data-filtro]:hover{outline:1.5px solid var(--azul)}
@@ -415,6 +418,7 @@
     <div id="resultadosBusqueda" style="margin-top:12px"></div>
   </div>
 
+  <div id="lineaReasig" class="linea-reasig" hidden></div>
   <div class="tabla-wrap">
     <table>
       <thead><tr id="filaEncabezados"></tr></thead>
@@ -457,6 +461,7 @@
     <select id="reDe"></select>
     <label class="campo" for="reA">Pasa a</label>
     <select id="reA"></select>
+    <div class="ayuda-sugerencia" id="sugerenciaReA"></div>
     <label class="campo" for="reNota">Motivo (opcional)</label>
     <input type="text" id="reNota" placeholder="Ej. licencia, conflicto de intereses">
     <div id="avisoReasig" style="display:none;color:var(--rojo-oscuro);font-size:12.5px;margin-top:8px;font-weight:600"></div>
@@ -784,6 +789,76 @@ let reasignacionesLog = []; // colección "reasignaciones" — carga muerta, no 
 let defensorActivo = null;
 
 let mesEscuchado = null, cortarAsig = null, cortarReasig = null;
+// ---------- Sugerencia de reasignación: primero compensación, si nadie debe, turno (no se reinicia por mes) ----------
+// historial: todas las reasignaciones; lista: defensores activos del área en el orden de la Agenda (N° de orden).
+// Quien perdió un caso (−1) sin compensar recibe primero (el más antiguo primero); nunca el que pierde el caso.
+// El Coordinador no entra en nada; quien está de licencia se salta (conserva su deuda). Las derivaciones no cuentan.
+function sugerenciaReasignacion(historial, lista, pierdeId, nota){
+  const ids = new Set(lista.map(d => d.id));
+  const esCoord = id => { const d = lista.find(x => x.id === id); return !!d && /coordinador/i.test(nota(d)); };
+  const momento = r => r.creadoEnMs || (r.creadoEn && r.creadoEn.seconds ? r.creadoEn.seconds * 1000 : 0);
+  const eventos = historial.filter(r => r.aId && r.deId && (ids.has(r.aId) || ids.has(r.deId)))
+    .sort((a, b) => (a.fecha || '').localeCompare(b.fecha || '') || momento(a) - momento(b));
+  const deudas = {};
+  let ultimoTurno = null;
+  eventos.forEach(r => {
+    if (deudas[r.aId] && deudas[r.aId].length) deudas[r.aId].shift();          // se le compensa
+    else if (ids.has(r.aId) && !esCoord(r.aId)) ultimoTurno = r.aId;           // lo recibió por turno
+    if (ids.has(r.deId) && !esCoord(r.deId)) (deudas[r.deId] = deudas[r.deId] || []).push(r.fecha); // queda debiéndosele
+  });
+  const dmy = iso => iso ? iso.slice(8, 10) + '/' + iso.slice(5, 7) + '/' + iso.slice(0, 4) : '';
+  const pendientes = lista.filter(d => deudas[d.id] && deudas[d.id].length)
+    .map(d => ({ id: d.id, nombre: d.nombre, n: deudas[d.id].length, desde: dmy(deudas[d.id][0]) }))
+    .sort((a, b) => deudas[a.id][0].localeCompare(deudas[b.id][0]));
+  const elegibles = lista.filter(d => d.id !== pierdeId && !/coordinador|licencia/i.test(nota(d)));
+  const deben = elegibles.filter(d => deudas[d.id] && deudas[d.id].length)
+    .sort((a, b) => deudas[a.id][0].localeCompare(deudas[b.id][0]) || lista.indexOf(a) - lista.indexOf(b));
+  if (deben.length) return { id: deben[0].id, motivo: 'compensación: perdió un caso el ' + dmy(deudas[deben[0].id][0]), pendientes };
+  const pos = lista.findIndex(d => d.id === ultimoTurno);
+  for (let i = 1; i <= lista.length; i++){
+    const d = lista[(pos + i) % lista.length];
+    if (elegibles.includes(d)) return { id: d.id, motivo: 'turno', pendientes };
+  }
+  return { id: null, motivo: '', pendientes };
+}
+// Fecha de inicio de los conteos rotativos (la fija el administrador en Personal y permisos).
+// Si todavía no se puede leer, se usa la fecha en que se activó (lo anterior eran pruebas).
+const INICIO_CONTEO_PREDETERMINADO = '2026-10-06';
+async function leerInicioConteos(){
+  try {
+    const s = await getDoc(doc(db, 'configuracion', 'conteos'));
+    const c = s.exists() ? s.data() : {};
+    return { reasignaciones: c.inicioReasignaciones || INICIO_CONTEO_PREDETERMINADO, opiniones: c.inicioOpiniones || INICIO_CONTEO_PREDETERMINADO };
+  } catch (e){ console.warn('No se pudo leer la fecha de inicio de los conteos', e); return { reasignaciones: INICIO_CONTEO_PREDETERMINADO, opiniones: INICIO_CONTEO_PREDETERMINADO }; }
+}
+let historialReasig = [], cortarHistorial = null, inicioConteos = { reasignaciones: INICIO_CONTEO_PREDETERMINADO, opiniones: INICIO_CONTEO_PREDETERMINADO };
+function escucharHistorialReasig(){
+  if (cortarHistorial) return;
+  leerInicioConteos().then(c => { inicioConteos = c; pintarTabla(); });
+  cortarHistorial = onSnapshot(collection(db, 'reasignaciones'), snap => {
+    historialReasig = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    pintarTabla();
+  }, err => { console.error(err); avisar('No se pudo leer el historial de reasignaciones: ' + err.code, 6000); });
+}
+// Solo cuentan las reasignaciones desde la fecha de inicio del conteo
+function sugerenciaArea(pierdeId){
+  return sugerenciaReasignacion(historialReasig.filter(r => (r.fecha || '') >= inicioConteos.reasignaciones), DEFENSORES, pierdeId, d => d.nota || '');
+}
+// Opciones del "Reasignar a": la sugerencia ya viene elegida (siempre se puede escoger a otro)
+function opcionesReasignar(pierdeId){
+  const s = sugerenciaArea(pierdeId);
+  return DEFENSORES.filter(x => x.id !== pierdeId)
+    .map(x => `<option value="${x.id}" ${x.id === s.id ? 'selected' : ''}>${x.nombre}${x.id === s.id ? ' — sugerido (' + s.motivo + ')' : ''}</option>`).join('');
+}
+function pintarLineaReasig(){
+  const caja = document.getElementById('lineaReasig');
+  if (!usuario || !DEFENSORES.length){ caja.hidden = true; return; }
+  const s = sugerenciaArea(null);
+  const deuda = s.pendientes.map(p => p.nombre + (p.n > 1 ? ' (' + p.n + ')' : '') + ' desde el ' + p.desde).join(' · ');
+  caja.innerHTML = '🔁 <b>Siguiente en reasignación:</b> ' + (s.id ? '<b>' + escHtml(nombreDe(s.id)) + '</b> (' + escHtml(s.motivo) + ')' : 'nadie disponible') +
+    '<span class="chico">' + (deuda ? 'Se le debe un caso a: ' + escHtml(deuda) : 'Nadie está debiendo: va por turno según el N° de orden.') + ' Si quien pierde el caso es el sugerido, pasa al siguiente. Cuenta desde el ' + inicioConteos.reasignaciones.split('-').reverse().join('/') + '.</span>';
+  caja.hidden = false;
+}
 function escucharMes(mes){
   if (mes === mesEscuchado) return;
   mesEscuchado = mes;
@@ -953,6 +1028,7 @@ function pintarTabla(){
     '<th class="total-col" title="+ entraron / − salieron por reasignación">Reasig.<br>+ / −</th>' +
     '<th class="total-col" style="text-align:left">Día a día · ■ = total semana (TS)</th>';
 
+  pintarLineaReasig();
   const cuerpo = document.getElementById('cuerpoTabla');
   cuerpo.innerHTML = '';
 
@@ -1048,8 +1124,7 @@ function pintarTabla(){
             }
             const etiquetaReasig = a.abogadoActualId ? ` <span style="color:#7A3B57;font-weight:600">🔁 ahora lo ve: ${nombreDe(a.abogadoActualId)} (la asignación sigue contando aquí)</span>` : '';
             if (a.id === idPorReasignar){
-              const opciones = DEFENSORES.filter(x => x.id !== titularActual(a))
-                .map(x => `<option value="${x.id}">${x.nombre}</option>`).join('');
+              const opciones = opcionesReasignar(titularActual(a));
               return `<div class="detalle-item"><span>Reasignar a: <select id="selReasignar-${a.id}" style="font-size:12px;padding:3px 6px;border-radius:5px">${opciones}</select></span><span class="detalle-acciones"><button class="btn-reasignar-si" data-id="${a.id}">Confirmar</button><button class="btn-borrar-no">Cancelar</button></span></div>`;
             }
             if (!cuentaComoNuevo(a)) return filaDerivada(a, 'detalle-item');
@@ -1108,7 +1183,7 @@ function pintarResultadosBusqueda(){
       return `<div class="resultado-busqueda"><span>¿Borrar el caso del ${a.fecha} (${a.categoria})?</span><span class="detalle-acciones"><button class="btn-borrar-si" data-id="${a.id}">Sí, borrar</button><button class="btn-borrar-no">Cancelar</button></span></div>`;
     }
     if (a.id === idPorReasignar){
-      const opciones = DEFENSORES.filter(x => x.id !== titularActual(a)).map(x => `<option value="${x.id}">${x.nombre}</option>`).join('');
+      const opciones = opcionesReasignar(titularActual(a));
       return `<div class="resultado-busqueda"><span>Reasignar a: <select id="selReasignar-${a.id}" style="font-size:12px;padding:3px 6px;border-radius:5px">${opciones}</select></span><span class="detalle-acciones"><button class="btn-reasignar-si" data-id="${a.id}">Confirmar</button><button class="btn-borrar-no">Cancelar</button></span></div>`;
     }
     if (!cuentaComoNuevo(a)) return filaDerivada(a, 'resultado-busqueda');
@@ -1617,12 +1692,20 @@ document.getElementById('btnRegistrarReasig').addEventListener('click', () => {
   ['reUsuario', 'reCarpeta', 'reNota'].forEach(i => document.getElementById(i).value = '');
   document.getElementById('reDe').value = '';
   document.getElementById('reA').value = '';
+  document.getElementById('sugerenciaReA').textContent = '';
   document.getElementById('avisoReasig').style.display = 'none';
   document.getElementById('confirmacionReasig').style.display = 'none';
   document.getElementById('btnGuardarReasig').disabled = false;
   document.getElementById('fondoReasig').hidden = false;
 });
 document.getElementById('btnCancelarReasig').addEventListener('click', cerrarReasig);
+document.getElementById('reDe').addEventListener('change', () => {
+  const de = document.getElementById('reDe').value, info = document.getElementById('sugerenciaReA');
+  if (!de){ info.textContent = ''; return; }
+  const s = sugerenciaArea(de);
+  if (s.id){ document.getElementById('reA').value = s.id; info.textContent = 'Sugerido: ' + nombreDe(s.id) + ' (' + s.motivo + '). Puedes elegir a otro.'; }
+  else info.textContent = 'No hay a quién sugerir: elige a mano.';
+});
 document.getElementById('fondoReasig').addEventListener('click', e => { if (e.target.id === 'fondoReasig') cerrarReasig(); });
 document.getElementById('btnGuardarReasig').addEventListener('click', () => {
   const de = document.getElementById('reDe').value, a = document.getElementById('reA').value;
@@ -1783,6 +1866,7 @@ onAuthStateChanged(auth, async user => {
     usuario = null;
     if (cortarAsig) cortarAsig();
     if (cortarReasig) cortarReasig();
+    if (cortarHistorial){ cortarHistorial(); cortarHistorial = null; } historialReasig = [];
     mesEscuchado = null;
     document.getElementById('app').hidden = true;
     document.getElementById('pantallaLogin').hidden = false;
@@ -1828,6 +1912,7 @@ onAuthStateChanged(auth, async user => {
     let areaInicial = 'Asistencia Legal';
     try { const g = localStorage.getItem('megaalegra-area'); if (g && AREAS[g]) areaInicial = g; } catch (e) {}
     if (!areaInicialElegida && (usuario.area || '').toLowerCase().startsWith('victima')) areaInicial = 'Defensa de Víctimas';
+    escucharHistorialReasig();
     await cambiarArea(areaInicial);
 
     document.body.classList.toggle('solo-lectura', usuario.rol !== 'abogado');

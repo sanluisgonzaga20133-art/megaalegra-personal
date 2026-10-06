@@ -1046,7 +1046,7 @@ function referenciaAutomatica(){
   if (origen === 'Mesa de partes virtual') $('fCodigo').focus();
 }
 $('fFecha').addEventListener('change', referenciaAutomatica);
-opcionesSimples($('optResultado'), RESULTADOS_CAMBIO, v => { resultadoCambio = v; actualizarAbogadoLabel(); });
+opcionesSimples($('optResultado'), RESULTADOS_CAMBIO, v => { resultadoCambio = v; actualizarAbogadoLabel(); sugerirAbogadoCambio(); });
 $('optPrioridad').onclick = e => {
   const o = e.target.closest('.opcion'); if (!o) return; prioridad = o.dataset.v; marcar($('optPrioridad'), prioridad);
   if (!$('bloqueAsistente').hidden && !asistenteManual) sugerirAsistente();
@@ -1077,6 +1077,65 @@ function llenarMaterias(valor){
   $('fMateria').value = !valor ? '' : existe ? valor : 'Otra';
   $('fMateriaOtra').value = valor && !existe ? valor : '';
   $('fMateriaOtra').hidden = $('fMateria').value !== 'Otra';
+}
+// ---------- Sugerencia de reasignación: primero compensación, si nadie debe, turno (no se reinicia por mes) ----------
+// historial: todas las reasignaciones; lista: defensores activos del área en el orden de la Agenda (N° de orden).
+// Quien perdió un caso (−1) sin compensar recibe primero (el más antiguo primero); nunca el que pierde el caso.
+// El Coordinador no entra en nada; quien está de licencia se salta (conserva su deuda). Las derivaciones no cuentan.
+function sugerenciaReasignacion(historial, lista, pierdeId, nota){
+  const ids = new Set(lista.map(d => d.id));
+  const esCoord = id => { const d = lista.find(x => x.id === id); return !!d && /coordinador/i.test(nota(d)); };
+  const momento = r => r.creadoEnMs || (r.creadoEn && r.creadoEn.seconds ? r.creadoEn.seconds * 1000 : 0);
+  const eventos = historial.filter(r => r.aId && r.deId && (ids.has(r.aId) || ids.has(r.deId)))
+    .sort((a, b) => (a.fecha || '').localeCompare(b.fecha || '') || momento(a) - momento(b));
+  const deudas = {};
+  let ultimoTurno = null;
+  eventos.forEach(r => {
+    if (deudas[r.aId] && deudas[r.aId].length) deudas[r.aId].shift();          // se le compensa
+    else if (ids.has(r.aId) && !esCoord(r.aId)) ultimoTurno = r.aId;           // lo recibió por turno
+    if (ids.has(r.deId) && !esCoord(r.deId)) (deudas[r.deId] = deudas[r.deId] || []).push(r.fecha); // queda debiéndosele
+  });
+  const dmy = iso => iso ? iso.slice(8, 10) + '/' + iso.slice(5, 7) + '/' + iso.slice(0, 4) : '';
+  const pendientes = lista.filter(d => deudas[d.id] && deudas[d.id].length)
+    .map(d => ({ id: d.id, nombre: d.nombre, n: deudas[d.id].length, desde: dmy(deudas[d.id][0]) }))
+    .sort((a, b) => deudas[a.id][0].localeCompare(deudas[b.id][0]));
+  const elegibles = lista.filter(d => d.id !== pierdeId && !/coordinador|licencia/i.test(nota(d)));
+  const deben = elegibles.filter(d => deudas[d.id] && deudas[d.id].length)
+    .sort((a, b) => deudas[a.id][0].localeCompare(deudas[b.id][0]) || lista.indexOf(a) - lista.indexOf(b));
+  if (deben.length) return { id: deben[0].id, motivo: 'compensación: perdió un caso el ' + dmy(deudas[deben[0].id][0]), pendientes };
+  const pos = lista.findIndex(d => d.id === ultimoTurno);
+  for (let i = 1; i <= lista.length; i++){
+    const d = lista[(pos + i) % lista.length];
+    if (elegibles.includes(d)) return { id: d.id, motivo: 'turno', pendientes };
+  }
+  return { id: null, motivo: '', pendientes };
+}
+// Fecha de inicio de los conteos rotativos (la fija el administrador en Personal y permisos).
+// Si todavía no se puede leer, se usa la fecha en que se activó (lo anterior eran pruebas).
+const INICIO_CONTEO_PREDETERMINADO = '2026-10-06';
+async function leerInicioConteos(){
+  try {
+    const s = await getDoc(doc(db, 'configuracion', 'conteos'));
+    const c = s.exists() ? s.data() : {};
+    return { reasignaciones: c.inicioReasignaciones || INICIO_CONTEO_PREDETERMINADO, opiniones: c.inicioOpiniones || INICIO_CONTEO_PREDETERMINADO };
+  } catch (e){ console.warn('No se pudo leer la fecha de inicio de los conteos', e); return { reasignaciones: INICIO_CONTEO_PREDETERMINADO, opiniones: INICIO_CONTEO_PREDETERMINADO }; }
+}
+const AYUDA_ABOGADO = 'El teléfono y el correo del abogado se completan solos.';
+// Al registrar un cambio de abogado que procede, el abogado que queda a cargo viene sugerido (se puede cambiar)
+async function sugerirAbogadoCambio(){
+  const ayuda = $('ayudaAbogado');
+  const tipo = modo === 'antecedente' ? $('fTipoDoc').value : '';
+  if (tipo !== 'Solicitud de cambio de abogado' || resultadoCambio !== 'Procede (reasignado)' || !padre || editandoId){ ayuda.textContent = AYUDA_ABOGADO; return; }
+  try {
+    const inicio = (await leerInicioConteos()).reasignaciones;
+    const historial = (await getDocs(collection(db, 'reasignaciones'))).docs.map(d => ({ id: d.id, ...d.data() })).filter(r => (r.fecha || '') >= inicio);
+    const area = padre.area || $('fArea').value;
+    const lista = DEFENSORES.filter(d => d.area === area);
+    const s = sugerenciaReasignacion(historial, lista, padre.abogadoActualId || padre.abogadoId, d => d.notas || '');
+    if (!s.id){ ayuda.textContent = 'No hay a quién sugerir: elige a mano.'; return; }
+    $('fAbogado').value = s.id;
+    ayuda.textContent = 'Sugerido: ' + (lista.find(d => d.id === s.id) || {}).nombre + ' (' + s.motivo + '). Puedes elegir a otro.';
+  } catch (err){ console.error(err); ayuda.textContent = AYUDA_ABOGADO; }
 }
 function llenarAbogados(valor){
   const area = $('fArea').value;
@@ -1269,6 +1328,7 @@ function limpiarForm(){
   $('fFecha').value = hoyIso();
   $('fArea').value = 'Asistencia Legal';
   $('fTipoDoc').value = TIPOS_DOC[0];
+  $('ayudaAbogado').textContent = AYUDA_ABOGADO;
   $('fRespuesta').value = ''; $('fDiligencia').value = ''; $('fPlazo').value = '';
   $('fDerivaTipo').value = ''; $('fDerivaMotivo').value = ''; $('fDerivaMotivoOtro').value = ''; $('fDerivaMotivoOtro').hidden = true;
   $('fDiligenciaOtra').hidden = true; $('bloquePlazoOtro').hidden = true;
