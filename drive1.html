@@ -298,11 +298,11 @@
   <div class="tabla-wrap">
     <table>
       <thead><tr>
-        <th>N°</th><th>Fecha</th><th>Origen</th><th>Documento de referencia</th><th>N° doc.</th>
+        <th>N°</th><th class="solo-abogado">Acciones</th><th>Fecha</th><th>Origen</th><th>Documento de referencia</th><th>N° doc.</th>
         <th>Usuario</th><th>Abogado</th><th>Teléfono</th><th>Correo</th><th>Materia o delito</th>
         <th>N° carpeta</th><th>Diligencia o audiencia</th><th>Estado del caso</th>
         <th class="verde">Proveído</th><th class="verde">Memo</th><th class="verde">Oficio / Carta</th>
-        <th>Dirigido a</th><th>Plazo</th><th>Supervisión</th><th>No mostrar en app pública</th><th class="solo-abogado">Acciones</th>
+        <th>Dirigido a</th><th>Plazo</th><th>Supervisión</th><th>No mostrar en app pública</th>
       </tr></thead>
       <tbody id="cuerpo"></tbody>
     </table>
@@ -391,9 +391,14 @@
       <select id="fRespuesta"></select>
     </div>
     <div class="bloque" id="bloqueDevolucion" hidden>
-      <label class="campo" for="fDistrital">Dirección Distrital a la que corresponde <span class="obl">*</span></label>
-      <input type="text" id="fDistrital" class="may" placeholder="Ej. LIMA NORTE">
-      <div class="ayuda">En el Drive 2 esto le restará 1 al defensor (lo haremos en la parte 2).</div>
+      <label class="campo" for="fDerivaTipo">Se deriva a <span class="obl">*</span></label>
+      <select id="fDerivaTipo"><option value="">— Elegir —</option><option>Otra Dirección Distrital</option><option>Otra institución</option></select>
+      <label class="campo" for="fDistrital">Nombre de la Dirección Distrital o institución <span class="obl">*</span></label>
+      <input type="text" id="fDistrital" class="may" placeholder="Ej. LIMA NORTE o MINISTERIO PÚBLICO">
+      <label class="campo" for="fDerivaMotivo">Motivo <span class="obl">*</span></label>
+      <select id="fDerivaMotivo"><option value="">— Elegir —</option><option>Territorio</option><option>Materia</option><option value="Otro">Otro (escribir)</option></select>
+      <input type="text" id="fDerivaMotivoOtro" class="may" placeholder="Escribe el motivo" aria-label="Otro motivo" hidden style="margin-top:6px">
+      <div class="ayuda">En la Agenda (Drive 2) el caso deja de contar como caso nuevo del defensor y se ve tachado: "Derivado a …".</div>
     </div>
     <div class="bloque" id="bloqueCambio" hidden>
       <label class="campo">Resultado de la solicitud de cambio <span class="obl">*</span></label>
@@ -519,7 +524,13 @@ const COL = 'casos'; // colección privada del Drive 1 (ya permitida en las regl
 
 // ---------------- Listas ----------------
 const ORIGENES = ['Mesa de partes virtual', 'Correo electrónico', 'Correo Fono Alegra', 'Presencial (formato)'];
-const TIPOS_DOC = ['Informe del defensor', 'Devolución a otra Dirección Distrital', 'Solicitud de cambio de abogado',
+// Derivación (antes "Devolución a otra Dirección Distrital"): se reconocen los dos nombres
+const TIPO_DERIVACION = 'Derivación (devuelto a otra distrital o institución)';
+const TIPO_DEVOLUCION_ANTIGUO = 'Devolución a otra Dirección Distrital';
+function esDerivacion(t){ return t === TIPO_DERIVACION || t === TIPO_DEVOLUCION_ANTIGUO; }
+// Texto de destino: "DIRECCIÓN DISTRITAL LIMA NORTE" o el nombre de la institución (las antiguas eran distritales)
+function destinoDerivacion(r){ return (r.derivaTipo === 'Otra institución' ? '' : 'DIRECCIÓN DISTRITAL ') + may(r.distrital || 'sin nombre'); }
+const TIPOS_DOC = ['Informe del defensor', TIPO_DERIVACION, 'Solicitud de cambio de abogado',
   'Solicitud de nueva opinión', 'Otro documento'];
 const RESPUESTAS = ['Usuario no contesta', 'No desea patrocinio', 'Solicita oficiar a otra institución', 'Caso atendido',
   'Informa estado del caso', 'Caso sin solución (absuelto)', 'Otro'];
@@ -699,11 +710,23 @@ async function convertirDevolucionesViejas(){
       const r = d.data();
       if (!r.casoId) continue;
       const distrital = (r.destino || '').replace(/^OTRA DISTRITAL:\s*/, '') || ((cache.get(d.id) || {}).distrital || '');
-      await marcarDerivacion(r.casoId, d.id, distrital, r.fecha);
+      await marcarDerivacion(r.casoId, d.id, { ...(cache.get(d.id) || {}), distrital, fecha: r.fecha, usuario: r.usuario || '' });
       await deleteDoc(d.ref);
       n++;
     }
     if (n) avisar(n + (n === 1 ? ' devolución antigua pasó' : ' devoluciones antiguas pasaron') + ' a "Derivado a …" en la Agenda.', 6000);
+    // Derivaciones ya marcadas sin usuario, destino o motivo: se completan desde el Drive 1 (para el Excel de la Agenda)
+    const derivs = await getDocs(query(collection(db, COL), where('tipoDoc', 'in', [TIPO_DERIVACION, TIPO_DEVOLUCION_ANTIGUO])));
+    for (const d of derivs.docs){
+      const r = d.data();
+      if (!r.padreId) continue;
+      const p = cache.get(r.padreId) || (await getDoc(doc(db, COL, r.padreId))).data() || {};
+      const idA = idAsignacion({ id: r.padreId, ...p });
+      const a = await getDoc(doc(db, 'asignaciones', idA));
+      if (!a.exists() || (a.data().derivadoId && a.data().derivadoId !== d.id)) continue;
+      if (a.data().derivadoId === d.id && a.data().derivadoTipo && a.data().derivadoUsuario !== undefined) continue;
+      await marcarDerivacion(idA, d.id, { ...r, usuario: p.usuario || r.usuario || '' });
+    }
   } catch (err){ console.error('No se pudieron convertir las devoluciones antiguas', err); devolucionesConvertidas = false; }
 }
 function cargarTodos(){
@@ -837,6 +860,7 @@ function pintar(){
 
     return `<tr id="fila-${r.id}" class="${clases.join(' ')}">
       <td class="num">${num[r.id] || ''}</td>
+      <td class="solo-abogado">${acciones}</td>
       <td>${celdaFecha}${prioridad}${r.porCompletar ? '<span class="etiqueta-completar">Por completar</span>' : ''}</td>
       <td>${esc(r.origen) || (r.turno ? '<span class="falta">Falta el medio</span>' : '')}${r.turno ? `<span class="chico">${esc(r.turno)}</span>` : ''}</td>
       <td>${esc(r.codigo)}${tipo}</td>
@@ -856,7 +880,6 @@ function pintar(){
       <td>${plazo}</td>
       <td>${sup}</td>
       <td style="text-align:center">${esAbogado ? `<input type="checkbox" data-ocultar="${r.id}" ${r.ocultarPublico ? 'checked' : ''} aria-label="No mostrar en app pública">` : (r.ocultarPublico ? '✓' : '')}</td>
-      <td class="solo-abogado">${acciones}</td>
     </tr>`;
   }).join('');
 
@@ -917,7 +940,7 @@ async function borrar(id){
       // Si era una devolución o un cambio de abogado, también sale su movimiento de la Agenda
       if (await existe('reasignaciones', id)) await deleteDoc(doc(db, 'reasignaciones', id));
       // Si era una devolución (derivación), el caso vuelve a contar en la Agenda
-      if (r.tipoDoc === TIPO_DEVOLUCION) await quitarDerivacion(idAsignacion(cache.get(r.padreId) || { id: r.padreId }), id);
+      if (esDerivacion(r.tipoDoc)) await quitarDerivacion(idAsignacion(cache.get(r.padreId) || { id: r.padreId }), id);
       await recalcularEstado(r.padreId);
     } else if (r){
       // Caso nuevo: sale también de la Agenda (con sus reasignaciones)
@@ -935,7 +958,8 @@ async function borrar(id){
 function textoEstado(r){
   switch (r.tipoDoc){
     case 'Informe del defensor': return may(r.respuesta);
-    case 'Devolución a otra Dirección Distrital': return 'DEVUELTO – ' + may(r.distrital);
+    case TIPO_DEVOLUCION_ANTIGUO: return 'DEVUELTO – ' + may(r.distrital);
+    case TIPO_DERIVACION: return 'DERIVADO A ' + destinoDerivacion(r);
     case 'Solicitud de cambio de abogado': return 'CAMBIO DE ABOGADO: ' + may(r.resultadoCambio);
     case 'Solicitud de nueva opinión': return 'EN ' + ordinal(r.opinionNum || 2) + ' OPINIÓN';
     default: return '';
@@ -1038,6 +1062,7 @@ $('fDirigido').onchange = () => $('fDirigidoOtro').hidden = !$('fDirigido').valu
 $('fMateria').onchange = () => $('fMateriaOtra').hidden = $('fMateria').value !== 'Otra';
 $('fArea').onchange = () => { llenarMaterias(); llenarAbogados(); };
 $('fTipoDoc').onchange = actualizarBloquesTipo;
+$('fDerivaMotivo').onchange = () => { $('fDerivaMotivoOtro').hidden = $('fDerivaMotivo').value !== 'Otro'; if (!$('fDerivaMotivoOtro').hidden) $('fDerivaMotivoOtro').focus(); };
 $('fNoHacer').onchange = () => { if ($('fNoHacer').checked) ['fHacerMemo', 'fHacerOficio', 'fHacerCarta'].forEach(i => $(i).checked = false); actualizarBloqueAsistente(); };
 ['fHacerMemo', 'fHacerOficio', 'fHacerCarta'].forEach(i => $(i).addEventListener('change', () => { if ($(i).checked) $('fNoHacer').checked = false; actualizarBloqueAsistente(); }));
 
@@ -1169,7 +1194,7 @@ function ponerModo(m){
 function actualizarBloquesTipo(){
   const t = modo === 'antecedente' ? $('fTipoDoc').value : '';
   $('bloqueInforme').hidden = t !== 'Informe del defensor';
-  $('bloqueDevolucion').hidden = t !== 'Devolución a otra Dirección Distrital';
+  $('bloqueDevolucion').hidden = !esDerivacion(t);
   $('bloqueCambio').hidden = t !== 'Solicitud de cambio de abogado';
   $('bloqueOpinion').hidden = t !== 'Solicitud de nueva opinión';
   if (t === 'Solicitud de nueva opinión') calcularOpinion();
@@ -1245,6 +1270,7 @@ function limpiarForm(){
   $('fArea').value = 'Asistencia Legal';
   $('fTipoDoc').value = TIPOS_DOC[0];
   $('fRespuesta').value = ''; $('fDiligencia').value = ''; $('fPlazo').value = '';
+  $('fDerivaTipo').value = ''; $('fDerivaMotivo').value = ''; $('fDerivaMotivoOtro').value = ''; $('fDerivaMotivoOtro').hidden = true;
   $('fDiligenciaOtra').hidden = true; $('bloquePlazoOtro').hidden = true;
   marcar($('optOrigen'), ''); marcar($('optResultado'), ''); marcar($('optPrioridad'), 'normal');
   llenarMaterias(); llenarAbogados(); llenarDirigido();
@@ -1272,7 +1298,7 @@ function abrirForm({ editarId = null, padreId = null } = {}){
     ponerModo(r.padreId ? 'antecedente' : 'nuevo');
     if (r.padreId){
       const p = cache.get(r.padreId);
-      $('fTipoDoc').value = r.tipoDoc;
+      $('fTipoDoc').value = esDerivacion(r.tipoDoc) ? TIPO_DERIVACION : r.tipoDoc;
       if (p) elegirPadre(p); else { padre = { id: r.padreId, codigo: r.padreCodigo, usuario: r.padreUsuario }; $('buscadorPadre').hidden = true; }
     }
     $('fFecha').value = r.fecha; $('fNumDoc').value = r.numDoc || ''; $('fCodigo').value = r.codigo || '';
@@ -1280,6 +1306,12 @@ function abrirForm({ editarId = null, padreId = null } = {}){
     $('fUsuario').value = r.usuario || ''; $('fArea').value = r.area || 'Asistencia Legal'; $('fCarpeta').value = r.carpeta || '';
     llenarMaterias(r.materia); llenarAbogados(r.abogadoId);
     $('fRespuesta').value = r.respuesta || ''; $('fDistrital').value = r.distrital || ''; $('fResumen').value = r.resumen || '';
+    if (esDerivacion(r.tipoDoc)){
+      $('fDerivaTipo').value = r.derivaTipo || 'Otra Dirección Distrital';
+      const mot = r.derivaMotivo || '', esOtro = !!mot && !['Territorio', 'Materia'].includes(mot);
+      $('fDerivaMotivo').value = esOtro ? 'Otro' : mot;
+      $('fDerivaMotivoOtro').value = esOtro ? mot.replace(/^OTRO:s*/i, '') : ''; $('fDerivaMotivoOtro').hidden = !esOtro;
+    }
     resultadoCambio = r.resultadoCambio || ''; marcar($('optResultado'), resultadoCambio);
     const dilExiste = DILIGENCIAS.includes(r.diligencia);
     $('fDiligencia').value = !r.diligencia ? '' : dilExiste ? r.diligencia : 'Otra';
@@ -1361,16 +1393,18 @@ async function sincronizarAgenda(id, previo, datos){
 }
 // Devolución a otra distrital o institución = DERIVACIÓN: no es reasignación (no va en Reasig. ni da −1);
 // el caso queda marcado "Derivado a …" en la Agenda y deja de contar como caso nuevo del defensor.
-const TIPO_DEVOLUCION = 'Devolución a otra Dirección Distrital';
-async function marcarDerivacion(idA, idDev, distrital, fecha){
+// info: { distrital, derivaTipo, derivaMotivo, fecha, usuario } (los datos de la derivación en el Drive 1)
+async function marcarDerivacion(idA, idDev, info){
   if (!(await existe('asignaciones', idA))) return;
-  await updateDoc(doc(db, 'asignaciones', idA), { derivadoA: distrital || 'OTRA DEPENDENCIA', derivadoId: idDev, derivadoFecha: fecha || '' });
+  await updateDoc(doc(db, 'asignaciones', idA), { derivadoA: destinoDerivacion(info), derivadoId: idDev, derivadoFecha: info.fecha || '',
+    derivadoTipo: info.derivaTipo || 'Otra Dirección Distrital', derivadoMotivo: info.derivaMotivo || '', derivadoUsuario: info.usuario || '' });
 }
 // Quita la marca solo si la puso esta misma devolución (el caso vuelve a contar)
 async function quitarDerivacion(idA, idDev){
   const snap = await getDoc(doc(db, 'asignaciones', idA));
   if (snap.exists() && snap.data().derivadoId === idDev)
-    await updateDoc(snap.ref, { derivadoA: deleteField(), derivadoId: deleteField(), derivadoFecha: deleteField() });
+    await updateDoc(snap.ref, { derivadoA: deleteField(), derivadoId: deleteField(), derivadoFecha: deleteField(),
+      derivadoTipo: deleteField(), derivadoMotivo: deleteField(), derivadoUsuario: deleteField() });
 }
 // Cambio de abogado que procede (−1 / +1) → movimiento en la Agenda; devolución → derivación
 async function sincronizarMovimiento(id, datos, previo){
@@ -1379,9 +1413,9 @@ async function sincronizarMovimiento(id, datos, previo){
     const anterior = (cache.get(id) || {}).abogadoAnteriorId || datos.abogadoAnteriorId || padre.abogadoId;
     const base = { fecha: datos.fecha, mes: datos.mes, casoId: idAsignacion(padre), area: padre.area || '',
       usuario: padre.usuario || '', carpeta: padre.carpeta || '', nota: '', creadoPor: usuario.correo, creadoEn: serverTimestamp() };
-    if (previo && previo.tipoDoc === TIPO_DEVOLUCION && datos.tipoDoc !== TIPO_DEVOLUCION) await quitarDerivacion(idAsignacion(padre), id);
-    if (datos.tipoDoc === TIPO_DEVOLUCION){
-      await marcarDerivacion(idAsignacion(padre), id, datos.distrital, datos.fecha);
+    if (previo && esDerivacion(previo.tipoDoc) && !esDerivacion(datos.tipoDoc)) await quitarDerivacion(idAsignacion(padre), id);
+    if (esDerivacion(datos.tipoDoc)){
+      await marcarDerivacion(idAsignacion(padre), id, { ...datos, usuario: padre.usuario || datos.usuario || '' });
       if (await existe('reasignaciones', id)) await deleteDoc(ref); // −1 viejo de antes de este cambio
     } else if (datos.tipoDoc === 'Solicitud de cambio de abogado' && datos.resultadoCambio === 'Procede (reasignado)'){
       await setDoc(ref, { ...base, deId: anterior, aId: datos.abogadoId,
@@ -1420,7 +1454,12 @@ $('btnGuardarForm').onclick = async () => {
   if (!esAnt && !materia) return error('Elige la materia o delito.');
   if (!abog) return error('Elige el abogado.');
   if (tipoDoc === 'Informe del defensor' && !$('fRespuesta').value) return error('Elige la respuesta del defensor.');
-  if (tipoDoc === 'Devolución a otra Dirección Distrital' && !$('fDistrital').value.trim()) return error('Escribe a qué Dirección Distrital corresponde.');
+  if (esDerivacion(tipoDoc)){
+    if (!$('fDerivaTipo').value) return error('Elige si se deriva a otra Dirección Distrital o a otra institución.');
+    if (!$('fDistrital').value.trim()) return error('Escribe el nombre de la Dirección Distrital o institución.');
+    if (!$('fDerivaMotivo').value) return error('Elige el motivo de la derivación.');
+    if ($('fDerivaMotivo').value === 'Otro' && !$('fDerivaMotivoOtro').value.trim()) return error('Escribe el motivo de la derivación.');
+  }
   if (tipoDoc === 'Solicitud de cambio de abogado' && !resultadoCambio) return error('Elige el resultado de la solicitud de cambio.');
   if ($('fPlazo').value === 'otro' && !$('fPlazoFecha').value) return error('Elige la fecha del plazo.');
 
@@ -1463,7 +1502,9 @@ $('btnGuardarForm').onclick = async () => {
       padreId: padre.id, padreCodigo: padre.codigo || '', padreUsuario: padre.usuario || '',
       usuario: padre.usuario || '', area: padre.area || $('fArea').value, carpeta: padre.carpeta || '', materia: padre.materia || '',
       respuesta: tipoDoc === 'Informe del defensor' ? $('fRespuesta').value : '',
-      distrital: tipoDoc === 'Devolución a otra Dirección Distrital' ? may($('fDistrital').value) : '',
+      distrital: esDerivacion(tipoDoc) ? may($('fDistrital').value) : '',
+      derivaTipo: esDerivacion(tipoDoc) ? $('fDerivaTipo').value : '',
+      derivaMotivo: !esDerivacion(tipoDoc) ? '' : $('fDerivaMotivo').value === 'Otro' ? 'OTRO: ' + may($('fDerivaMotivoOtro').value) : $('fDerivaMotivo').value,
       resultadoCambio: tipoDoc === 'Solicitud de cambio de abogado' ? resultadoCambio : '',
       opinionNum: tipoDoc === 'Solicitud de nueva opinión' ? opinionCalculada : null,
       resumen: may($('fResumen').value)
@@ -1544,7 +1585,7 @@ $('btnDescargar').onclick = async () => {
       'Tipo de documento': r.tipoDoc || '', 'Origen': r.origen, 'Documento de referencia': r.codigo, 'N° doc.': r.numDoc,
       'Usuario': r.usuario, 'Abogado': r.abogadoNombre, 'Teléfono': r.abogadoCelular, 'Correo': r.abogadoCorreo,
       'Materia o delito': r.materia, 'N° carpeta': r.carpeta,
-      'Respuesta / resultado': r.respuesta || r.resultadoCambio || (r.distrital ? 'CORRESPONDE A ' + r.distrital : '') || (r.opinionNum ? r.opinionNum + 'ª OPINIÓN' : ''),
+      'Respuesta / resultado': r.respuesta || r.resultadoCambio || (esDerivacion(r.tipoDoc) ? 'DERIVADO A ' + destinoDerivacion(r) + (r.derivaMotivo ? ' · MOTIVO: ' + r.derivaMotivo : '') : '') || (r.opinionNum ? r.opinionNum + 'ª OPINIÓN' : ''),
       'Resumen': r.resumen || '', 'Estado del caso': r.estado || '',
       'Diligencia': r.diligencia, 'Fecha diligencia': fechaCorta(r.dilFecha), 'Hora': r.dilHora,
       'Prioridad': (r.prioridad || 'normal').toUpperCase(),
@@ -1633,7 +1674,8 @@ const VENTANAS = [
   { tipo: 'sup', titulo: 'Supervisiones', singular: 'atrasada', plural: 'atrasadas' },
   { tipo: 'memo', titulo: 'Pendientes de los asistentes', singular: 'atrasado', plural: 'atrasados' }
 ];
-const minimizadas = new Set(), porParpadear = new Set();
+// Cerradas (✕): no se ven hasta la próxima hora de reapertura, algo urgente o recargar la página
+const minimizadas = new Set(), cerradas = new Set(), porParpadear = new Set();
 function pintarVentanitas(items){
   // Se ven siempre que haya pendientes; "Avisos apagados" solo quita que se reabran solas, el parpadeo y la felicitación
   const caja = $('ventanitas');
@@ -1642,11 +1684,12 @@ function pintarVentanitas(items){
   caja.querySelectorAll('[data-ventana]').forEach(s => { scroll[s.dataset.ventana] = s.querySelector('.cuerpo').scrollTop; });
   caja.innerHTML = VENTANAS.map(v => {
     const lista = items.filter(i => i.tipo === v.tipo);
-    if (!lista.length) return '';
+    if (!lista.length || cerradas.has(v.tipo)) return '';
     const malos = lista.filter(i => i.grave).length, mini = minimizadas.has(v.tipo);
     return `<section class="ventanita ${malos ? 'grave' : ''}" data-ventana="${v.tipo}" aria-label="${v.titulo}">
       <div class="cab"><button class="titulo-v" data-alternar="${v.tipo}" aria-expanded="${!mini}">${v.titulo} <b>${lista.length}</b>${malos ? ' <span class="malos">· ' + malos + ' ' + (malos === 1 ? v.singular : v.plural) + '</span>' : ''}</button>
-      <button class="min" data-alternar="${v.tipo}" aria-label="${mini ? 'Abrir' : 'Minimizar'} ${v.titulo}" title="${mini ? 'Abrir' : 'Minimizar'}">${mini ? '+' : '—'}</button></div>
+      <button class="min" data-alternar="${v.tipo}" aria-label="${mini ? 'Abrir' : 'Minimizar'} ${v.titulo}" title="${mini ? 'Abrir' : 'Minimizar'}">${mini ? '+' : '—'}</button>
+      <button class="min" data-cerrar-v="${v.tipo}" aria-label="Cerrar ${v.titulo}" title="Cerrar (vuelve a las 8:00, 12:00 y 15:00 o si llega algo urgente)">✕</button></div>
       <div class="cuerpo" ${mini ? 'hidden' : ''}>${lista.map(i => {
         const clave = i.tipo + '|' + i.r.id;
         return `<button class="linea-pend ${claseUrgencia(i.r)} ${i.grave ? 'grave' : ''} ${porParpadear.has(clave) ? 'parpadea' : ''}" data-ir="${i.r.id}" title="Ir a la fila">` +
@@ -1658,6 +1701,8 @@ function pintarVentanitas(items){
   caja.hidden = !caja.innerHTML;
 }
 $('ventanitas').addEventListener('click', e => {
+  const c = e.target.closest('[data-cerrar-v]');
+  if (c){ cerradas.add(c.dataset.cerrarV); pintarBarra(); return; }
   const t = e.target.closest('[data-alternar]');
   if (t){
     const tipo = t.dataset.alternar;
@@ -1715,7 +1760,8 @@ function revisarHorario(){
   const tocan = HORAS_AVISO.filter(h => h <= ahora && !horasMostradas.lista.includes(h));
   if (tocan.length){
     horasMostradas.lista.push(...tocan);
-    if (avisoEntradaHecho && avisosActivos()) minimizadas.clear(); // a las 08:00, 12:00 y 15:00 se vuelven a abrir las que tengan pendientes
+    // A las 08:00, 12:00 y 15:00 vuelven las cerradas; las minimizadas se abren si la persona tiene los avisos encendidos
+    if (avisoEntradaHecho){ cerradas.clear(); if (avisosActivos()) minimizadas.clear(); }
   }
   pintarBarra(); // los días de atraso y los plazos cambian con la hora
 }
@@ -1726,6 +1772,7 @@ function avisarUrgentesNuevos(){
     const clave = i.tipo + '|' + i.r.id + '|' + i.r.prioridad;
     if (urgentesAvisados.has(clave)) return;
     urgentesAvisados.add(clave);
+    if (avisoEntradaHecho) cerradas.delete(i.tipo); // lo urgente vuelve a mostrar su ventanita aunque estuviera cerrada
     if (avisoEntradaHecho && avisosActivos()){ minimizadas.delete(i.tipo); porParpadear.add(i.tipo + '|' + i.r.id); }
   });
 }
@@ -1765,7 +1812,7 @@ function detenerAvisos(){
   cortesAvisos.forEach(f => f()); cortesAvisos = [];
   clearInterval(relojAvisos); relojAvisos = null;
   pendMemo.clear(); pendPlazo.clear(); pendSup.clear(); urgentesAvisados.clear();
-  minimizadas.clear(); porParpadear.clear();
+  minimizadas.clear(); cerradas.clear(); porParpadear.clear();
   avisoEntradaHecho = false;
   $('avisosEsquina').innerHTML = ''; $('barraPendientes').hidden = true;
   $('ventanitas').innerHTML = ''; $('ventanitas').hidden = true;

@@ -660,7 +660,7 @@ let idReasigPorBorrar = null;
 // Derivación (devolución a otra distrital o institución, desde el Drive 1): el caso no se asumió y deja de contar como nuevo
 function cuentaComoNuevo(a){ return !a.derivadoA; }
 function filaDerivada(a, clase){
-  return `<div class="${clase} derivado"><span><s>${a.fecha} — ${a.categoria}${a.especifica ? ' (' + a.especifica + ')' : ''} · ${a.origen}</s> <b class="etiqueta-derivado">↪ Derivado a ${escHtml(a.derivadoA)}${a.derivadoFecha ? ' el ' + a.derivadoFecha : ''} · no cuenta</b></span><span class="detalle-acciones"><button class="btn-editar" data-id="${a.id}">✎ Editar</button><button class="btn-borrar" data-id="${a.id}">🗑 Borrar</button></span></div>`;
+  return `<div class="${clase} derivado"><span><s>${a.fecha} — ${a.categoria}${a.especifica ? ' (' + a.especifica + ')' : ''} · ${a.origen}</s> <b class="etiqueta-derivado">↪ Derivado a ${escHtml(a.derivadoA)}${a.derivadoFecha ? ' el ' + a.derivadoFecha : ''} ${a.derivadoMotivo ? ' · motivo: ' + escHtml(a.derivadoMotivo) : ''} · no cuenta</b></span><span class="detalle-acciones"><button class="btn-editar" data-id="${a.id}">✎ Editar</button><button class="btn-borrar" data-id="${a.id}">🗑 Borrar</button></span></div>`;
 }
 function escHtml(s){ return String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c])); }
 function nombreDe(id){ const d = DEFENSORES.find(x => x.id === id); return d ? d.nombre : id; }
@@ -1243,6 +1243,20 @@ document.getElementById('cuerpoTabla').addEventListener('click', function(e){
   }
 });
 
+// Derivaciones del mes (según el mes en que se asignó el caso, que es al que se le resta): no suman a ningún total
+const COL_DERIVADOS = 'Derivados (no suman)';
+function derivadosDelMes(defId){
+  return asignaciones.filter(a => !cuentaComoNuevo(a) && a.fecha.slice(0, 7) === mesElegido() && (defId ? a.defensorId === defId : DEFENSORES.some(d => d.id === a.defensorId)));
+}
+// Hoja de detalle: una fila por caso derivado
+function datosDerivaciones(){
+  return derivadosDelMes().sort((a, b) => a.fecha.localeCompare(b.fecha)).map(a => ({
+    'Fecha de asignación': a.fecha, 'Fecha de derivación': a.derivadoFecha || '', 'Usuario': a.derivadoUsuario || '',
+    'Abogado': nombreDe(a.defensorId), 'Materia': a.especifica || a.categoria || '',
+    'Tipo de destino': a.derivadoTipo || 'Otra Dirección Distrital', 'Derivado a': a.derivadoA || '', 'Motivo': a.derivadoMotivo || ''
+  }));
+}
+const COLUMNAS_DERIVACIONES = ['Fecha de asignación', 'Fecha de derivación', 'Usuario', 'Abogado', 'Materia', 'Tipo de destino', 'Derivado a', 'Motivo'];
 // Mismos datos para la vista previa y para el Excel (lo que ves es lo que se descarga)
 function datosInforme(){
   const filas = DEFENSORES.map(d => {
@@ -1251,10 +1265,11 @@ function datosInforme(){
     categoriasEnColumna().forEach(c => { fila[c] = propias.filter(a => a.categoria === c).length || 0; });
     AREA.totales.forEach(t => { fila[t.nombre] = propias.filter(t.f).length; });
     fila["Total mes"] = propias.length;
+    fila[COL_DERIVADOS] = derivadosDelMes(d.id).length;
     return fila;
   });
   const total = { "Defensor": "TOTAL" };
-  [...categoriasEnColumna(), ...AREA.totales.map(t => t.nombre), "Total mes"].forEach(c => { total[c] = filas.reduce((acc, f) => acc + f[c], 0); });
+  [...categoriasEnColumna(), ...AREA.totales.map(t => t.nombre), "Total mes", COL_DERIVADOS].forEach(c => { total[c] = filas.reduce((acc, f) => acc + f[c], 0); });
   filas.push(total);
   return filas;
 }
@@ -1272,6 +1287,7 @@ function datosPorOrigen(){
     const reasigMes = reasignacionesLog.filter(r => r.aId && r.fecha.slice(0, 7) === mesElegido());
     fila["Reasig. entraron"] = reasigMes.filter(r => r.aId === d.id).length;
     fila["Reasig. salieron"] = reasigMes.filter(r => r.deId === d.id).length;
+    fila[COL_DERIVADOS] = derivadosDelMes(d.id).length;
     return fila;
   });
   const total = { "Defensor": "TOTAL" };
@@ -1281,12 +1297,12 @@ function datosPorOrigen(){
 }
 
 function columnasPorOrigen(){
-  return ["Defensor", ...ORIGENES, "Total", "Reasig. entraron", "Reasig. salieron", ...AREA.casillas.map(k => CASILLAS_TODAS[k].split(' (')[0])];
+  return ["Defensor", ...ORIGENES, "Total", "Reasig. entraron", "Reasig. salieron", COL_DERIVADOS, ...AREA.casillas.map(k => CASILLAS_TODAS[k].split(' (')[0])];
 }
 function tablaHtml(filas, columnas){
   return `<table>
       <thead><tr>${columnas.map(c => `<th>${c}</th>`).join('')}</tr></thead>
-      <tbody>${filas.map(f => `<tr class="${f.Defensor === 'TOTAL' ? 'fila-total' : ''}">${columnas.map(c => `<td class="${c === 'Defensor' ? '' : 'n'}">${f[c]}</td>`).join('')}</tr>`).join('')}</tbody>
+      <tbody>${filas.map(f => `<tr class="${f.Defensor === 'TOTAL' ? 'fila-total' : ''}">${columnas.map(c => `<td class="${c === 'Defensor' ? '' : 'n'}">${escHtml(f[c])}</td>`).join('')}</tr>`).join('')}</tbody>
     </table>`;
 }
 
@@ -1295,6 +1311,7 @@ function descargarExcel(){
   const libro = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(libro, hoja, AREA.corto + ' - ' + etiquetaMes(mesElegido()));
   XLSX.utils.book_append_sheet(libro, XLSX.utils.json_to_sheet(datosPorOrigen()), "Por origen");
+  XLSX.utils.book_append_sheet(libro, XLSX.utils.json_to_sheet(datosDerivaciones(), { header: COLUMNAS_DERIVACIONES }), "Derivaciones");
   XLSX.writeFile(libro, "Asignaciones_" + AREA_NOMBRE.replace(/ /g, '_') + "_" + mesElegido() + ".xlsx");
 }
 document.getElementById('btnDescargar').addEventListener('click', descargarExcel);
@@ -1302,7 +1319,7 @@ document.getElementById('btnDescargarDesdeInforme').addEventListener('click', de
 
 document.getElementById('btnVistaInforme').addEventListener('click', () => {
   const filas = datosInforme();
-  const columnas = ["Defensor", ...categoriasEnColumna(), ...AREA.totales.map(t => t.nombre), "Total mes"];
+  const columnas = ["Defensor", ...categoriasEnColumna(), ...AREA.totales.map(t => t.nombre), "Total mes", COL_DERIVADOS];
   const mes = etiquetaMes(mesElegido());
   document.getElementById('hojaInforme').innerHTML = `
     <h3>Asignaciones — ${AREA_NOMBRE} · Lima Centro</h3>
@@ -1311,7 +1328,9 @@ document.getElementById('btnVistaInforme').addEventListener('click', () => {
     ${tablaHtml(filas, columnas)}
     <p style="font-size:11.5px;font-weight:700;color:var(--gris);margin:18px 0 6px">Hoja 2 — Por origen (casos según la vía por la que llegaron)</p>
     ${tablaHtml(datosPorOrigen(), columnasPorOrigen())}
-    <p style="font-size:11.5px;color:var(--gris);margin:6px 0 0">Las reasignaciones son carga muerta: no suman al Total. En la fila TOTAL, "entraron" y "salieron" dan el mismo número, que es la cantidad de casos reasignados en el mes.</p>`;
+    <p style="font-size:11.5px;color:var(--gris);margin:6px 0 0">Las reasignaciones son carga muerta: no suman al Total. En la fila TOTAL, "entraron" y "salieron" dan el mismo número, que es la cantidad de casos reasignados en el mes. Los derivados a otra distrital o institución tampoco suman.</p>
+    <p style="font-size:11.5px;font-weight:700;color:var(--gris);margin:18px 0 6px">Hoja 3 — Derivaciones (casos asignados este mes que se derivaron y no cuentan)</p>
+    ${datosDerivaciones().length ? tablaHtml(datosDerivaciones(), COLUMNAS_DERIVACIONES) : '<p style="font-size:12px;color:var(--gris)">No hubo derivaciones este mes.</p>'}`;
   document.getElementById('fondoInforme').hidden = false;
 });
 document.getElementById('btnCerrarInforme').addEventListener('click', () => { document.getElementById('fondoInforme').hidden = true; });
