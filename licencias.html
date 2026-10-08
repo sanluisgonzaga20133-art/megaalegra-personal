@@ -111,6 +111,17 @@
       <p id="subtitulo">Quién está de licencia y quiénes lo apoyan</p>
     </header>
 
+    <!-- ===== Carga única desde el Excel del Drive 1 (solo el administrador) ===== -->
+    <section class="caja" id="cajaCarga" hidden style="border-color:var(--dorado)">
+      <h3>Cargar licencias del Excel del Drive 1 (una sola vez)</h3>
+      <p class="ayuda">Tomadas de la pestaña "LICENCIAS DE DEFENSORES". Vienen marcadas las vigentes y las próximas; las pasadas, desmarcadas (márcalas si quieres guardarlas como historial). Las que ya están registradas no se vuelven a cargar. El celular y el correo de los apoyos se toman de Defensores. Las que no tienen apoyo en el Excel quedan "sin apoyo registrado": puedes agregárselo después con Editar.</p>
+      <div class="tabla-wrap" style="margin-bottom:8px"><table>
+        <thead><tr><th>Cargar</th><th>Defensor</th><th>Fechas</th><th>Abogados de apoyo</th><th>Nota</th></tr></thead>
+        <tbody id="cuerpoCarga"></tbody>
+      </table></div>
+      <button class="btn" id="btnCargarExcel">Cargar las marcadas</button>
+    </section>
+
     <!-- ===== Registrar / editar (solo con permiso Editar) ===== -->
     <section class="caja" id="cajaForm" hidden>
       <h3 id="tituloForm">Registrar licencia</h3>
@@ -217,6 +228,7 @@ async function cargarTodo(){
     avisar('No se pudieron leer los motivos (' + (e.code || e.message) + '). ¿Ya se publicaron las reglas nuevas?', 7000);
   }
   pintarLista();
+  pintarCarga();
 }
 const defPorId = id => DEFS.find(d => d.id === id);
 const activos = () => DEFS.filter(d => d.activo !== false);
@@ -407,7 +419,7 @@ function pintarLista(){
         return `<tr>
           <td class="nombre">${esc(l.defensorNombre)}<span class="chico">${esc(l.area || '')}</span></td>
           <td style="white-space:nowrap">${fechaCorta(l.inicio)} al ${fechaCorta(l.fin)}<span class="chico">${dias} día${dias === 1 ? '' : 's'}</span>${cuando}</td>
-          <td><ul class="lista-apoyos">${apoyos || '<li>—</li>'}</ul></td>
+          <td><ul class="lista-apoyos">${apoyos || '<li class="chico">Sin apoyo registrado</li>'}</ul></td>
           <td>${esc((PRIVADO[l.id] || {}).motivo || '') || '<span class="chico">—</span>'}</td>
           ${puedeEditar() ? `<td style="white-space:nowrap"><button class="btn sec chico" data-editar="${esc(l.id)}">Editar</button> <button class="btn sec chico" data-borrar="${esc(l.id)}">Borrar</button></td>` : ''}
         </tr>`; }).join('')}</tbody></table></div>`;
@@ -439,6 +451,76 @@ $('contenido').addEventListener('click', async e => {
     await cargarTodo();
   } catch (err){ error(err); }
 });
+
+// ---------- Carga única desde el Excel del Drive 1 (pestaña "LICENCIAS DE DEFENSORES", 26/09/2026) ----------
+// Solo códigos y fechas (sin teléfonos). Cada una se guarda con el código "excel-fila-N", así no se duplica.
+const CARGA_EXCEL = [
+  { fila: 4, defensorId: "BUSTINZA_ROBLES__MARIA_COQUI", inicio: "2026-10-20", fin: "2026-10-29", apoyoIds: [] },
+  { fila: 5, defensorId: "CHIRA_PAREDES__LUIS_ENRIQUE", inicio: "2026-09-01", fin: "2026-09-30", apoyoIds: ["RAMOS_ANDRADE__ANGEL"] },
+  { fila: 9, defensorId: "FUERTES_FLORES__JULIA_BEATRIZ", inicio: "2026-09-30", fin: "2026-10-29", apoyoIds: [] },
+  { fila: 10, defensorId: "PILARES_FLOREZ__MARITZA_ANGELICA", inicio: "2026-09-11", fin: "2026-09-25", apoyoIds: ["ARCE_VILLAR__CELIA_MARISELA"] },
+  { fila: 11, defensorId: "PRIETO_GALLARDO__VICKY_ROSALINA", inicio: "2026-09-01", fin: "2026-09-30", apoyoIds: ["RAMOS_ANDRADE__ANGEL"] },
+  { fila: 12, defensorId: "QUINTANA_ZAPATA__MYRNA_SORAYA", inicio: "2026-10-12", fin: "2026-10-26", apoyoIds: [] },
+  { fila: 14, defensorId: "SALAS_MACEDO__SANDRA", inicio: "2026-10-12", fin: "2026-10-18", apoyoIds: [] },
+  { fila: 20, defensorId: "ANDIA_CHAVEZ__RUTH_VILMA", inicio: "2026-10-12", fin: "2026-11-03", apoyoIds: [] },
+  { fila: 27, defensorId: "PERCY_HERMAN_AMPUERO_LINARES", inicio: "2026-10-12", fin: "2026-10-19", apoyoIds: [] },
+  { fila: 29, defensorId: "MARIANA_BARBOZA_BECERRA", inicio: "2026-10-08", fin: "2026-10-15", apoyoIds: [] },
+  { fila: 31, defensorId: "LUIS_MARTIN_CHACALTANA_HUASASQUICHE", inicio: "2026-09-28", fin: "2026-10-04", apoyoIds: [] },
+  { fila: 32, defensorId: "ESLEYMAN_JOVANY_CORDOVA_DE_LA_ROSA", inicio: "2026-10-12", fin: "2026-10-18", apoyoIds: [] },
+  { fila: 37, defensorId: "EDUARDO_ALVARO_GUILLEN_RAMOS", inicio: "2026-09-04", fin: "2026-10-04", apoyoIds: ["WILBERT_ELI_GUIZADO_SICOS"] },
+  { fila: 38, defensorId: "WILBERT_ELI_GUIZADO_SICOS", inicio: "2026-09-30", fin: "2026-10-07", apoyoIds: [] },
+  { fila: 39, defensorId: "KATHERINE_HIDALGO_BUSTAMENTE", inicio: "2026-10-02", fin: "2026-10-08", apoyoIds: [] },
+  { fila: 44, defensorId: "JENNY_ROCIO_ORTEGA_OLVEA", inicio: "2026-10-15", fin: "2026-10-22", apoyoIds: [] },
+  { fila: 46, defensorId: "MERY_PAJA_OLVEA", inicio: "2026-09-05", fin: "2026-12-11", apoyoIds: [] },
+  { fila: 48, defensorId: "JOHSSY_LUZ_QUISPE_APONTE", inicio: "2026-10-05", fin: "2026-10-27", apoyoIds: [] },
+  { fila: 49, defensorId: "INGRID_DANIELA_RIVERA_MARTINEZ", inicio: "2026-09-25", fin: "2026-10-07", apoyoIds: ["MILAGROS_DE_LA_CRUZ_CRISOLO"] },
+  { fila: 54, defensorId: "LISSI_INDIRA_TRUJILLO_ROLDAN", inicio: "2026-10-26", fin: "2026-11-22", apoyoIds: [] }
+];
+const idCarga = c => 'excel-fila-' + c.fila;
+// Ya registrada: se cargó antes o el defensor ya tiene una licencia que se cruza con esas fechas
+const yaRegistrada = c => LICENCIAS.find(l => l.id === idCarga(c) || (l.defensorId === c.defensorId && seCruzan(l, c)));
+function pintarCarga(){
+  const filas = CARGA_EXCEL.filter(c => !LICENCIAS.some(l => l.id === idCarga(c)));
+  $('cajaCarga').hidden = !(yo && yo.esAdmin === true) || !filas.some(c => !yaRegistrada(c));
+  if ($('cajaCarga').hidden) return;
+  const hoy = hoyIso(), rotulo = { vigente: 'Vigente', proxima: 'Próxima', pasada: 'Pasada' };
+  $('cuerpoCarga').innerHTML = filas.map(c => {
+    const d = defPorId(c.defensorId) || { nombre: c.defensorId }, ya = yaRegistrada(c), est = estado(c, hoy);
+    const apoyos = c.apoyoIds.map(id => esc(contacto({ id }).nombre)).join(', ') || '<span class="chico">Sin apoyo registrado</span>';
+    const nota = ya ? `Ya registrada (${fechaCorta(ya.inicio)} al ${fechaCorta(ya.fin)}): no se carga` : '';
+    return `<tr data-fila="${c.fila}">
+      <td><input type="checkbox" data-cargar ${ya ? 'disabled' : est !== 'pasada' ? 'checked' : ''} aria-label="Cargar la licencia de ${esc(d.nombre)}"></td>
+      <td class="nombre">${esc(d.nombre)}<span class="chico">${esc(d.area || '')} · fila ${c.fila} del Excel</span></td>
+      <td style="white-space:nowrap">${fechaCorta(c.inicio)} al ${fechaCorta(c.fin)}<span class="etiqueta ${est}">${rotulo[est]}</span></td>
+      <td>${apoyos}</td>
+      <td>${esc(nota)}</td></tr>`;
+  }).join('');
+}
+$('btnCargarExcel').onclick = async () => {
+  const marcadas = [...$('cuerpoCarga').querySelectorAll('[data-cargar]:checked')].map(i => CARGA_EXCEL.find(c => c.fila === Number(i.closest('tr').dataset.fila)));
+  if (!marcadas.length){ avisar('Marca al menos una licencia.'); return; }
+  if (!confirm('¿Cargar ' + marcadas.length + ' licencia(s) del Excel del Drive 1?')) return;
+  $('btnCargarExcel').disabled = true;
+  try {
+    const lote = writeBatch(db), ahora = new Date().toISOString();
+    marcadas.forEach(c => {
+      const d = defPorId(c.defensorId) || {};
+      lote.set(doc(db, 'licencias', idCarga(c)), {
+        defensorId: c.defensorId, defensorNombre: d.nombre || c.defensorId, area: d.area || '', inicio: c.inicio, fin: c.fin,
+        apoyoIds: c.apoyoIds,
+        apoyos: c.apoyoIds.map(id => { const k = contacto({ id }); return { id, nombre: k.nombre, area: k.area, celular: k.celular, correo: k.correo }; }),
+        actualizadoEn: ahora
+      });
+      lote.set(doc(db, 'licenciasPrivado', idCarga(c)), { motivo: '', registradoPor: (yo.nombre || yo.correo) + ' (carga del Excel del Drive 1)', registradoEn: ahora });
+    });
+    await lote.commit();
+    await registrarCambio('Cargó ' + marcadas.length + ' licencias del Excel del Drive 1', 'carga-excel', {},
+      { licencias: marcadas.map(c => (defPorId(c.defensorId) || {}).nombre + ' ' + fechaCorta(c.inicio) + '–' + fechaCorta(c.fin)).join('; ') });
+    avisar('Listo: ' + marcadas.length + ' licencia(s) cargadas.');
+    await cargarTodo();
+  } catch (err){ error(err); }
+  $('btnCargarExcel').disabled = false;
+};
 
 // ---------- Sesión ----------
 $('btnEntrar').onclick = async () => {
