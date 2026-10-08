@@ -171,9 +171,9 @@
     </div>
     <div class="caja" id="cajaSeparar" hidden style="border-color:var(--dorado)">
       <h3>Separar celulares personales (una sola vez)</h3>
-      <p class="ayuda">Estos defensores tienen un número personal en la lista pública. Revisa cada fila: lo de <b>Queda a la vista</b> se sigue mostrando; lo de <b>Pasa a privado</b> solo lo ves tú (columna Celular personal). Corrige lo que haga falta, desmarca a quien no quieras tocar y toca <b>Aplicar</b>. Muente, Ampuero, Illaconza y Erazo publican sus dos números: no aparecen aquí salvo que tengan algo en el campo antiguo de celular personal.</p>
+      <p class="ayuda">Estos defensores tienen un número personal o un campo antiguo de celular en la lista pública; al aplicar, los campos antiguos se borran. Revisa cada fila: lo de <b>Queda a la vista</b> se sigue mostrando; lo de <b>Pasa a privado</b> solo lo ves tú (columna Celular personal). Corrige lo que haga falta, desmarca a quien no quieras tocar y toca <b>Aplicar</b>. Muente, Ampuero, Illaconza y Erazo publican sus dos números: no aparecen aquí salvo que tengan algo en el campo antiguo de celular personal.</p>
       <div class="tabla-wrap" style="max-height:none;margin-bottom:8px"><table>
-        <thead><tr><th>Aplicar</th><th>Defensor</th><th>Hoy se muestra</th><th>Queda a la vista</th><th>Pasa a privado</th></tr></thead>
+        <thead><tr><th>Aplicar</th><th>Defensor</th><th>Hoy se muestra</th><th>Campo antiguo (se borra)</th><th>Queda a la vista</th><th>Pasa a privado</th></tr></thead>
         <tbody id="cuerpoSeparar"></tbody>
       </table></div>
       <button class="btn" id="btnSeparar">Aplicar a los marcados</button>
@@ -232,12 +232,14 @@ const DRIVES = [
   ['drive1', 'Drive 1', ['sin', 'ver', 'memos', 'editar']],
   ['drive2', 'Drive 2', ['sin', 'ver', 'editar']],
   ['drive3', 'Drive 3 · Fono Alegra', ['sin', 'ver', 'editar']],
-  ['drive4', 'Drive 4 · Consolidación', ['sin', 'ver', 'editar']]
+  ['drive4', 'Drive 4 · Consolidación', ['sin', 'ver', 'editar']],
+  // Licencias: cerrada por defecto como los drives. Quien antes tenía la casilla "Licencias" ya está en Editar.
+  ['licencias', 'Licencias', ['sin', 'ver', 'editar']]
 ];
 const NIVELES = { sin: 'Sin acceso', ver: 'Ver', memos: 'Anotar N° de memos, oficios y cartas', editar: 'Editar' };
 function nivelPorRol(p, d){ return 'sin'; } // todo cerrado salvo autorización
 const SECCIONES = [
-  ['licencias', 'Licencias'], ['turnos', 'Turnos'], ['teletrabajo', 'Teletrabajo'],
+  ['turnos', 'Turnos'], ['teletrabajo', 'Teletrabajo'],
   ['defensoriaPueblo', 'Defensoría'], ['conadis', 'CONADIS'], ['defensores', 'Defensores']
 ];
 
@@ -322,7 +324,7 @@ let abiertoTemporal = null;
 function pintarStaff(){
   const admin = esAdmin();
   $('ayudaPersonal').innerHTML = admin
-    ? 'Los cambios con interruptor se guardan al instante. <b>Bloqueado</b>: puede entrar y ver, pero no registrar, editar ni borrar. <b>Permiso temporal</b>: un asistente trabaja como abogado hasta la fecha que elijas y se corta solo. Los <b>Drives están cerrados</b> para todos: en cada columna eliges a quién das <b>Ver</b>, <b>Anotar N° de memos, oficios y cartas</b> (Drive 1) o <b>Editar</b>. El permiso temporal de un asistente le abre Drive 1 y Drive 2 como abogado hasta su fecha.'
+    ? 'Los cambios con interruptor se guardan al instante. <b>Bloqueado</b>: puede entrar y ver, pero no registrar, editar ni borrar. <b>Permiso temporal</b>: un asistente trabaja como abogado hasta la fecha que elijas y se corta solo. Los <b>Drives están cerrados</b> para todos: en cada columna eliges a quién das <b>Ver</b>, <b>Anotar N° de memos, oficios y cartas</b> (Drive 1) o <b>Editar</b>. El permiso temporal de un asistente le abre Drive 1 y Drive 2 como abogado hasta su fecha. <b>Licencias</b> funciona igual: Sin acceso, Ver o Editar (registrar, cambiar y borrar licencias).'
     : 'Como Responsable de Área puedes dar o retirar el <b>permiso temporal</b> a los asistentes para que trabajen como abogado hasta una fecha.';
   $('encPersonal').innerHTML = admin
     ? `<th>Nombre</th><th>Rol</th><th>Área</th><th>Bloqueado</th><th>Puede autorizar</th><th>Avisos</th><th>Permiso temporal (asistentes)</th>${DRIVES.map(d => `<th>${d[1]}</th>`).join('')}<th>Puede editar estas pestañas</th><th>De licencia hasta</th><th></th>`
@@ -514,14 +516,22 @@ function separarNumeros(texto){
   });
   return { vista: vista.join(' / '), privado: privado.join(' / ') };
 }
+// Campos antiguos que no deben quedar en la lista pública (aunque estén vacíos)
+const CAMPOS_ANTIGUOS = ['celularPersonal', 'celularAnterior'];
+const soloDigitos = t => String(t || '').replace(/\D/g, '');
 function porSeparar(){
   return DEFS.filter(d => {
-    if (d.celularPersonal) return true; // todavía está en la colección pública
+    if (CAMPOS_ANTIGUOS.some(k => k in d)) return true; // todavía hay algo en la colección pública
     return !publicaDos(d) && separarNumeros(d.celular).privado;
   }).map(d => {
     const s = publicaDos(d) ? { vista: d.celular || '', privado: '' } : separarNumeros(d.celular);
-    const privado = [celularPersonalDe(d), s.privado].filter(Boolean).join(' / ');
-    return { d, vista: s.privado ? s.vista : (d.celular || ''), privado };
+    const vista = s.privado ? s.vista : (d.celular || '');
+    const privados = [celularPersonalDe(d), s.privado].filter(Boolean);
+    // Números del campo antiguo que no están ni a la vista ni en privado: pasan a privado para no perderlos
+    const conocidos = soloDigitos(vista + ' ' + privados.join(' '));
+    const viejos = [...String(d.celularAnterior || '').matchAll(/\d(?: ?\d){8}/g)].map(m => m[0]);
+    viejos.forEach(n => { if (!conocidos.includes(soloDigitos(n)) && !privados.some(p => soloDigitos(p).includes(soloDigitos(n)))) privados.push(n); });
+    return { d, vista, privado: privados.join(' / ') };
   });
 }
 function pintarSeparar(){
@@ -532,6 +542,7 @@ function pintarSeparar(){
       <td><input type="checkbox" data-aplicar checked aria-label="Aplicar a ${esc(f.d.nombre)}"></td>
       <td class="nombre">${esc(f.d.nombre)}<span class="chico">${esc(f.d.area || '')}</span></td>
       <td>${esc(f.d.celular || '')}</td>
+      <td>${esc(f.d.celularAnterior || '')}</td>
       <td><input type="text" data-vista value="${esc(f.vista)}"></td>
       <td><input type="text" data-privado value="${esc(f.privado)}"></td>
     </tr>`).join('');
@@ -547,11 +558,13 @@ $('btnSeparar').onclick = async () => {
     const vista = tr.querySelector('[data-vista]').value.trim(), privado = tr.querySelector('[data-privado]').value.trim();
     try {
       const lote = writeBatch(db), ahora = new Date().toISOString();
-      lote.set(doc(db, 'defensoresPrivado', id), { nombre: d.nombre || '', celularPersonal: privado, actualizadoEn: ahora }, { merge: true });
-      lote.update(doc(db, 'defensores', id), { celular: vista, celularPersonal: deleteField(), actualizadoEn: ahora });
+      if (privado || PRIVADO[id])
+        lote.set(doc(db, 'defensoresPrivado', id), { nombre: d.nombre || '', celularPersonal: privado, actualizadoEn: ahora }, { merge: true });
+      lote.update(doc(db, 'defensores', id), { celular: vista, celularPersonal: deleteField(), celularAnterior: deleteField(), actualizadoEn: ahora });
       await lote.commit();
       await registrarCambio('Separó el celular personal de ' + (d.nombre || id), 'defensores', id,
-        { celular: d.celular || '', celularPersonal: celularPersonalDe(d) }, { celular: vista, 'celularPersonal (privado)': privado });
+        { celular: d.celular || '', celularPersonal: celularPersonalDe(d), celularAnterior: d.celularAnterior || '' },
+        { celular: vista, 'celularPersonal (privado)': privado, celularAnterior: '(borrado)' });
       hechos++;
     } catch (err){ error(err); break; }
   }
@@ -669,8 +682,11 @@ $('cuerpoDef').addEventListener('click', async e => {
     const lote = writeBatch(db), ahora = new Date().toISOString();
     if ('celularPersonal' in cambios)
       lote.set(doc(db, 'defensoresPrivado', id), { nombre: d.nombre || '', celularPersonal: cambios.celularPersonal, actualizadoEn: ahora }, { merge: true });
-    if (Object.keys(publicos).length || d.celularPersonal !== undefined)
-      lote.update(doc(db, 'defensores', id), { ...publicos, ...(d.celularPersonal !== undefined ? { celularPersonal: deleteField() } : {}), actualizadoEn: ahora });
+    const borrar = {};
+    if (d.celularPersonal !== undefined) borrar.celularPersonal = deleteField();
+    if ('celularPersonal' in cambios && d.celularAnterior !== undefined) borrar.celularAnterior = deleteField(); // ya se revisó el personal
+    if (Object.keys(publicos).length || Object.keys(borrar).length)
+      lote.update(doc(db, 'defensores', id), { ...publicos, ...borrar, actualizadoEn: ahora });
     await lote.commit();
     const antes = {}; Object.keys(cambios).forEach(k => antes[k] = actual(k));
     await registrarCambio('Editó defensor ' + (d.nombre || id), 'defensores', id, antes, cambios);
