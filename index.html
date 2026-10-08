@@ -788,7 +788,8 @@ let asignaciones = [];      // colección "asignaciones"
 let reasignacionesLog = []; // colección "reasignaciones" — carga muerta, no cuentan como casos nuevos
 let defensorActivo = null;
 
-let mesEscuchado = null, cortarAsig = null, cortarReasig = null;
+let mesEscuchado = null, cortarAsig = null, cortarReasig = null, cortarOpin = null, opinionesMes = [];
+function opinionesDe(defId, mes){ return opinionesMes.filter(o => o.abogadoId === defId && (o.fecha || '').slice(0, 7) === mes).length; }
 // ---------- Sugerencia de reasignación: primero compensación, si nadie debe, turno (no se reinicia por mes) ----------
 // historial: todas las reasignaciones; lista: defensores activos del área en el orden de la Agenda (N° de orden).
 // Quien perdió un caso (−1) sin compensar recibe primero (el más antiguo primero); nunca el que pierde el caso.
@@ -862,6 +863,13 @@ function pintarLineaReasig(){
 function escucharMes(mes){
   if (mes === mesEscuchado) return;
   mesEscuchado = mes;
+  if (cortarOpin) cortarOpin();
+  opinionesMes = [];
+  // Opiniones (2ª, 3ª…) del Drive 1: se muestran en su columna, pero NO suman al Mes
+  cortarOpin = onSnapshot(query(collection(db, 'opiniones'), where('mes', '==', mes)), snap => {
+    opinionesMes = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    pintarTabla();
+  }, err => console.error('No se pudieron leer las opiniones', err));
   if (cortarAsig) cortarAsig();
   if (cortarReasig) cortarReasig();
   asignaciones = []; reasignacionesLog = [];
@@ -1026,6 +1034,7 @@ function pintarTabla(){
     AREA.totales.map(t => `<th class="total-col">${t.titulo}</th>`).join('') +
     '<th class="total-col">Mes</th>' +
     '<th class="total-col" title="+ entraron / − salieron por reasignación">Reasig.<br>+ / −</th>' +
+    '<th class="total-col" title="2ª, 3ª… opiniones que dio en el mes (Drive 1). No suman al Mes">Opiniones</th>' +
     '<th class="total-col" style="text-align:left">Día a día · ■ = total semana (TS)</th>';
 
   pintarLineaReasig();
@@ -1099,6 +1108,7 @@ function pintarTabla(){
       ${celdasTotales}
       <td class="num celda-total" data-defensor="${d.id}" data-filtro="mes">${totalMes}</td>
       ${celdaReasig}
+      ${(n => `<td class="num celda-total ${n ? '' : 'cero'}" title="Opiniones que dio este mes (no suman al Mes)">${n || '·'}</td>`)(opinionesDe(d.id, mesDelDia))}
       <td data-defensor="${d.id}">${construirMapaDia(propias, diaElegido)}</td>
     `;
     cuerpo.appendChild(fila);
@@ -1108,7 +1118,7 @@ function pintarTabla(){
     filaDetalle.id = 'detalle-' + d.id;
     filaDetalle.hidden = d.id !== detalleAbiertoId;
     const td = document.createElement('td');
-    td.colSpan = categoriasEnColumna().length + AREA.totales.length + AREA.referencias.length + 5;
+    td.colSpan = categoriasEnColumna().length + AREA.totales.length + AREA.referencias.length + 6;
     // Solo los casos de la casilla que se tocó (día, semana, materia, total o todo el mes)
     const filtro = d.id === detalleAbiertoId ? filtroDetalle : { tipo: 'mes' };
     const listaFiltrada = filtrarDetalle(delMes, filtro)
@@ -1320,6 +1330,7 @@ document.getElementById('cuerpoTabla').addEventListener('click', function(e){
 
 // Derivaciones del mes (según el mes en que se asignó el caso, que es al que se le resta): no suman a ningún total
 const COL_DERIVADOS = 'Derivados (no suman)';
+const COL_OPINIONES = 'Opiniones (no suman)';
 function derivadosDelMes(defId){
   return asignaciones.filter(a => !cuentaComoNuevo(a) && a.fecha.slice(0, 7) === mesElegido() && (defId ? a.defensorId === defId : DEFENSORES.some(d => d.id === a.defensorId)));
 }
@@ -1362,6 +1373,7 @@ function datosPorOrigen(){
     const reasigMes = reasignacionesLog.filter(r => r.aId && r.fecha.slice(0, 7) === mesElegido());
     fila["Reasig. entraron"] = reasigMes.filter(r => r.aId === d.id).length;
     fila["Reasig. salieron"] = reasigMes.filter(r => r.deId === d.id).length;
+    fila[COL_OPINIONES] = opinionesDe(d.id, mesElegido());
     fila[COL_DERIVADOS] = derivadosDelMes(d.id).length;
     return fila;
   });
@@ -1372,7 +1384,7 @@ function datosPorOrigen(){
 }
 
 function columnasPorOrigen(){
-  return ["Defensor", ...ORIGENES, "Total", "Reasig. entraron", "Reasig. salieron", COL_DERIVADOS, ...AREA.casillas.map(k => CASILLAS_TODAS[k].split(' (')[0])];
+  return ["Defensor", ...ORIGENES, "Total", "Reasig. entraron", "Reasig. salieron", COL_DERIVADOS, COL_OPINIONES, ...AREA.casillas.map(k => CASILLAS_TODAS[k].split(' (')[0])];
 }
 function tablaHtml(filas, columnas){
   return `<table>
@@ -1866,6 +1878,7 @@ onAuthStateChanged(auth, async user => {
     usuario = null;
     if (cortarAsig) cortarAsig();
     if (cortarReasig) cortarReasig();
+    if (cortarOpin){ cortarOpin(); cortarOpin = null; } opinionesMes = [];
     if (cortarHistorial){ cortarHistorial(); cortarHistorial = null; } historialReasig = [];
     mesEscuchado = null;
     document.getElementById('app').hidden = true;

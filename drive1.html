@@ -940,6 +940,7 @@ async function borrar(id){
       // Si era una devolución o un cambio de abogado, también sale su movimiento de la Agenda
       if (await existe('reasignaciones', id)) await deleteDoc(doc(db, 'reasignaciones', id));
       // Si era una devolución (derivación), el caso vuelve a contar en la Agenda
+      if (r.tipoDoc === TIPO_OPINION && await existe('opiniones', id)) await deleteDoc(doc(db, 'opiniones', id));
       if (esDerivacion(r.tipoDoc)) await quitarDerivacion(idAsignacion(cache.get(r.padreId) || { id: r.padreId }), id);
       await recalcularEstado(r.padreId);
     } else if (r){
@@ -1121,6 +1122,52 @@ async function leerInicioConteos(){
   } catch (e){ console.warn('No se pudo leer la fecha de inicio de los conteos', e); return { reasignaciones: INICIO_CONTEO_PREDETERMINADO, opiniones: INICIO_CONTEO_PREDETERMINADO }; }
 }
 const AYUDA_ABOGADO = 'El teléfono y el correo del abogado se completan solos.';
+// ---------- Turno de opiniones (2ª, 3ª…): rotativo por área según el N° de orden, sin reiniciarse por mes ----------
+// Le toca al que sigue después del último que dio una opinión en el área (desde la fecha de inicio del conteo).
+// Se salta a quien está de licencia, al Coordinador y a quien ya vio ese caso (titular, quien lo tiene ahora y quienes ya opinaron).
+const TIPO_OPINION = 'Solicitud de nueva opinión';
+function sugerenciaOpinion(opiniones, lista, yaVieron, nota){
+  if (!lista.length) return null;
+  const momento = o => o.creadoEnMs || 0;
+  const ultima = opiniones.filter(o => lista.some(d => d.id === o.abogadoId))
+    .sort((a, b) => (a.fecha || '').localeCompare(b.fecha || '') || momento(a) - momento(b)).pop();
+  const pos = ultima ? lista.findIndex(d => d.id === ultima.abogadoId) : -1;
+  for (let i = 1; i <= lista.length; i++){
+    const d = lista[(pos + i) % lista.length];
+    if (!yaVieron.has(d.id) && !/coordinador|licencia/i.test(nota(d))) return d.id;
+  }
+  return null;
+}
+// Copia de la opinión en "opiniones" (la lee la Agenda para su columna y el turno)
+async function sincronizarOpinion(id, datos, previo){
+  try {
+    const ref = doc(db, 'opiniones', id);
+    if (datos.tipoDoc === TIPO_OPINION){
+      await setDoc(ref, { fecha: datos.fecha, mes: datos.fecha.slice(0, 7), area: padre.area || datos.area || '',
+        abogadoId: datos.abogadoId, abogadoNombre: datos.abogadoNombre, opinionNum: datos.opinionNum || 2,
+        casoId: padre.id, asignacionId: idAsignacion(padre), usuario: padre.usuario || '',
+        creadoPor: usuario.correo, creadoEnMs: (previo && previo.creadoEnMs) || Date.now() });
+    } else if (previo && previo.tipoDoc === TIPO_OPINION && await existe('opiniones', id)) await deleteDoc(ref);
+  } catch (err){ console.error(err); avisar('Se guardó en el Drive 1, pero no se pudo anotar la opinión para la Agenda.', 6000); }
+}
+// Opiniones registradas antes de este cambio: el administrador las copia al abrir el Drive 1
+let opinionesCopiadas = false;
+async function copiarOpinionesViejas(){
+  if (opinionesCopiadas) return;
+  opinionesCopiadas = true;
+  try {
+    const snap = await getDocs(query(collection(db, COL), where('tipoDoc', '==', TIPO_OPINION)));
+    for (const d of snap.docs){
+      const r = d.data();
+      if (!r.padreId || await existe('opiniones', d.id)) continue;
+      const p = cache.get(r.padreId) || (await getDoc(doc(db, COL, r.padreId))).data() || {};
+      await setDoc(doc(db, 'opiniones', d.id), { fecha: r.fecha, mes: (r.fecha || '').slice(0, 7), area: p.area || r.area || '',
+        abogadoId: r.abogadoId || '', abogadoNombre: r.abogadoNombre || '', opinionNum: r.opinionNum || 2,
+        casoId: r.padreId, asignacionId: idAsignacion({ id: r.padreId, ...p }), usuario: p.usuario || r.usuario || '',
+        creadoPor: r.creadoPor || '', creadoEnMs: r.creadoEnMs || 0 });
+    }
+  } catch (err){ console.error('No se pudieron copiar las opiniones antiguas', err); opinionesCopiadas = false; }
+}
 // Al registrar un cambio de abogado que procede, el abogado que queda a cargo viene sugerido (se puede cambiar)
 async function sugerirAbogadoCambio(){
   const ayuda = $('ayudaAbogado');
@@ -1277,6 +1324,19 @@ async function calcularOpinion(){
   const yaOpinaron = [...new Set([padre.abogadoNombre, ...hermanos.map(h => h.abogadoNombre)])].filter(Boolean);
   $('numOpinion').innerHTML = `Será la <b>${ordinal(opinionCalculada)} opinión</b>.` +
     (yaOpinaron.length ? `<br><span class="ayuda">Ya vieron este caso: ${esc(yaOpinaron.join(', '))}. Elige a otro abogado.</span>` : '');
+  if (editandoId) return;
+  try {
+    const area = padre.area || $('fArea').value;
+    const inicio = (await leerInicioConteos()).opiniones;
+    const opiniones = (await getDocs(query(collection(db, 'opiniones'), where('area', '==', area)))).docs
+      .map(d => d.data()).filter(o => (o.fecha || '') >= inicio);
+    const lista = DEFENSORES.filter(d => d.area === area);
+    const yaVieron = new Set([padre.abogadoId, padre.abogadoActualId, ...hermanos.map(h => h.abogadoId)].filter(Boolean));
+    const id = sugerenciaOpinion(opiniones, lista, yaVieron, d => d.notas || '');
+    if (!id){ $('ayudaAbogado').textContent = 'No hay a quién sugerir para la opinión: elige a mano.'; return; }
+    $('fAbogado').value = id;
+    $('ayudaAbogado').textContent = 'Sugerido para la opinión: ' + (lista.find(d => d.id === id) || {}).nombre + ' (turno de opiniones del área). Puedes elegir a otro.';
+  } catch (err){ console.error(err); }
 }
 
 // Buscar el caso al que pertenece el antecedente
@@ -1597,6 +1657,7 @@ $('btnGuardarForm').onclick = async () => {
     const idFila = editandoId || editandoIdNuevo;
     if (!esAnt) await sincronizarAgenda(idFila, previo, datos);
     else await sincronizarMovimiento(idFila, datos, previo);
+    if (esAnt) await sincronizarOpinion(idFila, datos, previo);
     if (esAnt) await recalcularEstado(padre.id);
     if (esAnt && !editandoId && tipoDoc === 'Informe del defensor') await cerrarPlazosDelCaso(padre.id, idFila);
     $('fondoForm').hidden = true;
@@ -1958,7 +2019,7 @@ onAuthStateChanged(auth, async user => {
     $('pantallaLogin').hidden = true; $('app').hidden = false;
     pintarAnios(); escucharAnio(anioElegido);
     iniciarAvisos();
-    if (usuario.esAdmin) convertirDevolucionesViejas();
+    if (usuario.esAdmin){ convertirDevolucionesViejas(); copiarOpinionesViejas(); }
   } catch (err){
     console.error(err);
     msgLogin.textContent = 'No se pudo cargar tu acceso (' + (err.code || err.message) + ').';
