@@ -169,6 +169,15 @@
         <button class="btn" id="btnAgregarDef">Agregar</button>
       </div>
     </div>
+    <div class="caja" id="cajaSeparar" hidden style="border-color:var(--dorado)">
+      <h3>Separar celulares personales (una sola vez)</h3>
+      <p class="ayuda">Estos defensores tienen un número personal en la lista pública. Revisa cada fila: lo de <b>Queda a la vista</b> se sigue mostrando; lo de <b>Pasa a privado</b> solo lo ves tú (columna Celular personal). Corrige lo que haga falta, desmarca a quien no quieras tocar y toca <b>Aplicar</b>. Muente, Ampuero, Illaconza y Erazo publican sus dos números: no aparecen aquí salvo que tengan algo en el campo antiguo de celular personal.</p>
+      <div class="tabla-wrap" style="max-height:none;margin-bottom:8px"><table>
+        <thead><tr><th>Aplicar</th><th>Defensor</th><th>Hoy se muestra</th><th>Queda a la vista</th><th>Pasa a privado</th></tr></thead>
+        <tbody id="cuerpoSeparar"></tbody>
+      </table></div>
+      <button class="btn" id="btnSeparar">Aplicar a los marcados</button>
+    </div>
     <div class="fila-form" style="margin-bottom:8px">
       <label>Área<select id="filtroAreaDef"><option value="">Todas</option><option>Asistencia Legal</option><option>Defensa de Víctimas</option><option>Equipo multidisciplinario</option></select></label>
       <label class="interruptor" style="flex-direction:row;padding-bottom:8px"><input type="checkbox" id="verBajas"> Mostrar también los dados de baja</label>
@@ -176,7 +185,7 @@
     <p class="ayuda">El <b>N°</b> es el orden en que aparece cada defensor en la Agenda dentro de su área: muévelo con ▲ ▼ o escribe el número y presiona Enter (se guarda al instante). Al dar de baja, reactivar o agregar, los números se reacomodan solos sin huecos.</p>
     <p class="ayuda">Cambia lo que necesites en la fila y toca <b>Guardar</b>. Dar de baja no borra su historial: sus casos antiguos siguen mostrando su nombre, pero deja de aparecer en las listas para asignar.</p>
     <div class="tabla-wrap"><table>
-      <thead><tr><th>N°</th><th>Nombre</th><th>Área</th><th>Celular (se muestra)</th><th>Celular personal (oculto)</th><th>Correo</th><th>Sede</th><th>Notas</th><th>Activo</th><th></th></tr></thead>
+      <thead><tr><th>N°</th><th>Nombre</th><th>Área</th><th>Celular (se muestra)</th><th>Celular personal (privado, solo el administrador)</th><th>Correo</th><th>Sede</th><th>Notas</th><th>Activo</th><th></th></tr></thead>
       <tbody id="cuerpoDef"></tbody>
     </table></div>
   </section>
@@ -469,12 +478,87 @@ $('btnGuardarConteos').onclick = async () => {
 };
 
 // ---------- Defensores ----------
+// El celular personal NO va en "defensores" (que es de lectura pública): va en "defensoresPrivado", que solo lee el administrador
+let PRIVADO = {};
 async function cargarDefs(){
   const snap = await getDocs(collection(db, 'defensores'));
   DEFS = snap.docs.map(d => ({ id: d.id, ...d.data() }))
     .sort((a, b) => (a.area || '').localeCompare(b.area || '') || (a.orden ?? 999) - (b.orden ?? 999) || (a.nombre || '').localeCompare(b.nombre || '', 'es'));
+  try {
+    const sp = await getDocs(collection(db, 'defensoresPrivado'));
+    PRIVADO = Object.fromEntries(sp.docs.map(d => [d.id, d.data()]));
+  } catch (e){
+    console.error(e); PRIVADO = {};
+    avisar('No se pudo leer los celulares personales (' + (e.code || e.message) + '). ¿Ya publicaste las reglas nuevas?', 8000);
+  }
   pintarDefs();
+  pintarSeparar();
 }
+// Celular personal: primero el del lugar privado; si aún no se movió, el antiguo de "defensores"
+const celularPersonalDe = d => (PRIVADO[d.id] && PRIVADO[d.id].celularPersonal) || d.celularPersonal || '';
+
+// ---------- Separar celulares personales (una sola vez, solo el administrador) ----------
+// Defensores que publican sus dos números: no se tocan
+const PUBLICAN_DOS = ['MUENTE', 'AMPUERO', 'ILLACONZA', 'ERAZO'];
+const publicaDos = d => PUBLICAN_DOS.some(a => (d.nombre || '').toUpperCase().includes(a));
+// Lee "I - 912 606 106 P-999 920 814": I = institucional (a la vista), P = personal (privado).
+// Un número sin letra va al revés que su compañero con letra; si está solo, se queda a la vista.
+function separarNumeros(texto){
+  const nums = [...String(texto || '').matchAll(/(?:\b([IiPp])\s*-?\s*)?(\d(?: ?\d){8})/g)]
+    .map(m => ({ letra: (m[1] || '').toUpperCase(), num: m[2] }));
+  const hayI = nums.some(n => n.letra === 'I'), hayP = nums.some(n => n.letra === 'P');
+  const vista = [], privado = [];
+  nums.forEach(n => {
+    if (n.letra === 'P' || (!n.letra && hayI && !hayP)) privado.push(n.num);
+    else vista.push(n.num);
+  });
+  return { vista: vista.join(' / '), privado: privado.join(' / ') };
+}
+function porSeparar(){
+  return DEFS.filter(d => {
+    if (d.celularPersonal) return true; // todavía está en la colección pública
+    return !publicaDos(d) && separarNumeros(d.celular).privado;
+  }).map(d => {
+    const s = publicaDos(d) ? { vista: d.celular || '', privado: '' } : separarNumeros(d.celular);
+    const privado = [celularPersonalDe(d), s.privado].filter(Boolean).join(' / ');
+    return { d, vista: s.privado ? s.vista : (d.celular || ''), privado };
+  });
+}
+function pintarSeparar(){
+  const filas = porSeparar();
+  $('cajaSeparar').hidden = !filas.length;
+  if (!filas.length) return;
+  $('cuerpoSeparar').innerHTML = filas.map(f => `<tr data-fila="${esc(f.d.id)}">
+      <td><input type="checkbox" data-aplicar checked aria-label="Aplicar a ${esc(f.d.nombre)}"></td>
+      <td class="nombre">${esc(f.d.nombre)}<span class="chico">${esc(f.d.area || '')}</span></td>
+      <td>${esc(f.d.celular || '')}</td>
+      <td><input type="text" data-vista value="${esc(f.vista)}"></td>
+      <td><input type="text" data-privado value="${esc(f.privado)}"></td>
+    </tr>`).join('');
+}
+$('btnSeparar').onclick = async () => {
+  const filas = [...$('cuerpoSeparar').querySelectorAll('tr')].filter(tr => tr.querySelector('[data-aplicar]').checked);
+  if (!filas.length){ avisar('Marca al menos una fila.'); return; }
+  if (!confirm('¿Aplicar a ' + filas.length + ' defensor(es)? El número personal pasa al lugar privado y se borra de la lista pública.')) return;
+  $('btnSeparar').disabled = true;
+  let hechos = 0;
+  for (const tr of filas){
+    const id = tr.dataset.fila, d = DEFS.find(x => x.id === id);
+    const vista = tr.querySelector('[data-vista]').value.trim(), privado = tr.querySelector('[data-privado]').value.trim();
+    try {
+      const lote = writeBatch(db), ahora = new Date().toISOString();
+      lote.set(doc(db, 'defensoresPrivado', id), { nombre: d.nombre || '', celularPersonal: privado, actualizadoEn: ahora }, { merge: true });
+      lote.update(doc(db, 'defensores', id), { celular: vista, celularPersonal: deleteField(), actualizadoEn: ahora });
+      await lote.commit();
+      await registrarCambio('Separó el celular personal de ' + (d.nombre || id), 'defensores', id,
+        { celular: d.celular || '', celularPersonal: celularPersonalDe(d) }, { celular: vista, 'celularPersonal (privado)': privado });
+      hechos++;
+    } catch (err){ error(err); break; }
+  }
+  $('btnSeparar').disabled = false;
+  if (hechos) avisar('Listo: ' + hechos + ' defensor(es) con el celular personal en el lugar privado.');
+  await cargarDefs();
+};
 const CAMPOS_DEF = ['nombre', 'celular', 'celularPersonal', 'correo', 'sede', 'notas'];
 function pintarDefs(){
   const area = $('filtroAreaDef').value, bajas = $('verBajas').checked;
@@ -491,7 +575,7 @@ function pintarDefs(){
       ${celdaOrden(d)}
       ${['nombre'].map(c => `<td class="nombre"><input type="text" data-def="${c}" value="${esc(d[c] || '')}"></td>`).join('')}
       <td>${esc(d.area || '')}</td>
-      ${['celular', 'celularPersonal', 'correo', 'sede', 'notas'].map(c => `<td><input type="text" data-def="${c}" value="${esc(d[c] || '')}" style="min-width:${c === 'sede' ? 260 : 140}px"></td>`).join('')}
+      ${['celular', 'celularPersonal', 'correo', 'sede', 'notas'].map(c => `<td><input type="text" data-def="${c}" value="${esc(c === 'celularPersonal' ? celularPersonalDe(d) : d[c] || '')}" style="min-width:${c === 'sede' ? 260 : 140}px"></td>`).join('')}
       <td><label class="interruptor"><input type="checkbox" data-activo ${d.activo !== false ? 'checked' : ''}> ${d.activo !== false ? 'Sí' : 'De baja'}</label></td>
       <td><button class="btn chico" data-guardar-def disabled>Guardar</button></td>
     </tr>`).join('') || '<tr><td colspan="10" class="vacio">No hay defensores para mostrar.</td></tr>';
@@ -576,11 +660,19 @@ $('cuerpoDef').addEventListener('click', async e => {
   const fila = e.target.closest('tr'), id = fila.dataset.fila;
   const d = DEFS.find(x => x.id === id);
   const cambios = {};
-  fila.querySelectorAll('[data-def]').forEach(i => { const v = i.value.trim(); if ((d[i.dataset.def] || '') !== v) cambios[i.dataset.def] = i.dataset.def === 'correo' ? v.toLowerCase() : v; });
+  const actual = c => c === 'celularPersonal' ? celularPersonalDe(d) : d[c] || '';
+  fila.querySelectorAll('[data-def]').forEach(i => { const v = i.value.trim(); if (actual(i.dataset.def) !== v) cambios[i.dataset.def] = i.dataset.def === 'correo' ? v.toLowerCase() : v; });
   if (!Object.keys(cambios).length) return;
   try {
-    await updateDoc(doc(db, 'defensores', id), { ...cambios, actualizadoEn: new Date().toISOString() });
-    const antes = {}; Object.keys(cambios).forEach(k => antes[k] = d[k] || '');
+    // El celular personal se guarda en el lugar privado y se borra de la lista pública si quedaba ahí
+    const publicos = { ...cambios }; delete publicos.celularPersonal;
+    const lote = writeBatch(db), ahora = new Date().toISOString();
+    if ('celularPersonal' in cambios)
+      lote.set(doc(db, 'defensoresPrivado', id), { nombre: d.nombre || '', celularPersonal: cambios.celularPersonal, actualizadoEn: ahora }, { merge: true });
+    if (Object.keys(publicos).length || d.celularPersonal !== undefined)
+      lote.update(doc(db, 'defensores', id), { ...publicos, ...(d.celularPersonal !== undefined ? { celularPersonal: deleteField() } : {}), actualizadoEn: ahora });
+    await lote.commit();
+    const antes = {}; Object.keys(cambios).forEach(k => antes[k] = actual(k));
     await registrarCambio('Editó defensor ' + (d.nombre || id), 'defensores', id, antes, cambios);
     avisar('Guardado');
   } catch (err){ error(err); }
@@ -593,7 +685,7 @@ $('btnAgregarDef').onclick = async () => {
   if (DEFS.some(d => d.id === id)){ avisar('Ya existe un defensor con ese nombre. Si estaba de baja, reactívalo en la lista.', 6000); return; }
   // Entra al final de su área contando solo a los activos; si había huecos, se cierran en el mismo paso
   const activos = activosDelArea(area), orden = activos.length + 1;
-  const datos = { nombre, area, celular: $('dCelular').value.trim(), celularPersonal: '', correo: $('dCorreo').value.trim().toLowerCase(),
+  const datos = { nombre, area, celular: $('dCelular').value.trim(), correo: $('dCorreo').value.trim().toLowerCase(),
     sede: $('dSede').value.trim(), notas: '', activo: true, orden, rol: 'defensor', actualizadoEn: new Date().toISOString() };
   try {
     const lote = writeBatch(db);
