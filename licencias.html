@@ -225,24 +225,39 @@ function contacto(a){
   const d = defPorId(a.id) || {};
   return { nombre: d.nombre || a.nombre || a.id, celular: d.celular ?? a.celular ?? '', correo: d.correo ?? a.correo ?? '', area: d.area || a.area || '' };
 }
+// Para elegir apoyo: quien está de licencia HOY no se puede elegir (gris y deshabilitado);
+// si sale de licencia en los próximos 5 días, se puede, pero se pide confirmar al guardar.
+const diaMes = iso => iso.slice(8, 10) + '/' + iso.slice(5, 7);
+function estadoLicencia(defId){
+  const hoy = hoyIso();
+  const l = LICENCIAS.filter(x => x.defensorId === defId && x.inicio <= hoy && hoy <= x.fin).sort((a, b) => b.fin.localeCompare(a.fin))[0];
+  if (l) return { tipo: 'hoy', texto: ' — de licencia hasta ' + diaMes(l.fin) };
+  const p = LICENCIAS.filter(x => x.defensorId === defId && x.inicio > hoy && diasEntre(hoy, x.inicio) <= 5)
+    .sort((a, b) => a.inicio.localeCompare(b.inicio))[0];
+  return p ? { tipo: 'pronto', inicio: p.inicio, dias: diasEntre(hoy, p.inicio), texto: ' — sale de licencia el ' + diaMes(p.inicio) } : null;
+}
+// Apoyos que ya tenía la licencia que se edita: se pueden mantener aunque estén de licencia
+let apoyosPrecargados = [];
 function estado(l, hoy = hoyIso()){ return l.fin < hoy ? 'pasada' : l.inicio > hoy ? 'proxima' : 'vigente'; }
 const seCruzan = (a, b) => a.inicio <= b.fin && b.inicio <= a.fin;
 
 // ---------- Formulario ----------
-function opcionesDefensores(elegido, sinId){
+function opcionesDefensores(elegido, sinId, paraApoyo = false){
   const porArea = {};
   activos().filter(d => d.id !== sinId).forEach(d => (porArea[d.area || 'Sin área'] = porArea[d.area || 'Sin área'] || []).push(d));
   // Si el elegido ya está de baja, igual se muestra para no perderlo al editar
   const baja = elegido && !activos().some(d => d.id === elegido) ? defPorId(elegido) : null;
   return '<option value="">— Elige —</option>' +
     (baja ? `<option value="${esc(baja.id)}" selected>${esc(baja.nombre)} (de baja)</option>` : '') +
-    Object.entries(porArea).map(([area, lista]) => `<optgroup label="${esc(area)}">${lista.map(d =>
-      `<option value="${esc(d.id)}" ${d.id === elegido ? 'selected' : ''}>${esc(d.nombre)}</option>`).join('')}</optgroup>`).join('');
+    Object.entries(porArea).map(([area, lista]) => `<optgroup label="${esc(area)}">${lista.map(d => {
+      const e = paraApoyo ? estadoLicencia(d.id) : null, bloq = e && e.tipo === 'hoy' && !apoyosPrecargados.includes(d.id);
+      return `<option value="${esc(d.id)}" ${d.id === elegido ? 'selected' : ''} ${bloq ? 'disabled style="color:#9A938A"' : ''}>${esc(d.nombre + (e ? e.texto : ''))}</option>`;
+    }).join('')}</optgroup>`).join('');
 }
 function filaApoyo(id = ''){
   const div = document.createElement('div');
   div.className = 'apoyo';
-  div.innerHTML = `<select data-apoyo aria-label="Abogado de apoyo">${opcionesDefensores(id, $('fDefensor').value)}</select>
+  div.innerHTML = `<select data-apoyo aria-label="Abogado de apoyo">${opcionesDefensores(id, $('fDefensor').value, true)}</select>
     <span class="contacto"></span>
     <button type="button" class="btn sec chico" data-quitar-apoyo aria-label="Quitar este apoyo">Quitar</button>`;
   $('fApoyos').appendChild(div);
@@ -255,7 +270,7 @@ function pintarContacto(div){
 }
 function apoyosElegidos(){ return [...$('fApoyos').querySelectorAll('[data-apoyo]')].map(s => s.value).filter(Boolean); }
 function limpiarForm(){
-  editandoId = null;
+  editandoId = null; apoyosPrecargados = [];
   $('tituloForm').textContent = 'Registrar licencia';
   $('btnCancelar').hidden = true;
   $('fDefensor').innerHTML = opcionesDefensores('');
@@ -266,7 +281,7 @@ function limpiarForm(){
 }
 function abrirEdicion(id){
   const l = LICENCIAS.find(x => x.id === id); if (!l) return;
-  editandoId = id;
+  editandoId = id; apoyosPrecargados = l.apoyoIds || (l.apoyos || []).map(a => a.id);
   $('tituloForm').textContent = 'Editar licencia de ' + l.defensorNombre;
   $('btnCancelar').hidden = false;
   $('fDefensor').innerHTML = opcionesDefensores(l.defensorId);
@@ -323,6 +338,13 @@ $('btnGuardar').onclick = async () => {
   if (fin < inicio) return falla('fFin', 'La fecha de fin no puede ser antes que la de inicio.');
   if (!apoyos.length){ $('fApoyos').querySelector('[data-apoyo]').classList.add('error-campo'); $('msgForm').textContent = 'Elige al menos un abogado de apoyo.'; return; }
   if (apoyos.includes(defId)){ $('msgForm').textContent = 'El defensor no puede ser su propio apoyo.'; return; }
+  const nuevos = apoyos.filter(id => !apoyosPrecargados.includes(id)); // solo se revisa a quien se agrega ahora
+  const enLicencia = nuevos.filter(id => (estadoLicencia(id) || {}).tipo === 'hoy');
+  if (enLicencia.length){ $('msgForm').textContent = enLicencia.map(id => contacto({ id }).nombre + estadoLicencia(id).texto).join('; ') + ': elige a otro apoyo.'; return; }
+  for (const id of nuevos){
+    const e = estadoLicencia(id);
+    if (e && e.tipo === 'pronto' && !confirm(`${contacto({ id }).nombre} sale de licencia el ${diaMes(e.inicio)} (en ${e.dias} día${e.dias === 1 ? '' : 's'}). ¿Seguro?`)) return;
+  }
   const adv = advertenciasActuales();
   if (adv.length && !confirm('Atención:\n\n' + adv.map(t => '• ' + t.replace(/&amp;/g, '&')).join('\n') + '\n\n¿Guardar de todas formas?')) return;
   $('msgForm').textContent = '';

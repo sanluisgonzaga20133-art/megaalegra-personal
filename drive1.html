@@ -641,7 +641,23 @@ function licenciaEn(defId, fecha){
     .sort((a, b) => b.fin.localeCompare(a.fin))[0] || null;
 }
 const deLicenciaHoy = d => !!licenciaEn(d.id, hoyIso());
-function textoLicencia(d){ const l = licenciaEn(d.id, hoyIso()); return l ? ' — de licencia hasta ' + l.fin.slice(8, 10) + '/' + l.fin.slice(5, 7) : ''; }
+// Para asignar: quien está de licencia HOY no se puede elegir (gris y deshabilitado);
+// si sale de licencia en los próximos 5 días, se puede, pero se pide confirmar al guardar.
+const diaMes = iso => iso.slice(8, 10) + '/' + iso.slice(5, 7);
+function estadoLicencia(defId){
+  const hoy = hoyIso(), l = licenciaEn(defId, hoy);
+  if (l) return { tipo: 'hoy', texto: ' — de licencia hasta ' + diaMes(l.fin) };
+  const dias = iso => Math.round((new Date(iso + 'T12:00:00') - new Date(hoy + 'T12:00:00')) / 86400000);
+  const p = LICENCIAS.filter(x => x.defensorId === defId && x.inicio > hoy && dias(x.inicio) <= 5)
+    .sort((a, b) => a.inicio.localeCompare(b.inicio))[0];
+  return p ? { tipo: 'pronto', inicio: p.inicio, dias: dias(p.inicio), texto: ' — sale de licencia el ' + diaMes(p.inicio) } : null;
+}
+function textoLicencia(d){ const e = estadoLicencia(d.id); return e ? e.texto : ''; }
+function confirmarLicenciaProxima(d){
+  const e = estadoLicencia(d.id);
+  if (!e || e.tipo !== 'pronto') return true;
+  return confirm(`${d.nombre} sale de licencia el ${diaMes(e.inicio)} (en ${e.dias} día${e.dias === 1 ? '' : 's'}). ¿Seguro?`);
+}
 function esHabil(iso){ const dow = new Date(iso + 'T00:00:00').getDay(); return dow !== 0 && dow !== 6 && !FERIADOS.has(iso); }
 function diasHabilesHasta(desde, hasta){
   let n = 0;
@@ -1203,13 +1219,18 @@ async function sugerirAbogadoCambio(){
     ayuda.textContent = 'Sugerido: ' + (lista.find(d => d.id === s.id) || {}).nombre + ' (' + s.motivo + '). Puedes elegir a otro.';
   } catch (err){ console.error(err); ayuda.textContent = AYUDA_ABOGADO; }
 }
+// El abogado que ya traía el caso (al editar o al registrar un antecedente) se puede mantener aunque esté de licencia
+let abogadoPrecargado = '';
 function llenarAbogados(valor){
   const area = $('fArea').value;
+  abogadoPrecargado = valor || '';
   const propios = DEFENSORES.filter(d => d.area === area);
   const otros = DEFENSORES.filter(d => d.area !== area);
+  const opcion = d => { const bloq = deLicenciaHoy(d) && d.id !== abogadoPrecargado;
+    return `<option value="${d.id}" ${bloq ? 'disabled style="color:#9A938A"' : ''}>${esc(d.nombre + textoLicencia(d))}</option>`; };
   $('fAbogado').innerHTML = '<option value="">— Elegir —</option>' +
-    `<optgroup label="${area}">${propios.map(d => `<option value="${d.id}">${esc(d.nombre + textoLicencia(d))}</option>`).join('')}</optgroup>` +
-    `<optgroup label="Otras áreas">${otros.map(d => `<option value="${d.id}">${esc(d.nombre + textoLicencia(d))}</option>`).join('')}</optgroup>`;
+    `<optgroup label="${area}">${propios.map(opcion).join('')}</optgroup>` +
+    `<optgroup label="Otras áreas">${otros.map(opcion).join('')}</optgroup>`;
   if (valor) $('fAbogado').value = valor;
 }
 function llenarDirigido(valor){
@@ -1632,6 +1653,8 @@ $('btnGuardarForm').onclick = async () => {
   falta(!esAnt && !$('fUsuario').value.trim(), $('fUsuario'), 'Falta el nombre del usuario.');
   falta(!esAnt && !materia, $('fMateria').value === 'Otra' ? $('fMateriaOtra') : $('fMateria'), $('fMateria').value === 'Otra' ? 'Falta escribir la materia o delito.' : 'Falta la materia o delito.');
   falta(!abog, $('fAbogado'), 'Falta el abogado.');
+  const abogNuevo = abog && abog.id !== abogadoPrecargado; // solo se revisa a quien se asigna ahora
+  falta(abogNuevo && deLicenciaHoy(abog), $('fAbogado'), abog ? abog.nombre + textoLicencia(abog) + ': elige a otro abogado.' : '');
   falta(tipoDoc === 'Informe del defensor' && !$('fRespuesta').value, $('fRespuesta'), 'Falta la respuesta del defensor.');
   if (esDerivacion(tipoDoc)){
     falta(!$('fDerivaTipo').value, $('fDerivaTipo'), 'Falta elegir si se deriva a otra Dirección Distrital o a otra institución.');
@@ -1650,6 +1673,7 @@ $('btnGuardarForm').onclick = async () => {
     || (correoAsis && previoForm && correoAsis === previoForm.asistenteCorreo ? { correo: correoAsis, nombre: previoForm.asistenteNombre } : null);
   falta(proyecta && !asis && ASISTENTES.length && tienePendiente({ ...(previoForm || {}), hacer }), $('fAsistente'), 'Falta el asistente que lo proyecta.');
   if (faltas.length) return mostrarFaltas(faltas);
+  if (abogNuevo && !confirmarLicenciaProxima(abog)) return;
   limpiarFaltas();
 
   const dirigido = $('fDirigido').value.startsWith('OTRA') ? may($('fDirigidoOtro').value) : $('fDirigido').value;

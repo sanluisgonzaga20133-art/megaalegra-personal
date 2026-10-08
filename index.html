@@ -126,6 +126,7 @@
   .nombre .nota.responsable{color:var(--dorado); font-weight:700}
   .nombre .nota.licencia{display:inline-block; margin-top:2px; padding:1px 7px; border-radius:8px; background:#FFF3D6; color:#6B4A0E; font-weight:700}
   tr.fila-licencia td.nombre{opacity:.85}
+  .btn-rapido:disabled, .btn-detalle-mas:disabled{background:#EEEAE3; color:#B5AEA4; border-color:#E0DAD0; cursor:not-allowed}
   .num{text-align:center; font-variant-numeric:tabular-nums; font-weight:600}
   .num.cero{color:var(--gris-claro); font-weight:400}
   .celda-total{border-left:2px solid var(--linea); font-weight:700}
@@ -864,11 +865,37 @@ function licenciaEn(defId, fecha){
   return LICENCIAS.filter(l => l.defensorId === defId && l.inicio <= fecha && fecha <= l.fin)
     .sort((a, b) => b.fin.localeCompare(a.fin))[0] || null;
 }
+// Para asignar: quien está de licencia HOY no se puede elegir (gris y deshabilitado);
+// si sale de licencia en los próximos 5 días, se puede, pero se pide confirmar.
+const diaMes = iso => iso.slice(8, 10) + '/' + iso.slice(5, 7);
+function estadoLicencia(defId){
+  const hoy = hoyIso(), l = licenciaEn(defId, hoy);
+  if (l) return { tipo: 'hoy', texto: ' — de licencia hasta ' + diaMes(l.fin) };
+  const dias = iso => Math.round((new Date(iso + 'T12:00:00') - new Date(hoy + 'T12:00:00')) / 86400000);
+  const p = LICENCIAS.filter(x => x.defensorId === defId && x.inicio > hoy && dias(x.inicio) <= 5)
+    .sort((a, b) => a.inicio.localeCompare(b.inicio))[0];
+  return p ? { tipo: 'pronto', inicio: p.inicio, dias: dias(p.inicio), texto: ' — sale de licencia el ' + diaMes(p.inicio) } : null;
+}
+const deLicenciaHoy = defId => (estadoLicencia(defId) || {}).tipo === 'hoy';
+function confirmarLicenciaProxima(defId){
+  const e = estadoLicencia(defId);
+  if (!e || e.tipo !== 'pronto') return true;
+  return confirm(`${nombreDe(defId)} sale de licencia el ${diaMes(e.inicio)} (en ${e.dias} día${e.dias === 1 ? '' : 's'}). ¿Seguro?`);
+}
+function opcionDefensor(d, extra = '', elegido = false){
+  const e = estadoLicencia(d.id), bloq = e && e.tipo === 'hoy';
+  return `<option value="${d.id}" ${elegido && !bloq ? 'selected' : ''} ${bloq ? 'disabled style="color:#9A938A"' : ''}>${escHtml(d.nombre)}${e ? e.texto : ''}${extra}</option>`;
+}
 // Opciones del "Reasignar a": la sugerencia ya viene elegida (siempre se puede escoger a otro)
 function opcionesReasignar(pierdeId){
   const s = sugerenciaArea(pierdeId);
   return DEFENSORES.filter(x => x.id !== pierdeId)
-    .map(x => `<option value="${x.id}" ${x.id === s.id ? 'selected' : ''}>${x.nombre}${x.id === s.id ? ' — sugerido (' + s.motivo + ')' : ''}</option>`).join('');
+    .map(x => opcionDefensor(x, x.id === s.id ? ' — sugerido (' + s.motivo + ')' : '', x.id === s.id)).join('');
+}
+// "Pasa a" de Registrar reasignación: se rehace al abrir, para tomar las licencias del día
+function llenarPasaA(){
+  const sel = document.getElementById('reA');
+  sel.innerHTML = '<option value="">— Elegir defensor —</option>' + DEFENSORES.map(d => opcionDefensor(d)).join('');
 }
 function pintarLineaReasig(){
   const caja = document.getElementById('lineaReasig');
@@ -1101,6 +1128,7 @@ function pintarTabla(){
     const esResponsable = d.nota && d.nota.includes('Responsable');
     const esSugerido = d.id === sugeridoId;
     const lic = licenciaEn(d.id, diaElegido);
+    const licHoy = deLicenciaHoy(d.id) ? estadoLicencia(d.id) : null; // de licencia HOY: no se le puede asignar
     const textoLic = lic ? `<span class="nota licencia">De licencia hasta ${lic.fin.slice(8, 10)}/${lic.fin.slice(5, 7)}${(lic.apoyos || []).length ? ' · Apoyo: ' + lic.apoyos.map(a => escHtml(a.nombre)).join(', ') : ''}</span>` : '';
     const clasesFila = [
       lic ? 'fila-licencia' : '',
@@ -1118,8 +1146,11 @@ function pintarTabla(){
     fila.innerHTML = `
       <td class="nombre"><div class="celda-nombre">
         <div class="grupo-btns">
-          <button class="btn-rapido" data-defensor="${d.id}" title="Agregar rápido: hoy, Otras materias, Mesa de partes virtual">+</button>
-          <button class="btn-detalle-mas" data-defensor="${d.id}" data-nombre="${d.nombre}" title="Elegir categoría, materia u origen distintos">···</button>
+          ${licHoy
+            ? `<button class="btn-rapido" disabled title="${escHtml(d.nombre + licHoy.texto)}" aria-label="${escHtml(d.nombre + licHoy.texto)}: no se le puede asignar">+</button>
+          <button class="btn-detalle-mas" disabled title="${escHtml(d.nombre + licHoy.texto)}" aria-label="${escHtml(d.nombre + licHoy.texto)}: no se le puede asignar">···</button>`
+            : `<button class="btn-rapido" data-defensor="${d.id}" title="Agregar rápido: hoy, Otras materias, Mesa de partes virtual">+</button>
+          <button class="btn-detalle-mas" data-defensor="${d.id}" data-nombre="${d.nombre}" title="Elegir categoría, materia u origen distintos">···</button>`}
         </div>
         <span class="numero-fila">${idx + 1}</span>
         <div>${d.nombre}${esSugerido ? '<span class="etiqueta-sugerido">Sugerido</span>' : ''}${d.nota ? `<span class="nota${esResponsable ? ' responsable' : ''}">${esResponsable ? '★ ' : ''}${d.nota}</span>` : ''}${textoLic}</div>
@@ -1234,6 +1265,7 @@ document.getElementById('resultadosBusqueda').addEventListener('click', function
     const id = btnReasignarSi.dataset.id;
     const registro = buscarRegistro(id);
     const select = document.getElementById('selReasignar-' + id);
+    if (select && select.value && !confirmarLicenciaProxima(select.value)) return;
     if (registro && select && select.value) reasignarRegistro(registro, select.value);
     idPorReasignar = null;
     ejecutarBusqueda();
@@ -1305,9 +1337,9 @@ document.getElementById('cuerpoTabla').addEventListener('click', function(e){
   const btnRe = e.target.closest('.btn-borrar-reasig');
   if (btnRe){ idReasigPorBorrar = btnRe.dataset.rid; pintarTabla(); return; }
   const btnRapido = e.target.closest('.btn-rapido');
-  if (btnRapido){ registrarRapido(btnRapido.dataset.defensor); return; }
+  if (btnRapido){ if (confirmarLicenciaProxima(btnRapido.dataset.defensor)) registrarRapido(btnRapido.dataset.defensor); return; }
   const btnDetalle = e.target.closest('.btn-detalle-mas');
-  if (btnDetalle){ abrirModal(btnDetalle.dataset.defensor, btnDetalle.dataset.nombre); return; }
+  if (btnDetalle){ if (confirmarLicenciaProxima(btnDetalle.dataset.defensor)) abrirModal(btnDetalle.dataset.defensor, btnDetalle.dataset.nombre); return; }
   const btnEditar = e.target.closest('.btn-editar');
   if (btnEditar){ abrirModalEdicion(btnEditar.dataset.id); return; }
   const btnReasignar = e.target.closest('.btn-reasignar');
@@ -1317,6 +1349,7 @@ document.getElementById('cuerpoTabla').addEventListener('click', function(e){
     const id = btnReasignarSi.dataset.id;
     const registro = buscarRegistro(id);
     const select = document.getElementById('selReasignar-' + id);
+    if (select && select.value && !confirmarLicenciaProxima(select.value)) return;
     if (registro && select && select.value) reasignarRegistro(registro, select.value);
     idPorReasignar = null;
     pintarTabla();
@@ -1713,19 +1746,20 @@ document.getElementById('btnGuardar').addEventListener('click', () => {
 function llenarSelectsDefensores(){
   selBuscarDefensor.innerHTML = '';
   DEFENSORES.forEach(d => selBuscarDefensor.appendChild(new Option(d.nombre, d.id)));
-  ['reDe', 'reA'].forEach(idSel => {
+  ['reDe'].forEach(idSel => {
     const sel = document.getElementById(idSel);
     sel.innerHTML = '';
     sel.appendChild(new Option('— Elegir defensor —', ''));
     DEFENSORES.forEach(d => sel.appendChild(new Option(d.nombre, d.id)));
   });
+  llenarPasaA();
 }
 function cerrarReasig(){ document.getElementById('fondoReasig').hidden = true; }
 document.getElementById('btnRegistrarReasig').addEventListener('click', () => {
   document.getElementById('reFecha').value = hoyIso();
   ['reUsuario', 'reCarpeta', 'reNota'].forEach(i => document.getElementById(i).value = '');
   document.getElementById('reDe').value = '';
-  document.getElementById('reA').value = '';
+  llenarPasaA();
   document.getElementById('sugerenciaReA').textContent = '';
   document.getElementById('avisoReasig').style.display = 'none';
   document.getElementById('confirmacionReasig').style.display = 'none';
@@ -1752,7 +1786,9 @@ document.getElementById('btnGuardarReasig').addEventListener('click', () => {
   else if (!carpetaRe) error = 'Escribe el N° de carpeta defensorial.';
   else if (!de || !a) error = 'Elige quién lo tenía y a quién pasa.';
   else if (de === a) error = 'El defensor de origen y el de destino son el mismo.';
+  else if (deLicenciaHoy(a)) error = nombreDe(a) + ' está de licencia hoy: elige a otro.';
   if (error){ aviso.textContent = error; aviso.style.display = 'block'; return; }
+  if (!confirmarLicenciaProxima(a)) return;
   const fechaRe = document.getElementById('reFecha').value || hoyIso();
   setDoc(doc(collection(db, 'reasignaciones')), { fecha: fechaRe, mes: fechaRe.slice(0, 7), deId: de, aId: a, casoId: null,
     referencia, usuario: usuarioRe, carpeta: carpetaRe, area: AREA_NOMBRE,
