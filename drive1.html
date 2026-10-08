@@ -252,6 +252,7 @@
   <nav class="menu-drives" aria-label="Drives">
     <a href="drive1.html" class="actual" aria-current="page">Drive 1 · Registro de casos</a>
     <a href="index.html">Drive 2 · Agenda diaria</a>
+    <a href="licencias.html" id="enlaceLicencias" hidden>Licencias</a>
     <a href="permisos.html" id="enlacePermisos" hidden>Personal y permisos</a>
     <span class="separador" aria-hidden="true"></span>
     <span class="rotulo">Hojas de Google (mientras se migran):</span>
@@ -2041,6 +2042,7 @@ onAuthStateChanged(auth, async user => {
       esAdmin: ficha.data().esAdmin === true, avisos: ficha.data().avisos !== false };
     const navD2 = document.querySelector('.menu-drives a[href="index.html"]');
     if (navD2) navD2.hidden = nivelSeccion(ficha.data(), 'drive2') === 'sin';
+    $('enlaceLicencias').hidden = nivelSeccion(ficha.data(), 'licencias') === 'sin';
     // Enlaces a las hojas de Google: solo para quien tiene acceso a ese drive
     let hojasVisibles = 0;
     document.querySelectorAll('.menu-drives a.hoja[data-drive]').forEach(a => { a.hidden = nivelSeccion(ficha.data(), a.dataset.drive) === 'sin'; if (!a.hidden) hojasVisibles++; });

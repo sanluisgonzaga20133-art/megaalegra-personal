@@ -1,0 +1,449 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Licencias · MEGA ALEGRA</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Source+Serif+4:opsz,wght@8..60,600&family=Public+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --rojo:#D91023; --rojo-oscuro:#A10C1A; --dorado:#B8873A; --tinta:#241E1B; --gris:#6A635C; --gris-claro:#9A938A;
+    --papel:#F7F2EA; --linea:#E6DECF; --celda:#D9D2C5; --verde:#3F6B52; --verde-fondo:#EAF2ED; --azul:#2C6478; --ambar-fondo:#FFF3D6; --ambar:#6B4A0E;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0}
+  body{font-family:'Public Sans',system-ui,sans-serif;background:var(--papel);color:var(--tinta);padding:max(10px, env(safe-area-inset-top,0px)) 12px 30px}
+  [hidden]{display:none !important}
+  button,input,select,textarea{font:inherit}
+  :focus-visible{outline:2px solid var(--azul);outline-offset:2px}
+
+  #pantallaLogin{min-height:100vh;display:flex;align-items:center;justify-content:center;padding:20px}
+  .caja-login{background:#fff;border:1px solid var(--linea);border-radius:14px;padding:28px;max-width:380px;width:100%}
+  .caja-login h2{font-family:'Source Serif 4',Georgia,serif;margin:0 0 12px;color:var(--rojo-oscuro)}
+  .caja-login input{width:100%;padding:10px 12px;border:1px solid var(--linea);border-radius:8px;margin:4px 0 10px}
+  #msgLogin{margin-top:12px;font-size:13px;font-weight:600;color:var(--rojo-oscuro);min-height:18px}
+
+  .barra-sesion{display:flex;justify-content:space-between;align-items:center;gap:10px;margin-bottom:8px;font-size:12.5px;color:var(--gris)}
+  .barra-sesion button{background:#fff;border:1px solid var(--linea);border-radius:8px;padding:4px 12px;cursor:pointer}
+  .menu-drives{display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin:0 0 10px;padding:6px;background:#fff;border:1px solid var(--linea);border-radius:12px}
+  .menu-drives a{padding:7px 12px;border-radius:8px;font-size:13.5px;font-weight:600;color:var(--tinta);text-decoration:none;white-space:nowrap}
+  .menu-drives a:hover{background:var(--papel)}
+  .menu-drives a.actual{background:var(--tinta);color:#fff}
+
+  header{background:var(--rojo);color:#fff;border-radius:14px;padding:12px 18px;margin-bottom:10px}
+  header::after{content:"";display:block;height:3px;background:var(--dorado);margin-top:10px;border-radius:2px}
+  header h1{font-family:'Source Serif 4',Georgia,serif;font-weight:600;font-size:19px;margin:0 0 2px}
+  header p{margin:0;font-size:14px;color:rgba(255,255,255,.9)}
+
+  .caja{background:#fff;border:1px solid var(--linea);border-radius:12px;padding:14px;margin-bottom:10px}
+  .caja h3{margin:0 0 8px;font-size:15px}
+  .ayuda{font-size:12.5px;color:var(--gris);line-height:1.5;margin:4px 0}
+  .fila-form{display:flex;gap:8px;flex-wrap:wrap;align-items:end}
+  .fila-form label{font-size:12px;font-weight:700;display:flex;flex-direction:column;gap:3px}
+  .fila-form input, .fila-form select{padding:8px 10px;border:1.5px solid var(--linea);border-radius:8px;background:var(--papel);min-width:160px;max-width:100%}
+  .fila-form label.ancho{flex:1 1 260px}
+  .fila-form label.ancho select, .fila-form label.ancho input{width:100%}
+  .btn{padding:8px 14px;border-radius:8px;border:none;background:var(--rojo);color:#fff;font-weight:700;cursor:pointer}
+  .btn:disabled{background:#D8CFC3;cursor:default}
+  .btn.sec{background:#fff;color:var(--tinta);border:1.5px solid var(--linea)}
+  .btn.chico{padding:4px 10px;font-size:12px}
+
+  .apoyos{display:flex;flex-direction:column;gap:6px;margin:10px 0 6px}
+  .apoyo{display:flex;gap:8px;align-items:center;flex-wrap:wrap;background:var(--papel);border:1px solid var(--linea);border-radius:8px;padding:6px 8px}
+  .apoyo select{padding:7px 9px;border:1.5px solid var(--linea);border-radius:8px;background:#fff;min-width:240px;max-width:100%;font-size:13.5px}
+  .apoyo .contacto{font-size:12px;color:var(--gris)}
+  .error-campo{border-color:var(--rojo) !important}
+  #msgForm{font-size:13px;font-weight:600;color:var(--rojo-oscuro);min-height:18px;margin-top:6px}
+  .advertencia{background:var(--ambar-fondo);color:var(--ambar);border-radius:8px;padding:8px 10px;font-size:13px;margin-top:8px}
+
+  .buscar{display:flex;gap:8px;align-items:center;margin:0 0 10px}
+  .buscar input{flex:1;padding:9px 12px;border:1.5px solid var(--linea);border-radius:9px;background:#fff;max-width:520px}
+  .grupo h2{font-size:15px;margin:14px 0 6px;display:flex;align-items:center;gap:8px}
+  .cuenta{font-size:12px;font-weight:700;background:var(--linea);border-radius:10px;padding:1px 8px}
+  .tabla-wrap{background:#fff;border:1px solid var(--celda);border-radius:10px;overflow:auto}
+  table{border-collapse:collapse;width:100%;min-width:760px}
+  th{background:#EFE9DD;text-align:left;font-size:11.5px;font-weight:700;padding:7px 8px;border:1px solid var(--celda);white-space:nowrap}
+  td{padding:6px 8px;border:1px solid var(--celda);font-size:12.5px;vertical-align:top;background:#fff}
+  td .chico{display:block;font-size:11px;color:var(--gris);font-weight:400}
+  td.nombre{font-weight:600}
+  .etiqueta{display:inline-block;font-size:11px;font-weight:700;padding:2px 7px;border-radius:8px;white-space:nowrap}
+  .etiqueta.vigente{background:var(--verde-fondo);color:var(--verde)}
+  .etiqueta.proxima{background:var(--ambar-fondo);color:var(--ambar)}
+  .etiqueta.pasada{background:#F1EEE8;color:var(--gris)}
+  .lista-apoyos{margin:0;padding-left:16px}
+  .lista-apoyos li{margin-bottom:3px}
+  .vacio{padding:16px;text-align:center;color:var(--gris)}
+  #sinAcceso{background:#fff;border:1px solid var(--linea);border-radius:12px;padding:20px}
+  #aviso{position:fixed;left:50%;bottom:calc(20px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);background:#222;color:#fff;
+    padding:10px 16px;border-radius:10px;font-size:13.5px;font-weight:600;z-index:99;display:none;max-width:90vw}
+</style>
+</head>
+<body>
+<div id="pantallaLogin">
+  <div id="cargandoSesion" style="text-align:center;color:#6A635C;font-size:15px;font-weight:600">Cargando MEGA ALEGRA…</div>
+  <div class="caja-login" id="cajaLogin" hidden>
+    <h2>MEGA ALEGRA · Licencias</h2>
+    <label for="loginCorreo" style="font-size:13px;font-weight:700">Correo</label>
+    <input type="email" id="loginCorreo" autocomplete="username">
+    <label for="loginClave" style="font-size:13px;font-weight:700">Contraseña</label>
+    <input type="password" id="loginClave" autocomplete="current-password">
+    <button class="btn" id="btnEntrar" style="width:100%;padding:11px">Entrar</button>
+    <div id="msgLogin"></div>
+  </div>
+</div>
+<div id="aviso" role="status" aria-live="polite"></div>
+
+<div id="app" hidden>
+  <div class="barra-sesion"><span id="usuarioSesion"></span><button id="btnSalir">Salir</button></div>
+  <nav class="menu-drives" aria-label="Drives">
+    <a href="drive1.html" data-seccion="drive1" hidden>Drive 1 · Registro de casos</a>
+    <a href="index.html" data-seccion="drive2" hidden>Drive 2 · Agenda diaria</a>
+    <a href="licencias.html" class="actual" aria-current="page">Licencias</a>
+    <a href="permisos.html" id="enlacePermisos" hidden>Personal y permisos</a>
+  </nav>
+  <div id="sinAcceso" hidden>No tienes acceso a Licencias. Si lo necesitas, pídeselo al Coordinador.</div>
+
+  <div id="contenido" hidden>
+    <header>
+      <h1>Licencias de defensores</h1>
+      <p id="subtitulo">Quién está de licencia y quiénes lo apoyan</p>
+    </header>
+
+    <!-- ===== Registrar / editar (solo con permiso Editar) ===== -->
+    <section class="caja" id="cajaForm" hidden>
+      <h3 id="tituloForm">Registrar licencia</h3>
+      <div class="fila-form">
+        <label class="ancho">Defensor que sale de licencia<select id="fDefensor"></select></label>
+        <label>Desde<input type="date" id="fInicio"></label>
+        <label>Hasta (último día de licencia)<input type="date" id="fFin"></label>
+        <label class="ancho">Motivo (opcional, no se publica)<input type="text" id="fMotivo" placeholder="Ej. vacaciones, descanso médico"></label>
+      </div>
+      <div style="margin-top:10px;font-size:12px;font-weight:700">Abogados de apoyo</div>
+      <div class="apoyos" id="fApoyos"></div>
+      <button type="button" class="btn sec chico" id="btnOtroApoyo">+ Agregar otro apoyo</button>
+      <p class="ayuda">El celular y el correo de cada apoyo se toman de Personal y permisos › Defensores (solo el que se muestra, nunca el personal).</p>
+      <div id="advertencias"></div>
+      <div id="msgForm"></div>
+      <div class="fila-form" style="margin-top:6px">
+        <button class="btn" id="btnGuardar">Guardar licencia</button>
+        <button class="btn sec" id="btnCancelar" hidden>Cancelar edición</button>
+      </div>
+    </section>
+
+    <div class="buscar">
+      <label for="buscador" style="font-size:13px;font-weight:700">Buscar</label>
+      <input type="search" id="buscador" placeholder="Defensor, apoyo, área o motivo">
+    </div>
+    <section class="grupo" aria-labelledby="hVigentes"><h2 id="hVigentes">Vigentes hoy <span class="cuenta" id="nVigentes">0</span></h2><div id="listaVigentes"></div></section>
+    <section class="grupo" aria-labelledby="hProximas"><h2 id="hProximas">Próximas <span class="cuenta" id="nProximas">0</span></h2><div id="listaProximas"></div></section>
+    <section class="grupo" aria-labelledby="hPasadas"><h2 id="hPasadas">Pasadas <span class="cuenta" id="nPasadas">0</span></h2><div id="listaPasadas"></div></section>
+  </div>
+</div>
+
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
+import { getAuth, onAuthStateChanged, signInWithEmailAndPassword, signOut } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
+import { initializeFirestore, collection, doc, getDoc, getDocs, setDoc, writeBatch } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+
+const fbApp = initializeApp({
+  apiKey: "AIzaSyBHxewV5R3CAj-5i3AzCgfdKvwI5A3jXnA",
+  authDomain: "defensapublica-limacentro.firebaseapp.com",
+  projectId: "defensapublica-limacentro",
+  storageBucket: "defensapublica-limacentro.firebasestorage.app",
+  messagingSenderId: "595677954487",
+  appId: "1:595677954487:web:8a68160c5927bf5cf0a832"
+});
+const auth = getAuth(fbApp);
+const db = initializeFirestore(fbApp, { experimentalForceLongPolling: true });
+
+const $ = id => document.getElementById(id);
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+function avisar(t, ms = 3500){ const a = $('aviso'); a.textContent = t; a.style.display = 'block'; clearTimeout(avisar.t); avisar.t = setTimeout(() => a.style.display = 'none', ms); }
+function hoyIso(){ const d = new Date(); return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'); }
+function fechaCorta(iso){ return iso ? iso.slice(8, 10) + '/' + iso.slice(5, 7) + '/' + iso.slice(0, 4) : ''; }
+const diasEntre = (a, b) => Math.round((new Date(b + 'T12:00:00') - new Date(a + 'T12:00:00')) / 86400000);
+const sinTildes = s => String(s || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+function error(err){
+  console.error(err);
+  avisar(err && err.code === 'permission-denied' ? 'Firebase no dio permiso para este cambio.' : 'No se pudo guardar. Revisa tu conexión.', 6000);
+}
+
+// Mismo cálculo de permisos que en el Drive 1 y la Agenda
+function nivelSeccion(f, s){
+  if (f.esAdmin === true) return 'editar';
+  const temporal = f.rol === 'asistente' && f.permisoTemporalHasta && f.permisoTemporalHasta.toDate && f.permisoTemporalHasta.toDate() > new Date();
+  let n;
+  if (temporal && (s === 'drive1' || s === 'drive2')) n = 'editar';
+  else if ((f.permisos || {})[s]) n = f.permisos[s];
+  else n = 'sin';
+  if (f.bloqueado === true && n !== 'sin') n = 'ver';
+  return n;
+}
+
+let yo = null, nivel = 'sin';
+let DEFS = [];          // todos los defensores (también los de baja, para mostrar nombres antiguos)
+let LICENCIAS = [];     // colección "licencias" (pública: sin motivo)
+let PRIVADO = {};       // colección "licenciasPrivado" (motivo y quién registró)
+let editandoId = null;
+const puedeEditar = () => nivel === 'editar';
+
+// ---------- Registro de cambios ----------
+async function registrarCambio(accion, id, antes, despues){
+  const txt = v => typeof v === 'object' && v !== null ? JSON.stringify(v) : String(v ?? '');
+  const claves = [...new Set([...Object.keys(antes || {}), ...Object.keys(despues || {})])];
+  const detalle = claves.filter(k => txt((antes || {})[k]) !== txt((despues || {})[k]))
+    .map(k => ({ campo: k, antes: txt((antes || {})[k]), despues: txt((despues || {})[k]) }));
+  try {
+    await setDoc(doc(collection(db, 'cambios')), {
+      cuandoMs: Date.now(), quien: yo.correo, quienNombre: yo.nombre || yo.correo,
+      accion, coleccion: 'licencias', docId: id, detalle
+    });
+  } catch (e){ console.error('No se pudo anotar en el registro de cambios', e); }
+}
+
+// ---------- Datos ----------
+async function cargarTodo(){
+  const [sd, sl] = await Promise.all([getDocs(collection(db, 'defensores')), getDocs(collection(db, 'licencias'))]);
+  DEFS = sd.docs.map(d => ({ id: d.id, ...d.data() }))
+    .sort((a, b) => (a.area || '').localeCompare(b.area || '') || (a.orden ?? 999) - (b.orden ?? 999) || (a.nombre || '').localeCompare(b.nombre || '', 'es'));
+  LICENCIAS = sl.docs.map(d => ({ id: d.id, ...d.data() }));
+  try {
+    const sp = await getDocs(collection(db, 'licenciasPrivado'));
+    PRIVADO = Object.fromEntries(sp.docs.map(d => [d.id, d.data()]));
+  } catch (e){
+    console.error(e); PRIVADO = {};
+    avisar('No se pudieron leer los motivos (' + (e.code || e.message) + '). ¿Ya se publicaron las reglas nuevas?', 7000);
+  }
+  pintarLista();
+}
+const defPorId = id => DEFS.find(d => d.id === id);
+const activos = () => DEFS.filter(d => d.activo !== false);
+// Contacto del apoyo: siempre el más reciente de Defensores; si ya no está, el que se guardó
+function contacto(a){
+  const d = defPorId(a.id) || {};
+  return { nombre: d.nombre || a.nombre || a.id, celular: d.celular ?? a.celular ?? '', correo: d.correo ?? a.correo ?? '', area: d.area || a.area || '' };
+}
+function estado(l, hoy = hoyIso()){ return l.fin < hoy ? 'pasada' : l.inicio > hoy ? 'proxima' : 'vigente'; }
+const seCruzan = (a, b) => a.inicio <= b.fin && b.inicio <= a.fin;
+
+// ---------- Formulario ----------
+function opcionesDefensores(elegido, sinId){
+  const porArea = {};
+  activos().filter(d => d.id !== sinId).forEach(d => (porArea[d.area || 'Sin área'] = porArea[d.area || 'Sin área'] || []).push(d));
+  // Si el elegido ya está de baja, igual se muestra para no perderlo al editar
+  const baja = elegido && !activos().some(d => d.id === elegido) ? defPorId(elegido) : null;
+  return '<option value="">— Elige —</option>' +
+    (baja ? `<option value="${esc(baja.id)}" selected>${esc(baja.nombre)} (de baja)</option>` : '') +
+    Object.entries(porArea).map(([area, lista]) => `<optgroup label="${esc(area)}">${lista.map(d =>
+      `<option value="${esc(d.id)}" ${d.id === elegido ? 'selected' : ''}>${esc(d.nombre)}</option>`).join('')}</optgroup>`).join('');
+}
+function filaApoyo(id = ''){
+  const div = document.createElement('div');
+  div.className = 'apoyo';
+  div.innerHTML = `<select data-apoyo aria-label="Abogado de apoyo">${opcionesDefensores(id, $('fDefensor').value)}</select>
+    <span class="contacto"></span>
+    <button type="button" class="btn sec chico" data-quitar-apoyo aria-label="Quitar este apoyo">Quitar</button>`;
+  $('fApoyos').appendChild(div);
+  pintarContacto(div);
+}
+function pintarContacto(div){
+  const id = div.querySelector('[data-apoyo]').value;
+  const c = id ? contacto({ id }) : null;
+  div.querySelector('.contacto').textContent = c ? [c.celular && 'Cel. ' + c.celular, c.correo].filter(Boolean).join(' · ') || 'Sin celular ni correo en Defensores' : '';
+}
+function apoyosElegidos(){ return [...$('fApoyos').querySelectorAll('[data-apoyo]')].map(s => s.value).filter(Boolean); }
+function limpiarForm(){
+  editandoId = null;
+  $('tituloForm').textContent = 'Registrar licencia';
+  $('btnCancelar').hidden = true;
+  $('fDefensor').innerHTML = opcionesDefensores('');
+  $('fInicio').value = hoyIso(); $('fFin').value = ''; $('fMotivo').value = '';
+  $('fApoyos').innerHTML = ''; filaApoyo();
+  $('msgForm').textContent = ''; $('advertencias').innerHTML = '';
+  document.querySelectorAll('.error-campo').forEach(x => x.classList.remove('error-campo'));
+}
+function abrirEdicion(id){
+  const l = LICENCIAS.find(x => x.id === id); if (!l) return;
+  editandoId = id;
+  $('tituloForm').textContent = 'Editar licencia de ' + l.defensorNombre;
+  $('btnCancelar').hidden = false;
+  $('fDefensor').innerHTML = opcionesDefensores(l.defensorId);
+  $('fInicio').value = l.inicio; $('fFin').value = l.fin;
+  $('fMotivo').value = (PRIVADO[id] && PRIVADO[id].motivo) || '';
+  $('fApoyos').innerHTML = '';
+  (l.apoyos && l.apoyos.length ? l.apoyos : [{ id: '' }]).forEach(a => filaApoyo(a.id));
+  $('msgForm').textContent = ''; $('advertencias').innerHTML = '';
+  $('cajaForm').scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+// Al cambiar el defensor, se rehacen las listas de apoyo (no puede apoyarse a sí mismo)
+$('fDefensor').addEventListener('change', () => {
+  const elegidos = apoyosElegidos().filter(id => id !== $('fDefensor').value);
+  $('fApoyos').innerHTML = '';
+  (elegidos.length ? elegidos : ['']).forEach(id => filaApoyo(id));
+  revisarAdvertencias();
+});
+$('fApoyos').addEventListener('change', e => { const div = e.target.closest('.apoyo'); if (div) pintarContacto(div); revisarAdvertencias(); });
+$('fApoyos').addEventListener('click', e => {
+  if (!e.target.closest('[data-quitar-apoyo]')) return;
+  e.target.closest('.apoyo').remove();
+  if (!$('fApoyos').children.length) filaApoyo();
+  revisarAdvertencias();
+});
+$('btnOtroApoyo').onclick = () => filaApoyo();
+$('btnCancelar').onclick = limpiarForm;
+['fInicio', 'fFin'].forEach(i => $(i).addEventListener('change', revisarAdvertencias));
+
+// Advertencias (no impiden guardar): licencias que se cruzan
+function advertenciasActuales(){
+  const defId = $('fDefensor').value, inicio = $('fInicio').value, fin = $('fFin').value;
+  if (!defId || !inicio || !fin || fin < inicio) return [];
+  const rango = { inicio, fin }, otras = LICENCIAS.filter(l => l.id !== editandoId && seCruzan(l, rango));
+  const lista = [];
+  otras.filter(l => l.defensorId === defId).forEach(l =>
+    lista.push(`${esc(l.defensorNombre)} ya tiene otra licencia del ${fechaCorta(l.inicio)} al ${fechaCorta(l.fin)} que se cruza con estas fechas.`));
+  apoyosElegidos().forEach(id => otras.filter(l => l.defensorId === id).forEach(l =>
+    lista.push(`El apoyo ${esc(contacto({ id }).nombre)} también está de licencia del ${fechaCorta(l.inicio)} al ${fechaCorta(l.fin)}.`)));
+  return lista;
+}
+function revisarAdvertencias(){
+  const a = advertenciasActuales();
+  $('advertencias').innerHTML = a.length ? `<div class="advertencia">⚠ ${a.join('<br>⚠ ')}</div>` : '';
+}
+
+$('btnGuardar').onclick = async () => {
+  document.querySelectorAll('.error-campo').forEach(x => x.classList.remove('error-campo'));
+  const defId = $('fDefensor').value, inicio = $('fInicio').value, fin = $('fFin').value, motivo = $('fMotivo').value.trim();
+  const apoyos = [...new Set(apoyosElegidos())];
+  const falla = (campo, texto) => { $(campo).classList.add('error-campo'); $('msgForm').textContent = texto; $(campo).focus(); };
+  if (!defId) return falla('fDefensor', 'Elige al defensor que sale de licencia.');
+  if (!inicio) return falla('fInicio', 'Elige la fecha de inicio.');
+  if (!fin) return falla('fFin', 'Elige la fecha de fin.');
+  if (fin < inicio) return falla('fFin', 'La fecha de fin no puede ser antes que la de inicio.');
+  if (!apoyos.length){ $('fApoyos').querySelector('[data-apoyo]').classList.add('error-campo'); $('msgForm').textContent = 'Elige al menos un abogado de apoyo.'; return; }
+  if (apoyos.includes(defId)){ $('msgForm').textContent = 'El defensor no puede ser su propio apoyo.'; return; }
+  const adv = advertenciasActuales();
+  if (adv.length && !confirm('Atención:\n\n' + adv.map(t => '• ' + t.replace(/&amp;/g, '&')).join('\n') + '\n\n¿Guardar de todas formas?')) return;
+  $('msgForm').textContent = '';
+
+  const d = defPorId(defId);
+  // Lo público (para la Agenda y la futura app pública): sin motivo ni datos de quien registra
+  const publico = {
+    defensorId: defId, defensorNombre: d.nombre || defId, area: d.area || '', inicio, fin,
+    apoyoIds: apoyos,
+    apoyos: apoyos.map(id => { const c = contacto({ id }); return { id, nombre: c.nombre, area: c.area, celular: c.celular, correo: c.correo }; }),
+    actualizadoEn: new Date().toISOString()
+  };
+  const ahora = new Date().toISOString();
+  const privado = editandoId
+    ? { motivo, actualizadoPor: yo.nombre || yo.correo, actualizadoEn: ahora }
+    : { motivo, registradoPor: yo.nombre || yo.correo, registradoEn: ahora };
+  const id = editandoId || doc(collection(db, 'licencias')).id;
+  const antes = editandoId ? resumen(LICENCIAS.find(x => x.id === id), PRIVADO[id]) : {};
+  $('btnGuardar').disabled = true;
+  try {
+    const lote = writeBatch(db);
+    lote.set(doc(db, 'licencias', id), publico);
+    lote.set(doc(db, 'licenciasPrivado', id), privado, { merge: true });
+    await lote.commit();
+    await registrarCambio(editandoId ? 'Editó licencia de ' + publico.defensorNombre : 'Registró licencia de ' + publico.defensorNombre, id, antes, resumen(publico, privado));
+    avisar(editandoId ? 'Licencia actualizada' : 'Licencia registrada');
+    limpiarForm();
+    await cargarTodo();
+  } catch (err){ error(err); }
+  $('btnGuardar').disabled = false;
+};
+function resumen(l, p){
+  if (!l) return {};
+  return { defensor: l.defensorNombre, desde: fechaCorta(l.inicio), hasta: fechaCorta(l.fin),
+    apoyos: (l.apoyos || []).map(a => a.nombre).join(', '), motivo: (p && p.motivo) || '' };
+}
+
+// ---------- Lista ----------
+function pintarLista(){
+  const hoy = hoyIso(), q = sinTildes($('buscador').value.trim());
+  const coincide = l => !q || sinTildes([l.defensorNombre, l.area, (PRIVADO[l.id] || {}).motivo,
+    ...(l.apoyos || []).map(a => contacto(a).nombre)].join(' ')).includes(q);
+  const lista = LICENCIAS.filter(coincide);
+  const grupos = {
+    vigente: lista.filter(l => estado(l, hoy) === 'vigente').sort((a, b) => a.fin.localeCompare(b.fin)),
+    proxima: lista.filter(l => estado(l, hoy) === 'proxima').sort((a, b) => a.inicio.localeCompare(b.inicio)),
+    pasada: lista.filter(l => estado(l, hoy) === 'pasada').sort((a, b) => b.fin.localeCompare(a.fin))
+  };
+  const tabla = (filas, tipo) => {
+    if (!filas.length) return `<div class="vacio">${q ? 'Nada coincide con la búsqueda.' : tipo === 'vigente' ? 'Nadie está de licencia hoy.' : tipo === 'proxima' ? 'No hay licencias programadas.' : 'Todavía no hay licencias pasadas.'}</div>`;
+    return `<div class="tabla-wrap"><table>
+      <thead><tr><th>Defensor</th><th>Fechas</th><th>Abogados de apoyo</th><th>Motivo</th>${puedeEditar() ? '<th></th>' : ''}</tr></thead>
+      <tbody>${filas.map(l => {
+        const dias = diasEntre(l.inicio, l.fin) + 1;
+        const cuando = tipo === 'vigente' ? `<span class="etiqueta vigente">Vuelve el ${fechaCorta(sumarDia(l.fin))}</span>`
+          : tipo === 'proxima' ? `<span class="etiqueta proxima">Empieza en ${diasEntre(hoy, l.inicio)} día${diasEntre(hoy, l.inicio) === 1 ? '' : 's'}</span>`
+          : '<span class="etiqueta pasada">Terminó</span>';
+        const apoyos = (l.apoyos || []).map(a => { const c = contacto(a);
+          return `<li><b>${esc(c.nombre)}</b>${c.area && c.area !== l.area ? ' <span class="chico" style="display:inline">(' + esc(c.area) + ')</span>' : ''}<span class="chico">${[c.celular && 'Cel. ' + esc(c.celular), esc(c.correo)].filter(Boolean).join(' · ') || 'Sin contacto en Defensores'}</span></li>`; }).join('');
+        return `<tr>
+          <td class="nombre">${esc(l.defensorNombre)}<span class="chico">${esc(l.area || '')}</span></td>
+          <td style="white-space:nowrap">${fechaCorta(l.inicio)} al ${fechaCorta(l.fin)}<span class="chico">${dias} día${dias === 1 ? '' : 's'}</span>${cuando}</td>
+          <td><ul class="lista-apoyos">${apoyos || '<li>—</li>'}</ul></td>
+          <td>${esc((PRIVADO[l.id] || {}).motivo || '') || '<span class="chico">—</span>'}</td>
+          ${puedeEditar() ? `<td style="white-space:nowrap"><button class="btn sec chico" data-editar="${esc(l.id)}">Editar</button> <button class="btn sec chico" data-borrar="${esc(l.id)}">Borrar</button></td>` : ''}
+        </tr>`; }).join('')}</tbody></table></div>`;
+  };
+  $('listaVigentes').innerHTML = tabla(grupos.vigente, 'vigente');
+  $('listaProximas').innerHTML = tabla(grupos.proxima, 'proxima');
+  $('listaPasadas').innerHTML = tabla(grupos.pasada, 'pasada');
+  $('nVigentes').textContent = grupos.vigente.length;
+  $('nProximas').textContent = grupos.proxima.length;
+  $('nPasadas').textContent = grupos.pasada.length;
+}
+function sumarDia(iso){ const d = new Date(iso + 'T12:00:00'); d.setDate(d.getDate() + 1); return d.toISOString().slice(0, 10); }
+$('buscador').addEventListener('input', pintarLista);
+$('contenido').addEventListener('click', async e => {
+  const ed = e.target.closest('[data-editar]');
+  if (ed){ abrirEdicion(ed.dataset.editar); return; }
+  const bo = e.target.closest('[data-borrar]');
+  if (!bo) return;
+  const id = bo.dataset.borrar, l = LICENCIAS.find(x => x.id === id);
+  if (!l || !confirm(`¿Borrar la licencia de ${l.defensorNombre} (${fechaCorta(l.inicio)} al ${fechaCorta(l.fin)})?`)) return;
+  try {
+    const lote = writeBatch(db);
+    lote.delete(doc(db, 'licencias', id));
+    lote.delete(doc(db, 'licenciasPrivado', id));
+    await lote.commit();
+    await registrarCambio('Borró licencia de ' + l.defensorNombre, id, resumen(l, PRIVADO[id]), {});
+    if (editandoId === id) limpiarForm();
+    avisar('Licencia borrada');
+    await cargarTodo();
+  } catch (err){ error(err); }
+});
+
+// ---------- Sesión ----------
+$('btnEntrar').onclick = async () => {
+  try { await signInWithEmailAndPassword(auth, $('loginCorreo').value.trim().toLowerCase(), $('loginClave').value); }
+  catch (e){ $('msgLogin').textContent = 'No se pudo entrar (' + e.code + ').'; }
+};
+$('btnSalir').onclick = () => signOut(auth);
+onAuthStateChanged(auth, async user => {
+  if (!user){ $('app').hidden = true; $('pantallaLogin').hidden = false; $('cargandoSesion').hidden = true; $('cajaLogin').hidden = false; return; }
+  try {
+    const correo = (user.email || '').toLowerCase();
+    const ficha = await getDoc(doc(db, 'staff', correo));
+    if (!ficha.exists()){ $('msgLogin').textContent = 'Tu correo no está autorizado.'; $('cargandoSesion').hidden = true; $('cajaLogin').hidden = false; await signOut(auth); return; }
+    const f = ficha.data();
+    yo = { correo, ...f };
+    nivel = nivelSeccion(f, 'licencias');
+    document.querySelectorAll('.menu-drives [data-seccion]').forEach(a => a.hidden = nivelSeccion(f, a.dataset.seccion) === 'sin');
+    $('enlacePermisos').hidden = !(f.esAdmin === true || f.puedeAutorizar === true);
+    $('usuarioSesion').textContent = (f.nombre || correo) + (nivel === 'editar' ? ' · puede registrar y editar licencias' : nivel === 'ver' ? ' · solo puede ver' : '');
+    $('pantallaLogin').hidden = true; $('app').hidden = false;
+    if (nivel === 'sin'){ $('sinAcceso').hidden = false; $('contenido').hidden = true; return; }
+    $('contenido').hidden = false;
+    $('cajaForm').hidden = !puedeEditar();
+    await cargarTodo();
+    if (puedeEditar()) limpiarForm();
+  } catch (e){ console.error(e); $('msgLogin').textContent = 'No se pudo cargar tu acceso (' + (e.code || e.message) + ').'; $('cargandoSesion').hidden = true; $('cajaLogin').hidden = false; }
+});
+</script>
+</body>
+</html>
