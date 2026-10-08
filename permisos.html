@@ -504,7 +504,7 @@ const celularPersonalDe = d => (PRIVADO[d.id] && PRIVADO[d.id].celularPersonal) 
 // Defensores que publican sus dos números: no se tocan
 const PUBLICAN_DOS = ['MUENTE', 'AMPUERO', 'ILLACONZA', 'ERAZO'];
 const publicaDos = d => PUBLICAN_DOS.some(a => (d.nombre || '').toUpperCase().includes(a));
-// Lee "I - 912 606 106 P-999 920 814": I = institucional (a la vista), P = personal (privado).
+// Lee "I - 900 000 001 P-900 000 002": I = institucional (a la vista), P = personal (privado).
 // Un número sin letra va al revés que su compañero con letra; si está solo, se queda a la vista.
 function separarNumeros(texto){
   const nums = [...String(texto || '').matchAll(/(?:\b([IiPp])\s*-?\s*)?(\d(?: ?\d){8})/g)]
