@@ -124,6 +124,8 @@
   .nombre{font-weight:600; min-width:250px; font-size:12.5px}
   .nombre .nota{display:block; font-size:11.5px; font-weight:500; color:var(--gris); margin-top:1px}
   .nombre .nota.responsable{color:var(--dorado); font-weight:700}
+  .nombre .nota.licencia{display:inline-block; margin-top:2px; padding:1px 7px; border-radius:8px; background:#FFF3D6; color:#6B4A0E; font-weight:700}
+  tr.fila-licencia td.nombre{opacity:.85}
   .num{text-align:center; font-variant-numeric:tabular-nums; font-weight:600}
   .num.cero{color:var(--gris-claro); font-weight:400}
   .celda-total{border-left:2px solid var(--linea); font-weight:700}
@@ -431,7 +433,7 @@
     <span class="badge-hoy c1">1</span><span class="badge-hoy c2">2</span><span class="badge-hoy c3">3</span>
     <span class="badge-hoy c4">4</span><span class="badge-hoy c5">5</span><span class="badge-hoy c6">6+</span>
   </div>
-  <p class="pie-nota">Arriba eliges el área: Asistencia Legal, Defensa de Víctimas o Equipo multidisciplinario; cada una tiene sus propias columnas. Las columnas de totales (Turno Consulta, Adulto Mayor, Patrocinio presencial, Turno de flagrancia, Turno peritos) marcan casos que ya cuentan en su categoría: no se suman dos veces. Las columnas grises del mes anterior (Nuevos, Consultas, Asesorías, Informes técnicos) vendrán de Consolidación. Las reasignaciones son carga muerta: solo se ven en "Reasig." y en el detalle de cada persona. La fila "Sugerido" es la de menor carga (sin licencias, Responsables de Área ni Coordinador). Toca cualquier número para ver el detalle.</p>
+  <p class="pie-nota">Arriba eliges el área: Asistencia Legal, Defensa de Víctimas o Equipo multidisciplinario; cada una tiene sus propias columnas. Las columnas de totales (Turno Consulta, Adulto Mayor, Patrocinio presencial, Turno de flagrancia, Turno peritos) marcan casos que ya cuentan en su categoría: no se suman dos veces. Las columnas grises del mes anterior (Nuevos, Consultas, Asesorías, Informes técnicos) vendrán de Consolidación. Las reasignaciones son carga muerta: solo se ven en "Reasig." y en el detalle de cada persona. La fila "Sugerido" es la de menor carga (sin quienes están de licencia ese día según la página Licencias, ni Responsables de Área ni Coordinador). Toca cualquier número para ver el detalle.</p>
 </div>
 
 <div class="fondo-modal" id="fondoInforme" hidden>
@@ -795,8 +797,8 @@ function opinionesDe(defId, mes){ return opinionesMes.filter(o => o.abogadoId ==
 // ---------- Sugerencia de reasignación: primero compensación, si nadie debe, turno (no se reinicia por mes) ----------
 // historial: todas las reasignaciones; lista: defensores activos del área en el orden de la Agenda (N° de orden).
 // Quien perdió un caso (−1) sin compensar recibe primero (el más antiguo primero); nunca el que pierde el caso.
-// El Coordinador no entra en nada; quien está de licencia se salta (conserva su deuda). Las derivaciones no cuentan.
-function sugerenciaReasignacion(historial, lista, pierdeId, nota){
+// El Coordinador no entra en nada; quien está de licencia (según la página Licencias) se salta y conserva su deuda. Las derivaciones no cuentan.
+function sugerenciaReasignacion(historial, lista, pierdeId, nota, deLicencia = () => false){
   const ids = new Set(lista.map(d => d.id));
   const esCoord = id => { const d = lista.find(x => x.id === id); return !!d && /coordinador/i.test(nota(d)); };
   const momento = r => r.creadoEnMs || (r.creadoEn && r.creadoEn.seconds ? r.creadoEn.seconds * 1000 : 0);
@@ -813,7 +815,7 @@ function sugerenciaReasignacion(historial, lista, pierdeId, nota){
   const pendientes = lista.filter(d => deudas[d.id] && deudas[d.id].length)
     .map(d => ({ id: d.id, nombre: d.nombre, n: deudas[d.id].length, desde: dmy(deudas[d.id][0]) }))
     .sort((a, b) => deudas[a.id][0].localeCompare(deudas[b.id][0]));
-  const elegibles = lista.filter(d => d.id !== pierdeId && !/coordinador|licencia/i.test(nota(d)));
+  const elegibles = lista.filter(d => d.id !== pierdeId && !/coordinador/i.test(nota(d)) && !deLicencia(d));
   const deben = elegibles.filter(d => deudas[d.id] && deudas[d.id].length)
     .sort((a, b) => deudas[a.id][0].localeCompare(deudas[b.id][0]) || lista.indexOf(a) - lista.indexOf(b));
   if (deben.length) return { id: deben[0].id, motivo: 'compensación: perdió un caso el ' + dmy(deudas[deben[0].id][0]), pendientes };
@@ -845,7 +847,22 @@ function escucharHistorialReasig(){
 }
 // Solo cuentan las reasignaciones desde la fecha de inicio del conteo
 function sugerenciaArea(pierdeId){
-  return sugerenciaReasignacion(historialReasig.filter(r => (r.fecha || '') >= inicioConteos.reasignaciones), DEFENSORES, pierdeId, d => d.nota || '');
+  return sugerenciaReasignacion(historialReasig.filter(r => (r.fecha || '') >= inicioConteos.reasignaciones), DEFENSORES, pierdeId, d => d.nota || '',
+    d => !!licenciaEn(d.id, hoyIso()));
+}
+// ---------- Licencias (página Licencias, colección pública "licencias") ----------
+let LICENCIAS = [], cortarLicencias = null;
+function escucharLicencias(){
+  if (cortarLicencias) return;
+  cortarLicencias = onSnapshot(collection(db, 'licencias'), snap => {
+    LICENCIAS = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    pintarTabla();
+  }, err => { console.error(err); avisar('No se pudieron leer las licencias: ' + err.code, 6000); });
+}
+// Licencia que cubre esa fecha (si hay dos seguidas, la que termina más tarde)
+function licenciaEn(defId, fecha){
+  return LICENCIAS.filter(l => l.defensorId === defId && l.inicio <= fecha && fecha <= l.fin)
+    .sort((a, b) => b.fin.localeCompare(a.fin))[0] || null;
 }
 // Opciones del "Reasignar a": la sugerencia ya viene elegida (siempre se puede escoger a otro)
 function opcionesReasignar(pierdeId){
@@ -1043,8 +1060,8 @@ function pintarTabla(){
   const cuerpo = document.getElementById('cuerpoTabla');
   cuerpo.innerHTML = '';
 
-  // Sugerido: menor carga del mes, sin contar a quien está de licencia; entre iguales, evita a los Responsables de Área
-  const candidatos = DEFENSORES.filter(d => !(d.nota && d.nota.toLowerCase().includes('licencia')));
+  // Sugerido: menor carga del mes, sin contar a quien está de licencia el día que se ve (página Licencias); entre iguales, evita a los Responsables de Área
+  const candidatos = DEFENSORES.filter(d => !licenciaEn(d.id, diaElegido));
   const totalesPorId = {};
   candidatos.forEach(d => { totalesPorId[d.id] = asignaciones.filter(a => cuentaComoNuevo(a) && a.defensorId === d.id && a.fecha.slice(0, 7) === diaElegido.slice(0, 7)).length; });
   const noResponsables = candidatos.filter(d => !(d.nota && (d.nota.includes('Responsable') || d.nota.includes('Coordinador'))));
@@ -1083,7 +1100,10 @@ function pintarTabla(){
 
     const esResponsable = d.nota && d.nota.includes('Responsable');
     const esSugerido = d.id === sugeridoId;
+    const lic = licenciaEn(d.id, diaElegido);
+    const textoLic = lic ? `<span class="nota licencia">De licencia hasta ${lic.fin.slice(8, 10)}/${lic.fin.slice(5, 7)}${(lic.apoyos || []).length ? ' · Apoyo: ' + lic.apoyos.map(a => escHtml(a.nombre)).join(', ') : ''}</span>` : '';
     const clasesFila = [
+      lic ? 'fila-licencia' : '',
       idx % 2 === 1 ? 'fila-par' : '',
       esResponsable ? 'fila-responsable' : '',
       esSugerido ? 'fila-sugerida' : ''
@@ -1102,7 +1122,7 @@ function pintarTabla(){
           <button class="btn-detalle-mas" data-defensor="${d.id}" data-nombre="${d.nombre}" title="Elegir categoría, materia u origen distintos">···</button>
         </div>
         <span class="numero-fila">${idx + 1}</span>
-        <div>${d.nombre}${esSugerido ? '<span class="etiqueta-sugerido">Sugerido</span>' : ''}${d.nota ? `<span class="nota${esResponsable ? ' responsable' : ''}">${esResponsable ? '★ ' : ''}${d.nota}</span>` : ''}</div>
+        <div>${d.nombre}${esSugerido ? '<span class="etiqueta-sugerido">Sugerido</span>' : ''}${d.nota ? `<span class="nota${esResponsable ? ' responsable' : ''}">${esResponsable ? '★ ' : ''}${d.nota}</span>` : ''}${textoLic}</div>
       </div></td>
       ${celdaHoy}
       ${celdasRef}
@@ -1929,6 +1949,7 @@ onAuthStateChanged(auth, async user => {
     try { const g = localStorage.getItem('megaalegra-area'); if (g && AREAS[g]) areaInicial = g; } catch (e) {}
     if (!areaInicialElegida && (usuario.area || '').toLowerCase().startsWith('victima')) areaInicial = 'Defensa de Víctimas';
     escucharHistorialReasig();
+    escucharLicencias();
     await cambiarArea(areaInicial);
 
     document.body.classList.toggle('solo-lectura', usuario.rol !== 'abogado');

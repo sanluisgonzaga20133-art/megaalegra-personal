@@ -629,6 +629,19 @@ async function cargarFeriados(){
     if (!lista.size) console.warn('La colección feriados está vacía: solo se descuentan sábados y domingos.');
   } catch (e){ console.error('No se pudieron leer los feriados', e); }
 }
+// Licencias de defensores (página Licencias, colección pública "licencias"): se saltan en los turnos y se marcan al elegir abogado
+let LICENCIAS = [];
+async function cargarLicencias(){
+  try { LICENCIAS = (await getDocs(collection(db, 'licencias'))).docs.map(d => ({ id: d.id, ...d.data() })); }
+  catch (e){ console.error('No se pudieron leer las licencias', e); }
+}
+// Licencia que cubre esa fecha (si hay dos seguidas, la que termina más tarde)
+function licenciaEn(defId, fecha){
+  return LICENCIAS.filter(l => l.defensorId === defId && l.inicio <= fecha && fecha <= l.fin)
+    .sort((a, b) => b.fin.localeCompare(a.fin))[0] || null;
+}
+const deLicenciaHoy = d => !!licenciaEn(d.id, hoyIso());
+function textoLicencia(d){ const l = licenciaEn(d.id, hoyIso()); return l ? ' — de licencia hasta ' + l.fin.slice(8, 10) + '/' + l.fin.slice(5, 7) : ''; }
 function esHabil(iso){ const dow = new Date(iso + 'T00:00:00').getDay(); return dow !== 0 && dow !== 6 && !FERIADOS.has(iso); }
 function diasHabilesHasta(desde, hasta){
   let n = 0;
@@ -1087,8 +1100,8 @@ function llenarMaterias(valor){
 // ---------- Sugerencia de reasignación: primero compensación, si nadie debe, turno (no se reinicia por mes) ----------
 // historial: todas las reasignaciones; lista: defensores activos del área en el orden de la Agenda (N° de orden).
 // Quien perdió un caso (−1) sin compensar recibe primero (el más antiguo primero); nunca el que pierde el caso.
-// El Coordinador no entra en nada; quien está de licencia se salta (conserva su deuda). Las derivaciones no cuentan.
-function sugerenciaReasignacion(historial, lista, pierdeId, nota){
+// El Coordinador no entra en nada; quien está de licencia (según la página Licencias) se salta y conserva su deuda. Las derivaciones no cuentan.
+function sugerenciaReasignacion(historial, lista, pierdeId, nota, deLicencia = () => false){
   const ids = new Set(lista.map(d => d.id));
   const esCoord = id => { const d = lista.find(x => x.id === id); return !!d && /coordinador/i.test(nota(d)); };
   const momento = r => r.creadoEnMs || (r.creadoEn && r.creadoEn.seconds ? r.creadoEn.seconds * 1000 : 0);
@@ -1105,7 +1118,7 @@ function sugerenciaReasignacion(historial, lista, pierdeId, nota){
   const pendientes = lista.filter(d => deudas[d.id] && deudas[d.id].length)
     .map(d => ({ id: d.id, nombre: d.nombre, n: deudas[d.id].length, desde: dmy(deudas[d.id][0]) }))
     .sort((a, b) => deudas[a.id][0].localeCompare(deudas[b.id][0]));
-  const elegibles = lista.filter(d => d.id !== pierdeId && !/coordinador|licencia/i.test(nota(d)));
+  const elegibles = lista.filter(d => d.id !== pierdeId && !/coordinador/i.test(nota(d)) && !deLicencia(d));
   const deben = elegibles.filter(d => deudas[d.id] && deudas[d.id].length)
     .sort((a, b) => deudas[a.id][0].localeCompare(deudas[b.id][0]) || lista.indexOf(a) - lista.indexOf(b));
   if (deben.length) return { id: deben[0].id, motivo: 'compensación: perdió un caso el ' + dmy(deudas[deben[0].id][0]), pendientes };
@@ -1129,9 +1142,9 @@ async function leerInicioConteos(){
 const AYUDA_ABOGADO = 'El teléfono y el correo del abogado se completan solos.';
 // ---------- Turno de opiniones (2ª, 3ª…): rotativo por área según el N° de orden, sin reiniciarse por mes ----------
 // Le toca al que sigue después del último que dio una opinión en el área (desde la fecha de inicio del conteo).
-// Se salta a quien está de licencia, al Coordinador y a quien ya vio ese caso (titular, quien lo tiene ahora y quienes ya opinaron).
+// Se salta a quien está de licencia (según la página Licencias), al Coordinador y a quien ya vio ese caso (titular, quien lo tiene ahora y quienes ya opinaron).
 const TIPO_OPINION = 'Solicitud de nueva opinión';
-function sugerenciaOpinion(opiniones, lista, yaVieron, nota){
+function sugerenciaOpinion(opiniones, lista, yaVieron, nota, deLicencia = () => false){
   if (!lista.length) return null;
   const momento = o => o.creadoEnMs || 0;
   const ultima = opiniones.filter(o => lista.some(d => d.id === o.abogadoId))
@@ -1139,7 +1152,7 @@ function sugerenciaOpinion(opiniones, lista, yaVieron, nota){
   const pos = ultima ? lista.findIndex(d => d.id === ultima.abogadoId) : -1;
   for (let i = 1; i <= lista.length; i++){
     const d = lista[(pos + i) % lista.length];
-    if (!yaVieron.has(d.id) && !/coordinador|licencia/i.test(nota(d))) return d.id;
+    if (!yaVieron.has(d.id) && !/coordinador/i.test(nota(d)) && !deLicencia(d)) return d.id;
   }
   return null;
 }
@@ -1183,7 +1196,8 @@ async function sugerirAbogadoCambio(){
     const historial = (await getDocs(collection(db, 'reasignaciones'))).docs.map(d => ({ id: d.id, ...d.data() })).filter(r => (r.fecha || '') >= inicio);
     const area = padre.area || $('fArea').value;
     const lista = DEFENSORES.filter(d => d.area === area);
-    const s = sugerenciaReasignacion(historial, lista, padre.abogadoActualId || padre.abogadoId, d => d.notas || '');
+    await cargarLicencias();
+    const s = sugerenciaReasignacion(historial, lista, padre.abogadoActualId || padre.abogadoId, d => d.notas || '', deLicenciaHoy);
     if (!s.id){ ayuda.textContent = 'No hay a quién sugerir: elige a mano.'; return; }
     $('fAbogado').value = s.id;
     ayuda.textContent = 'Sugerido: ' + (lista.find(d => d.id === s.id) || {}).nombre + ' (' + s.motivo + '). Puedes elegir a otro.';
@@ -1194,8 +1208,8 @@ function llenarAbogados(valor){
   const propios = DEFENSORES.filter(d => d.area === area);
   const otros = DEFENSORES.filter(d => d.area !== area);
   $('fAbogado').innerHTML = '<option value="">— Elegir —</option>' +
-    `<optgroup label="${area}">${propios.map(d => `<option value="${d.id}">${esc(d.nombre)}</option>`).join('')}</optgroup>` +
-    `<optgroup label="Otras áreas">${otros.map(d => `<option value="${d.id}">${esc(d.nombre)}</option>`).join('')}</optgroup>`;
+    `<optgroup label="${area}">${propios.map(d => `<option value="${d.id}">${esc(d.nombre + textoLicencia(d))}</option>`).join('')}</optgroup>` +
+    `<optgroup label="Otras áreas">${otros.map(d => `<option value="${d.id}">${esc(d.nombre + textoLicencia(d))}</option>`).join('')}</optgroup>`;
   if (valor) $('fAbogado').value = valor;
 }
 function llenarDirigido(valor){
@@ -1337,7 +1351,8 @@ async function calcularOpinion(){
       .map(d => d.data()).filter(o => (o.fecha || '') >= inicio);
     const lista = DEFENSORES.filter(d => d.area === area);
     const yaVieron = new Set([padre.abogadoId, padre.abogadoActualId, ...hermanos.map(h => h.abogadoId)].filter(Boolean));
-    const id = sugerenciaOpinion(opiniones, lista, yaVieron, d => d.notas || '');
+    await cargarLicencias();
+    const id = sugerenciaOpinion(opiniones, lista, yaVieron, d => d.notas || '', deLicenciaHoy);
     if (!id){ $('ayudaAbogado').textContent = 'No hay a quién sugerir para la opinión: elige a mano.'; return; }
     $('fAbogado').value = id;
     $('ayudaAbogado').textContent = 'Sugerido para la opinión: ' + (lista.find(d => d.id === id) || {}).nombre + ' (turno de opiniones del área). Puedes elegir a otro.';
@@ -2056,7 +2071,7 @@ onAuthStateChanged(auth, async user => {
     }
     $('enlacePermisos').hidden = !(ficha.data().esAdmin === true || ficha.data().puedeAutorizar === true);
     // La lista de asistentes sale de "asistentes" (sin permisos), así no hace falta leer las fichas del personal
-    await Promise.all([cargarAsistentes(), cargarFeriados()]);
+    await Promise.all([cargarAsistentes(), cargarFeriados(), cargarLicencias()]);
     const snapDef = await getDocs(collection(db, 'defensores'));
     DEFENSORES = snapDef.docs.map(d => ({ id: d.id, ...d.data() })).filter(d => d.activo !== false)
       .sort((a, b) => (a.area || '').localeCompare(b.area || '') || (a.orden ?? 999) - (b.orden ?? 999) || (a.nombre || '').localeCompare(b.nombre || '', 'es'));
