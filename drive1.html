@@ -133,6 +133,10 @@
   .resultado-caso:hover{background:var(--papel)}
   .ayuda{font-size:12px;color:var(--gris);margin-top:4px}
   .error-form{color:var(--rojo-oscuro);font-size:13px;font-weight:700;margin-top:12px}
+  /* Dato obligatorio que falta: borde rojo y mensaje debajo del mismo casillero */
+  .falta-campo{border:2px solid var(--rojo) !important;border-radius:8px;background:#FFF5F5}
+  .opciones.falta-campo{padding:4px}
+  .msg-falta{color:var(--rojo-oscuro);font-size:12.5px;font-weight:700;margin-top:4px}
   .acciones-modal{display:flex;gap:10px;margin-top:18px}
   .acciones-modal button{flex:1;padding:12px;border-radius:9px;font-size:15px;font-weight:700;cursor:pointer}
   .btn-cancelar{background:var(--papel);color:var(--tinta);border:1.5px solid var(--linea)}
@@ -1396,7 +1400,7 @@ function limpiarForm(){
   llenarMaterias(); llenarAbogados(); llenarDirigido();
   asistenteManual = false; turnoSugerencia++;
   llenarAsistentes(''); $('bloqueAsistente').hidden = true; $('ayudaAsistente').textContent = '';
-  $('errorForm').hidden = true;
+  $('errorForm').hidden = true; limpiarFaltas();
   $('btnGuardarForm').disabled = false;
   actualizarObligatorios();
 }
@@ -1557,8 +1561,45 @@ async function cerrarPlazosDelCaso(raizId, informeId){
   } catch (err){ console.error(err); avisar('Se registró el informe, pero no se pudo cerrar el plazo del caso. Márcalo con “✓ Cumplido”.', 7000); }
 }
 
+// ---------- Datos obligatorios que faltan: se marcan en su propio casillero ----------
+// Borde rojo, mensaje debajo y la ventana sube al primero; al completarlo, desaparecen solos.
+function limpiarFaltas(){
+  document.querySelectorAll('#fondoForm .falta-campo').forEach(el => { el.classList.remove('falta-campo'); el.removeAttribute('aria-invalid'); });
+  document.querySelectorAll('#fondoForm .msg-falta').forEach(m => m.remove());
+}
+// faltas: [[casillero, mensaje], ...] en el orden del formulario
+function mostrarFaltas(faltas){
+  limpiarFaltas();
+  faltas.forEach(([el, texto]) => {
+    el.classList.add('falta-campo');
+    el.setAttribute('aria-invalid', 'true');
+    const m = document.createElement('div');
+    m.className = 'msg-falta'; m.textContent = texto; m.setAttribute('role', 'alert');
+    // El mensaje va debajo del casillero (en fecha y hora del plazo, debajo de los dos)
+    const ancla = el.id === 'fPlazoFecha' ? $('bloquePlazoOtro') : el;
+    ancla.insertAdjacentElement('afterend', m);
+    el._msgFalta = m;
+  });
+  const primero = faltas[0][0];
+  primero.scrollIntoView({ block: 'center', behavior: 'smooth' });
+  if (/INPUT|SELECT|TEXTAREA/.test(primero.tagName)) primero.focus({ preventScroll: true });
+}
+function estaCompleto(el){
+  if (el.id === 'buscarPadre') return !!padre;
+  if (el.classList.contains('opciones')) return !!el.querySelector('.activo');
+  return !!String(el.value || '').trim();
+}
+function revisarFaltas(){
+  document.querySelectorAll('#fondoForm .falta-campo').forEach(el => {
+    if (!estaCompleto(el)) return;
+    el.classList.remove('falta-campo'); el.removeAttribute('aria-invalid');
+    if (el._msgFalta){ el._msgFalta.remove(); el._msgFalta = null; }
+  });
+}
+['input', 'change'].forEach(t => $('fondoForm').addEventListener(t, revisarFaltas));
+$('fondoForm').addEventListener('click', () => setTimeout(revisarFaltas, 0)); // opciones (origen, resultado) y elegir el caso
+
 $('btnGuardarForm').onclick = async () => {
-  const error = t => { $('errorForm').textContent = t; $('errorForm').hidden = false; };
   $('errorForm').hidden = true;
   editandoIdNuevo = null;
   const esAnt = modo === 'antecedente';
@@ -1566,22 +1607,24 @@ $('btnGuardarForm').onclick = async () => {
   const abog = DEFENSORES.find(d => d.id === $('fAbogado').value);
   const materia = $('fMateria').value === 'Otra' ? may($('fMateriaOtra').value) : $('fMateria').value;
 
-  if (esAnt && !padre) return error('Elige el caso al que pertenece este documento.');
-  if (!$('fFecha').value) return error('Falta la fecha de registro.');
-  if (!origen) return error('Elige el origen.');
-  if (origen === 'Mesa de partes virtual' && !$('fCodigo').value.trim()) return error('Falta el código de mesa de partes virtual.');
-  if (!esAnt && !$('fUsuario').value.trim()) return error('Falta el nombre del usuario.');
-  if (!esAnt && !materia) return error('Elige la materia o delito.');
-  if (!abog) return error('Elige el abogado.');
-  if (tipoDoc === 'Informe del defensor' && !$('fRespuesta').value) return error('Elige la respuesta del defensor.');
+  const faltas = [];
+  const falta = (cond, el, texto) => { if (cond) faltas.push([el, texto]); };
+  falta(esAnt && !padre, $('buscarPadre'), 'Falta elegir el caso al que pertenece este documento.');
+  falta(!$('fFecha').value, $('fFecha'), 'Falta la fecha de registro.');
+  falta(!origen, $('optOrigen'), 'Falta el origen.');
+  falta(origen === 'Mesa de partes virtual' && !$('fCodigo').value.trim(), $('fCodigo'), 'Falta el código de mesa de partes virtual.');
+  falta(!esAnt && !$('fUsuario').value.trim(), $('fUsuario'), 'Falta el nombre del usuario.');
+  falta(!esAnt && !materia, $('fMateria').value === 'Otra' ? $('fMateriaOtra') : $('fMateria'), $('fMateria').value === 'Otra' ? 'Falta escribir la materia o delito.' : 'Falta la materia o delito.');
+  falta(!abog, $('fAbogado'), 'Falta el abogado.');
+  falta(tipoDoc === 'Informe del defensor' && !$('fRespuesta').value, $('fRespuesta'), 'Falta la respuesta del defensor.');
   if (esDerivacion(tipoDoc)){
-    if (!$('fDerivaTipo').value) return error('Elige si se deriva a otra Dirección Distrital o a otra institución.');
-    if (!$('fDistrital').value.trim()) return error('Escribe el nombre de la Dirección Distrital o institución.');
-    if (!$('fDerivaMotivo').value) return error('Elige el motivo de la derivación.');
-    if ($('fDerivaMotivo').value === 'Otro' && !$('fDerivaMotivoOtro').value.trim()) return error('Escribe el motivo de la derivación.');
+    falta(!$('fDerivaTipo').value, $('fDerivaTipo'), 'Falta elegir si se deriva a otra Dirección Distrital o a otra institución.');
+    falta(!$('fDistrital').value.trim(), $('fDistrital'), 'Falta el nombre de la Dirección Distrital o institución.');
+    falta(!$('fDerivaMotivo').value, $('fDerivaMotivo'), 'Falta el motivo de la derivación.');
+    falta($('fDerivaMotivo').value === 'Otro' && !$('fDerivaMotivoOtro').value.trim(), $('fDerivaMotivoOtro'), 'Falta escribir el motivo.');
   }
-  if (tipoDoc === 'Solicitud de cambio de abogado' && !resultadoCambio) return error('Elige el resultado de la solicitud de cambio.');
-  if ($('fPlazo').value === 'otro' && !$('fPlazoFecha').value) return error('Elige la fecha del plazo.');
+  falta(tipoDoc === 'Solicitud de cambio de abogado' && !resultadoCambio, $('optResultado'), 'Falta el resultado de la solicitud de cambio.');
+  falta($('fPlazo').value === 'otro' && !$('fPlazoFecha').value, $('fPlazoFecha'), 'Falta la fecha del plazo.');
 
   const previoForm = editandoId ? { ...(cache.get(editandoId) || {}) } : null;
   const hacer = { memo: $('fHacerMemo').checked, oficio: $('fHacerOficio').checked, carta: $('fHacerCarta').checked, noHacer: $('fNoHacer').checked };
@@ -1589,7 +1632,9 @@ $('btnGuardarForm').onclick = async () => {
   const correoAsis = $('fAsistente').value;
   const asis = ASISTENTES.find(a => a.correo === correoAsis)
     || (correoAsis && previoForm && correoAsis === previoForm.asistenteCorreo ? { correo: correoAsis, nombre: previoForm.asistenteNombre } : null);
-  if (proyecta && !asis && ASISTENTES.length && tienePendiente({ ...(previoForm || {}), hacer })) return error('Elige el asistente que lo proyecta.');
+  falta(proyecta && !asis && ASISTENTES.length && tienePendiente({ ...(previoForm || {}), hacer }), $('fAsistente'), 'Falta el asistente que lo proyecta.');
+  if (faltas.length) return mostrarFaltas(faltas);
+  limpiarFaltas();
 
   const dirigido = $('fDirigido').value.startsWith('OTRA') ? may($('fDirigidoOtro').value) : $('fDirigido').value;
   const diligencia = $('fDiligencia').value === 'Otra' ? may($('fDiligenciaOtra').value) : $('fDiligencia').value;
