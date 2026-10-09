@@ -131,6 +131,18 @@
   .resultados-caso{border:1px solid var(--linea);border-radius:8px;margin-top:6px;max-height:220px;overflow:auto}
   .resultado-caso{padding:8px 10px;font-size:12.5px;border-bottom:1px solid var(--linea);cursor:pointer}
   .resultado-caso:hover{background:var(--papel)}
+  /* Coincidencias por nombre al registrar un caso nuevo (todos los años) */
+  .coincidencias{border:1.5px solid var(--dorado);border-radius:9px;margin-top:6px;background:#FFFBF2}
+  .coincidencias .titulo-coinc{padding:8px 10px;font-size:12.5px;font-weight:700;color:#6B4A0E;border-bottom:1px solid var(--linea)}
+  .coincidencias .lista-coinc{max-height:300px;overflow:auto}
+  .coincidencia{padding:8px 10px;font-size:12.5px;border-bottom:1px solid var(--linea);line-height:1.45}
+  .coincidencia:last-child{border-bottom:none}
+  .anio-coinc{display:inline-block;background:var(--tinta);color:#fff;font-weight:800;font-size:13px;padding:1px 8px;border-radius:6px;margin-right:6px}
+  .marca-coinc{display:inline-block;font-size:11px;font-weight:700;padding:1px 6px;border-radius:6px;margin-left:4px;background:#F1E3F0;color:#7A3B57}
+  .marca-coinc.deriv{background:#FBEEEC;color:var(--rojo-oscuro)}
+  .acciones-coinc{display:flex;gap:6px;flex-wrap:wrap;margin-top:6px}
+  .acciones-coinc button{padding:5px 10px;border-radius:7px;font-size:12px;font-weight:700;cursor:pointer;border:1.5px solid var(--linea);background:#fff;color:var(--tinta)}
+  .acciones-coinc button.mismo{background:var(--azul);border-color:var(--azul);color:#fff}
   .ayuda{font-size:12px;color:var(--gris);margin-top:4px}
   .error-form{color:var(--rojo-oscuro);font-size:13px;font-weight:700;margin-top:12px}
   /* Dato obligatorio que falta: borde rojo y mensaje debajo del mismo casillero */
@@ -363,7 +375,8 @@
     <div class="rejilla" id="bloqueDatosCaso">
       <div class="ancho">
         <label class="campo" for="fUsuario">Usuario (agraviado o solicitante) <span class="obl">*</span></label>
-        <input type="text" id="fUsuario" class="may" placeholder="APELLIDOS, Nombres">
+        <input type="text" id="fUsuario" class="may" placeholder="APELLIDOS, Nombres" autocomplete="off">
+        <div class="coincidencias" id="coincidencias" hidden aria-live="polite"></div>
       </div>
       <div>
         <label class="campo" for="fArea">Área <span class="obl">*</span></label>
@@ -535,8 +548,10 @@ const TIPO_DEVOLUCION_ANTIGUO = 'Devolución a otra Dirección Distrital';
 function esDerivacion(t){ return t === TIPO_DERIVACION || t === TIPO_DEVOLUCION_ANTIGUO; }
 // Texto de destino: "DIRECCIÓN DISTRITAL LIMA NORTE" o el nombre de la institución (las antiguas eran distritales)
 function destinoDerivacion(r){ return (r.derivaTipo === 'Otra institución' ? '' : 'DIRECCIÓN DISTRITAL ') + may(r.distrital || 'sin nombre'); }
+// Mismo usuario que vuelve (botón "Pasar al mismo abogado"): antecedente con el abogado actual; no cuenta en la Agenda
+const TIPO_MISMO_ABOGADO = 'Nueva consulta del mismo usuario (pasa al mismo abogado)';
 const TIPOS_DOC = ['Informe del defensor', TIPO_DERIVACION, 'Solicitud de cambio de abogado',
-  'Solicitud de nueva opinión', 'Otro documento'];
+  'Solicitud de nueva opinión', TIPO_MISMO_ABOGADO, 'Otro documento'];
 const RESPUESTAS = ['Usuario no contesta', 'No desea patrocinio', 'Solicita oficiar a otra institución', 'Caso atendido',
   'Informa estado del caso', 'Caso sin solución (absuelto)', 'Otro'];
 const RESULTADOS_CAMBIO = ['En evaluación', 'Procede (reasignado)', 'No procede (continúa)'];
@@ -1006,11 +1021,21 @@ async function recalcularEstado(padreId){
   const ultimo = hijos[hijos.length - 1];
   const cambios = { estado: ultimo ? ultimo.estadoTexto : '' };
   const cambio = snap.docs.map(d => d.data()).filter(h => h.tipoDoc === 'Solicitud de cambio de abogado' && h.resultadoCambio === 'Procede (reasignado)').sort(ordenRegistro).pop();
-  if (cambio){ Object.assign(cambios, { abogadoActualId: cambio.abogadoId, abogadoActualNombre: cambio.abogadoNombre, abogadoActualCelular: cambio.abogadoCelular || '', abogadoActualCorreo: cambio.abogadoCorreo || '' }); }
-  else Object.assign(cambios, { abogadoActualId: deleteField(), abogadoActualNombre: deleteField(), abogadoActualCelular: deleteField(), abogadoActualCorreo: deleteField() });
-  await updateDoc(doc(db, COL, padreId), cambios);
   const padreDoc = cache.get(padreId);
   const idA = padreDoc ? idAsignacion(padreDoc) : padreId;
+  // Si el caso se reasignó desde la Agenda (no por un cambio de abogado del Drive 1), su abogado actual se conserva
+  const idsHijos = new Set(snap.docs.map(d => d.id));
+  let reasignadoEnAgenda = false;
+  if (!cambio){
+    try {
+      const rs = await getDocs(query(collection(db, 'reasignaciones'), where('casoId', '==', idA)));
+      reasignadoEnAgenda = rs.docs.some(d => d.data().aId && !idsHijos.has(d.id));
+    } catch (e){ console.warn('No se pudo revisar las reasignaciones de la Agenda', e); reasignadoEnAgenda = true; }
+  }
+  if (cambio){ Object.assign(cambios, { abogadoActualId: cambio.abogadoId, abogadoActualNombre: cambio.abogadoNombre, abogadoActualCelular: cambio.abogadoCelular || '', abogadoActualCorreo: cambio.abogadoCorreo || '' }); }
+  else if (!reasignadoEnAgenda) Object.assign(cambios, { abogadoActualId: deleteField(), abogadoActualNombre: deleteField(), abogadoActualCelular: deleteField(), abogadoActualCorreo: deleteField() });
+  await updateDoc(doc(db, COL, padreId), cambios);
+  if (!cambio && reasignadoEnAgenda) return;
   if (await existe('asignaciones', idA)) await updateDoc(doc(db, 'asignaciones', idA), { abogadoActualId: cambio ? cambio.abogadoId : deleteField() });
 }
 
@@ -1334,6 +1359,7 @@ function ponerModo(m){
   $('bloquePadre').hidden = m !== 'antecedente';
   $('bloqueDatosCaso').hidden = m === 'antecedente';
   $('bloqueResumen').hidden = m !== 'antecedente';
+  if (m !== 'nuevo') ocultarCoincidencias();
   if (m === 'antecedente' && !padre) mostrarBuscadorPadre();
   actualizarBloquesTipo();
 }
@@ -1344,6 +1370,9 @@ function actualizarBloquesTipo(){
   $('bloqueCambio').hidden = t !== 'Solicitud de cambio de abogado';
   $('bloqueOpinion').hidden = t !== 'Solicitud de nueva opinión';
   if (t === 'Solicitud de nueva opinión') calcularOpinion();
+  const AYUDA_MISMO = 'Pasa al abogado actual del caso. Se guarda como antecedente y no cuenta en la Agenda.';
+  if (t === TIPO_MISMO_ABOGADO) $('ayudaAbogado').textContent = AYUDA_MISMO;
+  else if ($('ayudaAbogado').textContent === AYUDA_MISMO) $('ayudaAbogado').textContent = AYUDA_ABOGADO;
   actualizarAbogadoLabel();
 }
 function actualizarAbogadoLabel(){
@@ -1421,8 +1450,67 @@ function elegirPadre(r){
   actualizarBloquesTipo();
 }
 
+// ---------- Al escribir el usuario de un caso nuevo: sus casos anteriores (todos los años) ----------
+// Lo más reciente primero, con el año destacado. "Pasar al mismo abogado" lo registra como antecedente (no cuenta en la Agenda);
+// "Es un caso nuevo" sigue el registro normal (sí cuenta).
+let tCoincidencias = null, coincidenciasDescartadas = '';
+function ocultarCoincidencias(){ $('coincidencias').hidden = true; $('coincidencias').innerHTML = ''; }
+function marcasDelCaso(r, hijos){
+  const marcas = [];
+  const cambio = hijos.filter(h => h.tipoDoc === 'Solicitud de cambio de abogado' && h.resultadoCambio === 'Procede (reasignado)').sort(ordenRegistro).pop();
+  if (cambio) marcas.push(`<span class="marca-coinc">Cambio de abogado el ${fechaCorta(cambio.fecha)}</span>`);
+  else if (r.abogadoActualId && r.abogadoActualId !== r.abogadoId) marcas.push('<span class="marca-coinc">Reasignado</span>');
+  const deriv = hijos.filter(h => esDerivacion(h.tipoDoc)).sort(ordenRegistro).pop();
+  if (deriv) marcas.push(`<span class="marca-coinc deriv">Derivado a ${esc(destinoDerivacion(deriv))}${deriv.fecha ? ' el ' + fechaCorta(deriv.fecha) : ''}</span>`);
+  return marcas.join('');
+}
+async function buscarCoincidencias(){
+  const texto = norm($('fUsuario').value.trim().replace(/[,.]/g, ' '));
+  if (modo !== 'nuevo' || editandoId || texto.length < 3 || texto === coincidenciasDescartadas){ ocultarCoincidencias(); return; }
+  await cargarTodos();
+  if (norm($('fUsuario').value.trim().replace(/[,.]/g, ' ')) !== texto || modo !== 'nuevo') return; // ya cambió mientras cargaba
+  const palabras = texto.split(/\s+/).filter(Boolean);
+  const todos = [...cache.values()];
+  const res = todos.filter(r => !r.padreId && r.usuario && palabras.every(p => norm(r.usuario).includes(p)))
+    .sort((a, b) => ordenRegistro(b, a));
+  if (!res.length){ ocultarCoincidencias(); return; }
+  const hijosDe = {};
+  todos.forEach(h => { if (h.padreId) (hijosDe[h.padreId] = hijosDe[h.padreId] || []).push(h); });
+  const mostrar = res.slice(0, 40);
+  $('coincidencias').innerHTML = `<div class="titulo-coinc">Este nombre ya tiene ${res.length} caso${res.length === 1 ? '' : 's'} registrado${res.length === 1 ? '' : 's'} (todos los años, lo más reciente primero)${res.length > mostrar.length ? '. Se muestran los ' + mostrar.length + ' más recientes: escribe más del nombre para afinar' : ''}.</div>
+    <div class="lista-coinc">${mostrar.map(r => {
+      const actual = r.abogadoActualNombre || r.abogadoNombre || '(sin abogado)';
+      const antes = r.abogadoActualNombre && r.abogadoActualNombre !== r.abogadoNombre ? ` <span class="ayuda" style="display:inline">(antes ${esc(r.abogadoNombre)})</span>` : '';
+      return `<div class="coincidencia">
+        <span class="anio-coinc">${esc(String(r.anio || (r.fecha || '').slice(0, 4)))}</span><b>${esc(r.usuario)}</b>${marcasDelCaso(r, hijosDe[r.id] || [])}<br>
+        ${fechaCorta(r.fecha)} · ${esc(r.codigo || '(sin código)')} · ${esc(r.materia || '(sin materia)')} · ${esc(r.area || '')}<br>
+        Abogado actual: <b>${esc(actual)}</b>${antes}
+        <div class="acciones-coinc"><button type="button" class="mismo" data-mismo="${esc(r.id)}">Pasar al mismo abogado</button><button type="button" data-es-nuevo>Es un caso nuevo</button></div>
+      </div>`;
+    }).join('')}</div>`;
+  $('coincidencias').hidden = false;
+}
+$('fUsuario').addEventListener('input', () => { clearTimeout(tCoincidencias); tCoincidencias = setTimeout(buscarCoincidencias, 250); });
+$('coincidencias').addEventListener('click', e => {
+  if (e.target.closest('[data-es-nuevo]')){
+    coincidenciasDescartadas = norm($('fUsuario').value.trim().replace(/[,.]/g, ' '));
+    ocultarCoincidencias();
+    avisar('Sigue el registro como caso nuevo (cuenta en la Agenda).');
+    return;
+  }
+  const b = e.target.closest('[data-mismo]'); if (!b) return;
+  const r = cache.get(b.dataset.mismo); if (!r) return;
+  ocultarCoincidencias();
+  ponerModo('antecedente');
+  elegirPadre(r);
+  $('fTipoDoc').value = TIPO_MISMO_ABOGADO;
+  actualizarBloquesTipo();
+  $('bloquePadre').scrollIntoView({ block: 'center', behavior: 'smooth' });
+});
+
 function limpiarForm(){
   editandoId = null; padre = null; origen = ''; prioridad = 'normal'; resultadoCambio = ''; ultimaReferenciaAuto = '';
+  coincidenciasDescartadas = ''; clearTimeout(tCoincidencias); ocultarCoincidencias();
   ['fNumDoc', 'fCodigo', 'fUsuario', 'fCarpeta', 'fResumen', 'fDistrital', 'fProveido', 'fDiligenciaOtra', 'fSupNota', 'fDilHora', 'fDilFecha', 'fPlazoFecha', 'fPlazoHora', 'fSupFecha']
     .forEach(i => $(i).value = '');
   ['fHacerMemo', 'fHacerOficio', 'fHacerCarta', 'fNoHacer', 'fOcultar'].forEach(i => $(i).checked = false);
