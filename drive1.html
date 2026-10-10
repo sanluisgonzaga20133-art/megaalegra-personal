@@ -334,6 +334,13 @@
     <h2 id="tituloForm">Registrar caso</h2>
     <p class="sub" id="subForm">Los campos con * son obligatorios. El texto se guarda en mayúsculas.</p>
 
+    <!-- Primero el nombre: al escribirlo salen sus casos anteriores de todos los años -->
+    <div id="bloqueUsuario">
+      <label class="campo" for="fUsuario">Usuario (agraviado o solicitante) <span class="obl">*</span></label>
+      <input type="text" id="fUsuario" class="may" placeholder="APELLIDOS, Nombres" autocomplete="off">
+      <div class="coincidencias" id="coincidencias" hidden aria-live="polite"></div>
+    </div>
+
     <div id="bloqueTipoRegistro">
       <label class="campo">¿Qué vas a registrar?</label>
       <div class="opciones" id="optTipoRegistro">
@@ -373,11 +380,6 @@
     </div>
 
     <div class="rejilla" id="bloqueDatosCaso">
-      <div class="ancho">
-        <label class="campo" for="fUsuario">Usuario (agraviado o solicitante) <span class="obl">*</span></label>
-        <input type="text" id="fUsuario" class="may" placeholder="APELLIDOS, Nombres" autocomplete="off">
-        <div class="coincidencias" id="coincidencias" hidden aria-live="polite"></div>
-      </div>
       <div>
         <label class="campo" for="fArea">Área <span class="obl">*</span></label>
         <select id="fArea">
@@ -1358,6 +1360,7 @@ function ponerModo(m){
   marcar($('optTipoRegistro'), m);
   $('bloquePadre').hidden = m !== 'antecedente';
   $('bloqueDatosCaso').hidden = m === 'antecedente';
+  $('bloqueUsuario').hidden = m === 'antecedente';
   $('bloqueResumen').hidden = m !== 'antecedente';
   if (m !== 'nuevo') ocultarCoincidencias();
   if (m === 'antecedente' && !padre) mostrarBuscadorPadre();
@@ -1587,6 +1590,8 @@ function abrirForm({ editarId = null, padreId = null } = {}){
     ponerModo('nuevo');
   }
   $('fondoForm').hidden = false;
+  // Caso nuevo: el cursor queda en el nombre del usuario (lo primero que se busca)
+  if (modo === 'nuevo' && !editandoId) setTimeout(() => $('fUsuario').focus(), 0);
   // Refresca licencias y "no vino hoy" por si cambiaron desde que se abrió la página
   cargarAsistentes().then(() => {
     if ($('fondoForm').hidden) return;
@@ -1734,11 +1739,11 @@ $('btnGuardarForm').onclick = async () => {
 
   const faltas = [];
   const falta = (cond, el, texto) => { if (cond) faltas.push([el, texto]); };
+  falta(!esAnt && !$('fUsuario').value.trim(), $('fUsuario'), 'Falta el nombre del usuario.');
   falta(esAnt && !padre, $('buscarPadre'), 'Falta elegir el caso al que pertenece este documento.');
   falta(!$('fFecha').value, $('fFecha'), 'Falta la fecha de registro.');
   falta(!origen, $('optOrigen'), 'Falta el origen.');
   falta(origen === 'Mesa de partes virtual' && !$('fCodigo').value.trim(), $('fCodigo'), 'Falta el código de mesa de partes virtual.');
-  falta(!esAnt && !$('fUsuario').value.trim(), $('fUsuario'), 'Falta el nombre del usuario.');
   falta(!esAnt && !materia, $('fMateria').value === 'Otra' ? $('fMateriaOtra') : $('fMateria'), $('fMateria').value === 'Otra' ? 'Falta escribir la materia o delito.' : 'Falta la materia o delito.');
   falta(!abog, $('fAbogado'), 'Falta el abogado.');
   const abogNuevo = abog && abog.id !== abogadoPrecargado; // solo se revisa a quien se asigna ahora
