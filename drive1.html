@@ -131,6 +131,10 @@
   .resultados-caso{border:1px solid var(--linea);border-radius:8px;margin-top:6px;max-height:220px;overflow:auto}
   .resultado-caso{padding:8px 10px;font-size:12.5px;border-bottom:1px solid var(--linea);cursor:pointer}
   .resultado-caso:hover{background:var(--papel)}
+  /* Bloque Fono Alegra (columnas de la hoja del Drive 3) */
+  .bloque-fono{border:1.5px solid var(--celeste-linea);background:#F4FAFD;border-radius:10px;padding:10px 12px}
+  .titulo-fono{font-size:12.5px;font-weight:700;color:var(--azul);margin-bottom:4px}
+  .dato-fijo{padding:9px 10px;border:1px dashed var(--linea);border-radius:8px;font-size:13px;font-weight:600;background:#fff}
   /* Coincidencias por nombre al registrar un caso nuevo (todos los años) */
   .coincidencias{border:1.5px solid var(--dorado);border-radius:9px;margin-top:6px;background:#FFFBF2}
   .coincidencias .titulo-coinc{padding:8px 10px;font-size:12.5px;font-weight:700;color:#6B4A0E;border-bottom:1px solid var(--linea)}
@@ -396,6 +400,68 @@
         <label class="campo" for="fMateria">Materia o delito <span class="obl">*</span></label>
         <select id="fMateria"></select>
         <input type="text" id="fMateriaOtra" class="may" placeholder="¿Cuál?" style="margin-top:6px" hidden>
+      </div>
+    </div>
+
+    <!-- Origen Fono Alegra: las columnas de la hoja de Fono Alegra que el Drive 1 no tiene. Se guardan SOLO en el Drive 3 (fonoAlegra) -->
+    <div class="bloque bloque-fono" id="bloqueFono" hidden>
+      <div class="titulo-fono">Fono Alegra · se guarda en el Drive 3 (datos personales, solo lo ve quien tiene acceso al Drive 3)</div>
+      <div id="fonoSinPermiso" class="ayuda" hidden>No tienes permiso de Editar en el Drive 3: la llamada se registra en el Drive 1, pero su fila del Drive 3 la completa quien tenga ese permiso (al editar este caso).</div>
+      <div id="fonoCampos">
+        <div class="rejilla">
+          <div>
+            <label class="campo" for="fSubSede">Sub sede derivada <span class="obl">*</span></label>
+            <select id="fSubSede"><option value="">— Elegir —</option><option>LIMA CENTRO</option><option>MIRAFLORES</option></select>
+          </div>
+          <div>
+            <label class="campo">Dir. Distrital · Día de turno</label>
+            <div class="dato-fijo" id="fDiaTurno">LIMA CENTRO · —</div>
+          </div>
+          <div>
+            <label class="campo" for="fDni">Documento Nacional (DNI)</label>
+            <input type="text" id="fDni" inputmode="numeric" autocomplete="off">
+          </div>
+          <div>
+            <label class="campo" for="fTelefono">Teléfono de contacto</label>
+            <input type="text" id="fTelefono" inputmode="tel" autocomplete="off">
+          </div>
+          <div>
+            <label class="campo" for="fCorreoUsuario">Correo electrónico</label>
+            <input type="text" id="fCorreoUsuario" inputmode="email" autocomplete="off">
+          </div>
+          <div>
+            <label class="campo" for="fDireccion">Dirección domiciliaria</label>
+            <input type="text" id="fDireccion" class="may" autocomplete="off">
+          </div>
+          <div class="ancho">
+            <label class="campo" for="fGestHechas">Gestiones realizadas</label>
+            <textarea id="fGestHechas" class="may"></textarea>
+          </div>
+          <div class="ancho">
+            <label class="campo" for="fGestPorHacer">Gestiones por realizar</label>
+            <textarea id="fGestPorHacer" class="may"></textarea>
+          </div>
+          <div class="ancho">
+            <label class="campo" for="fDificultades">Dificultades presentadas</label>
+            <textarea id="fDificultades" class="may"></textarea>
+          </div>
+          <div>
+            <label class="campo" for="fAcepta">Usuario acepta el patrocinio</label>
+            <select id="fAcepta"><option>Sí</option><option>No</option></select>
+          </div>
+          <div>
+            <label class="campo" for="fCarpetaCreada">Carpeta defensorial creada</label>
+            <select id="fCarpetaCreada"><option>No</option><option>Sí</option></select>
+          </div>
+          <div>
+            <label class="campo" for="fTrato">Se verificó trato al usuario con llamada</label>
+            <select id="fTrato"><option>Sí</option><option>No</option></select>
+          </div>
+          <div>
+            <label class="campo" for="fSatisfaccion">Nivel de satisfacción</label>
+            <select id="fSatisfaccion"><option>Buena</option><option>Regular</option><option>Mala</option></select>
+          </div>
+        </div>
       </div>
     </div>
 
@@ -987,6 +1053,12 @@ async function borrar(id){
     const hijos = await getDocs(query(collection(db, COL), where('padreId', '==', id)));
     if (!hijos.empty){ avisar('Este caso tiene ' + hijos.size + ' antecedente(s). Bórralos primero.', 5000); pintar(); return; }
     await deleteDoc(doc(db, COL, id));
+    // Fono Alegra: su fila del Drive 3 (datos personales) se borra solo si se confirma
+    if (r && r.origen === ORIGEN_FONO && puedeFono()){
+      try {
+        if (await existe(COL_FONO, id) && confirm('Este registro tiene su fila en el Drive 3 (Fono Alegra). ¿Borrarla también?')) await deleteDoc(doc(db, COL_FONO, id));
+      } catch (err){ console.error(err); avisar('No se pudo revisar la fila del Drive 3 de este registro.', 6000); }
+    }
     if (r && r.padreId){
       // Si era una devolución o un cambio de abogado, también sale su movimiento de la Agenda
       if (await existe('reasignaciones', id)) await deleteDoc(doc(db, 'reasignaciones', id));
@@ -1090,7 +1162,7 @@ function opcionesSimples(cont, lista, alElegir){
   cont.onclick = e => { const o = e.target.closest('.opcion'); if (!o) return; marcar(cont, o.dataset.v); alElegir(o.dataset.v); };
 }
 function marcar(cont, v){ [...cont.children].forEach(c => c.classList.toggle('activo', c.dataset.v === v)); }
-opcionesSimples($('optOrigen'), ORIGENES, v => { origen = v; actualizarObligatorios(); referenciaAutomatica(); });
+opcionesSimples($('optOrigen'), ORIGENES, v => { origen = v; actualizarObligatorios(); referenciaAutomatica(); actualizarBloqueFono(); });
 // Al elegir el origen, el documento de referencia se escribe solo con la fecha (se puede corregir a mano)
 const PREFIJO_ORIGEN = {
   'Correo electrónico': 'CORREO ELECTRÓNICO DE FECHA ',
@@ -1377,6 +1449,7 @@ function actualizarBloquesTipo(){
   if (t === TIPO_MISMO_ABOGADO) $('ayudaAbogado').textContent = AYUDA_MISMO;
   else if ($('ayudaAbogado').textContent === AYUDA_MISMO) $('ayudaAbogado').textContent = AYUDA_ABOGADO;
   actualizarAbogadoLabel();
+  actualizarBloqueFono();
 }
 function actualizarAbogadoLabel(){
   const t = modo === 'antecedente' ? $('fTipoDoc').value : '';
@@ -1511,9 +1584,159 @@ $('coincidencias').addEventListener('click', e => {
   $('bloquePadre').scrollIntoView({ block: 'center', behavior: 'smooth' });
 });
 
+// ---------- Fono Alegra (línea 1884): las columnas de la hoja del Drive 3 dentro del formulario ----------
+// Supuesto 1 (mismo usuario, "Pasar al mismo abogado"): antecedente, NO cuenta en la Agenda; igual se crea su fila en el Drive 3.
+// Supuesto 2 (caso nuevo): cuenta en la Agenda (origen Fono Alegra) y se crea su fila en el Drive 3.
+// DNI, teléfono, correo y dirección van SOLO en "fonoAlegra" (mismo identificador que el registro del Drive 1), nunca en "casos".
+const ORIGEN_FONO = 'Correo Fono Alegra';
+const COL_FONO = 'fonoAlegra';
+const DIAS_SEMANA = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado'];
+// Turnos de Fono Alegra (pestaña "Datos Matriz" de la hoja): sub sede · área · día (1 = lunes … 5 = viernes) → defensores.
+// Se usan hasta que exista la tabla en Firebase (turnos/fonoAlegra), que se podrá cambiar desde el Drive 3 sin tocar código.
+const TURNOS_FONO_INICIAL = {
+  'LIMA CENTRO|Defensa de Víctimas': {
+    1: ['VLADIMIR_TALENAS_QUISPE', 'LEADY_VANNESA_PACO_HUERTA_DE_FLORES', 'LUIS_CARLO_MUENTE_MAURICIO', 'LUIS_MARTIN_CHACALTANA_HUASASQUICHE', 'CARMELA_LUZ_ERAZO_MANRIQUE'],
+    2: ['JOHSSY_LUZ_QUISPE_APONTE', 'MARIANA_BARBOZA_BECERRA', 'ARNOLD_HUAMAN_PAIMA', 'INGRID_DANIELA_RIVERA_MARTINEZ', 'CASTORINA_QUIROZ_VASQUEZ', 'LISSI_INDIRA_TRUJILLO_ROLDAN'],
+    3: ['PERCY_HERMAN_AMPUERO_LINARES', 'RIOJAS DIAZ', 'MERY_PAJA_OLVEA', 'LUPE_LULY_GOMEZ_HUAMAN', 'MILAGROS_DE_LA_CRUZ_CRISOLO', 'MYRCEA_VASQUEZ_PIZARRO'],
+    4: ['WILBERT_ELI_GUIZADO_SICOS', 'LIZETH_MERCADO_LAGUNA', 'LESLY_KATHERINE_ROJAS_VALDEZ', 'RUTH_GIOVANNA_VARGAS_ANTAURCO', 'JENNY_ROCIO_ORTEGA_OLVEA', 'KATHERINE_HIDALGO_BUSTAMENTE'],
+    5: ['CARMEN_ANTONIA_BERROCAL_GONZALES', 'LAURA_ISABEL_RODRIGUEZ_BELLEZA', 'GUILLEMO_ALEJANDRO_HUAMAN', 'EDUARDO_ALVARO_GUILLEN_RAMOS', 'ESLEYMAN_JOVANY_CORDOVA_DE_LA_ROSA', 'DANNY_ILLACONZA_MORALES']
+  },
+  'LIMA CENTRO|Asistencia Legal': {
+    1: ['CHIRA_PAREDES__LUIS_ENRIQUE', 'COLQUI_GANTO__JOHNY_BERNABE'],
+    2: ['BUSTINZA_ROBLES__MARIA_COQUI', 'DORREGARAY_OVIEDO__PATRICIA'],
+    3: ['QUINTANA_ZAPATA__MYRNA_SORAYA', 'BAO_HERRERA__MARIA_EUGENIA_AMELIA', 'ARCE_VILLAR__CELIA_MARISELA'],
+    4: ['RAMOS_ANDRADE__ANGEL', 'SALAS_MACEDO__SANDRA', 'ZUNIGA_TATAJE__TALIA_ARIADNE'],
+    5: ['PRIETO_GALLARDO__VICKY_ROSALINA', 'SOTO_LUDENA__JAVIER_ANTENOR']
+  },
+  'MIRAFLORES|Defensa de Víctimas': Object.fromEntries([1, 2, 3, 4, 5].map(d => [d, ['LILIANA_MARGOTH_GALINDO_SARAS', 'OSCAR_ARCE_ZAVALA']])),
+  'MIRAFLORES|Asistencia Legal': Object.fromEntries([1, 2, 3, 4, 5].map(d => [d, ['FAUSTOR_LAU__GLORIA_ANTONIA', 'VILCHEZ_CHAVARRI__FERNANDO_ABRAHAM', 'PILARES_FLOREZ__MARITZA_ANGELICA', 'FUERTES_FLORES__JULIA_BEATRIZ']]))
+};
+let TURNOS_FONO = TURNOS_FONO_INICIAL;
+async function cargarTurnosFono(){
+  try {
+    const s = await getDoc(doc(db, 'turnos', 'fonoAlegra'));
+    if (s.exists() && s.data().tabla) TURNOS_FONO = s.data().tabla;
+  } catch (e){ console.warn('No se pudo leer la tabla de turnos de Fono Alegra; se usa la inicial', e); }
+}
+// Un nombre de la tabla que no sea un código se busca por apellidos en la lista de defensores
+function defensorDeTurno(clave){
+  const d = DEFENSORES.find(x => x.id === clave);
+  if (d) return d;
+  const ap = norm(clave).split(/[\s,_]+/).filter(Boolean);
+  const hallados = DEFENSORES.filter(x => ap.every(p => norm(x.nombre).split(/[\s,]+/).includes(p)));
+  return hallados.length === 1 ? hallados[0] : null;
+}
+function diaDeTurno(fecha){ return fecha ? new Date(fecha + 'T12:00:00').getDay() : null; }
+function fonoAplica(){
+  if (origen !== ORIGEN_FONO) return false;
+  return modo === 'nuevo' || (modo === 'antecedente' && $('fTipoDoc').value === TIPO_MISMO_ABOGADO);
+}
+const puedeFono = () => usuario && usuario.drive3 === 'editar';
+function areaFono(){ return modo === 'antecedente' && padre ? (padre.area || $('fArea').value) : $('fArea').value; }
+function posiblesDeTurno(){
+  const dia = diaDeTurno($('fFecha').value), sede = $('fSubSede').value;
+  if (!sede || !dia || dia > 5) return [];
+  const ids = ((TURNOS_FONO[sede + '|' + areaFono()] || {})[dia]) || [];
+  return [...new Set(ids.map(defensorDeTurno).filter(Boolean))];
+}
+// Carga del mes por defensor (el mismo "Mes" de la Agenda: casos nuevos sin los derivados) y cuántos son de Fono Alegra
+const CARGA_MES = new Map();
+function cargaDelMes(mes){
+  if (!CARGA_MES.has(mes)) CARGA_MES.set(mes, getDocs(query(collection(db, 'asignaciones'), where('mes', '==', mes))).then(snap => {
+    const c = {};
+    snap.docs.forEach(x => { const a = x.data(); if (a.derivadoA) return;
+      const t = c[a.defensorId] = c[a.defensorId] || { mes: 0, fono: 0 };
+      t.mes++; if (a.origen === 'Fono Alegra') t.fono++; });
+    return c;
+  }).catch(e => { console.error('No se pudo leer la carga del mes', e); CARGA_MES.delete(mes); return null; }));
+  return CARGA_MES.get(mes);
+}
+let abogadoFonoManual = false, turnoFono = 0;
+function actualizarBloqueFono(){
+  const aplica = fonoAplica();
+  $('bloqueFono').hidden = !aplica;
+  if (!aplica){
+    if ($('ayudaAbogado').dataset.fono && !editandoId){ delete $('ayudaAbogado').dataset.fono; llenarAbogados($('fAbogado').value); $('ayudaAbogado').textContent = AYUDA_ABOGADO; }
+    return;
+  }
+  $('fonoSinPermiso').hidden = puedeFono();
+  $('fonoCampos').hidden = !puedeFono();
+  const dia = diaDeTurno($('fFecha').value);
+  $('fDiaTurno').textContent = 'LIMA CENTRO · ' + (dia === null ? '—' : DIAS_SEMANA[dia] + (dia === 0 || dia === 6 ? ' (sin turno)' : ''));
+  sugerirAbogadoFono();
+}
+// Sugerido: entre los de turno ese día (sub sede · área · día), el de MENOS "Mes"; si empatan, menos Fono Alegra; luego el N° de orden.
+// Se salta a quien está de licencia. Es solo sugerencia: debajo siguen todos los demás.
+async function sugerirAbogadoFono(){
+  if (!fonoAplica() || modo !== 'nuevo' || editandoId) return;
+  const turno = ++turnoFono;
+  const posibles = posiblesDeTurno();
+  if (!posibles.length){ if ($('ayudaAbogado').dataset.fono){ llenarAbogados($('fAbogado').value); $('ayudaAbogado').textContent = AYUDA_ABOGADO; delete $('ayudaAbogado').dataset.fono; } return; }
+  const mes = ($('fFecha').value || hoyIso()).slice(0, 7);
+  const carga = await cargaDelMes(mes);
+  if (turno !== turnoFono || !fonoAplica() || modo !== 'nuevo') return; // ya cambió algo mientras se consultaba
+  const c = id => (carga && carga[id]) || { mes: 0, fono: 0 };
+  const elegibles = posibles.filter(d => !deLicenciaHoy(d));
+  const sug = elegibles.slice().sort((a, b) => c(a.id).mes - c(b.id).mes || c(a.id).fono - c(b.id).fono || (a.orden ?? 999) - (b.orden ?? 999))[0];
+  const textoCarga = d => carga ? ` — Mes: ${c(d.id).mes} · Fono Alegra: ${c(d.id).fono}` : '';
+  const area = areaFono(), dia = DIAS_SEMANA[diaDeTurno($('fFecha').value)];
+  const opcion = d => { const bloq = deLicenciaHoy(d);
+    return `<option value="${d.id}" ${bloq ? 'disabled style="color:#9A938A"' : ''}>${d.id === (sug && sug.id) ? '★ ' : ''}${esc(d.nombre)}${bloq ? esc(textoLicencia(d)) : esc(textoCarga(d) + textoLicencia(d))}${d.id === (sug && sug.id) ? ' (sugerido)' : ''}</option>`; };
+  const ids = new Set(posibles.map(d => d.id));
+  const previo = $('fAbogado').value;
+  abogadoPrecargado = '';
+  $('fAbogado').innerHTML = '<option value="">— Elegir —</option>' +
+    `<optgroup label="De turno Fono Alegra · ${esc($('fSubSede').value)} · ${dia}">${posibles.map(opcion).join('')}</optgroup>` +
+    `<optgroup label="${esc(area)} · otros">${DEFENSORES.filter(d => d.area === area && !ids.has(d.id)).map(opcion).join('')}</optgroup>` +
+    `<optgroup label="Otras áreas">${DEFENSORES.filter(d => d.area !== area).map(d => `<option value="${d.id}" ${deLicenciaHoy(d) ? 'disabled style="color:#9A938A"' : ''}>${esc(d.nombre + textoLicencia(d))}</option>`).join('')}</optgroup>`;
+  $('fAbogado').value = abogadoFonoManual && previo ? previo : (sug ? sug.id : '');
+  $('ayudaAbogado').dataset.fono = '1';
+  $('ayudaAbogado').textContent = sug
+    ? `Sugerido: ${sug.nombre} (de turno el ${dia.toLowerCase()} y con menos carga en el mes${carga ? '' : '; no se pudo leer la carga'}). Puedes elegir a otro.`
+    : 'Todos los de turno ese día están de licencia: elige a otro abogado.';
+}
+$('fAbogado').addEventListener('change', () => { abogadoFonoManual = true; });
+$('fSubSede').addEventListener('change', () => { abogadoFonoManual = false; actualizarBloqueFono(); });
+$('fFecha').addEventListener('change', () => { abogadoFonoManual = false; actualizarBloqueFono(); });
+$('fArea').addEventListener('change', () => { abogadoFonoManual = false; delete $('ayudaAbogado').dataset.fono; actualizarBloqueFono(); });
+function limpiarFono(){
+  ['fSubSede', 'fDni', 'fTelefono', 'fCorreoUsuario', 'fDireccion', 'fGestHechas', 'fGestPorHacer', 'fDificultades'].forEach(i => $(i).value = '');
+  $('fAcepta').value = 'Sí'; $('fCarpetaCreada').value = 'No'; $('fTrato').value = 'Sí'; $('fSatisfaccion').value = 'Buena';
+  abogadoFonoManual = false; turnoFono++; delete $('ayudaAbogado').dataset.fono;
+}
+function llenarFono(f){
+  $('fSubSede').value = f.subSede || ''; $('fDni').value = f.dni || ''; $('fTelefono').value = f.telefono || '';
+  $('fCorreoUsuario').value = f.correo || ''; $('fDireccion').value = f.direccion || '';
+  $('fGestHechas').value = f.gestionesRealizadas || ''; $('fGestPorHacer').value = f.gestionesPorRealizar || ''; $('fDificultades').value = f.dificultades || '';
+  $('fAcepta').value = f.aceptaPatrocinio || 'Sí'; $('fCarpetaCreada').value = f.carpetaCreada || 'No';
+  $('fTrato').value = f.tratoVerificado || 'Sí'; $('fSatisfaccion').value = f.satisfaccion || 'Buena';
+}
+// Fila del Drive 3: mismo identificador que el registro del Drive 1. casoId = el caso (para el Supuesto 1, el caso al que vuelve)
+function datosFono(idFila, datos){
+  const dia = diaDeTurno(datos.fecha);
+  return {
+    fecha: datos.fecha, mes: datos.mes, anio: datos.anio,
+    usuario: datos.usuario, dni: $('fDni').value.trim(), telefono: $('fTelefono').value.trim(),
+    correo: $('fCorreoUsuario').value.trim().toLowerCase(), direccion: may($('fDireccion').value),
+    dirDistrital: 'LIMA CENTRO', subSede: $('fSubSede').value, area: datos.area, diaTurno: dia === null ? '' : DIAS_SEMANA[dia],
+    defensorId: datos.abogadoId, defensorNombre: datos.abogadoNombre, materia: datos.materia,
+    gestionesRealizadas: may($('fGestHechas').value), gestionesPorRealizar: may($('fGestPorHacer').value), dificultades: may($('fDificultades').value),
+    aceptaPatrocinio: $('fAcepta').value, carpetaCreada: $('fCarpetaCreada').value, tratoVerificado: $('fTrato').value, satisfaccion: $('fSatisfaccion').value,
+    registroId: idFila, casoId: datos.padreId || idFila, casoNuevo: !datos.padreId, codigo: datos.padreId ? datos.padreCodigo : datos.codigo,
+    actualizadoPor: usuario.correo, actualizadoEnMs: Date.now()
+  };
+}
+async function guardarFono(idFila, datos, esNuevoRegistro){
+  try {
+    const extra = esNuevoRegistro ? { creadoPor: usuario.correo, creadoEnMs: Date.now() } : {};
+    await setDoc(doc(db, COL_FONO, idFila), { ...datosFono(idFila, datos), ...extra }, { merge: true });
+  } catch (err){ console.error(err); avisar('Se guardó en el Drive 1, pero no se pudo guardar su fila del Drive 3 (Fono Alegra).', 7000); }
+}
+
 function limpiarForm(){
   editandoId = null; padre = null; origen = ''; prioridad = 'normal'; resultadoCambio = ''; ultimaReferenciaAuto = '';
   coincidenciasDescartadas = ''; clearTimeout(tCoincidencias); ocultarCoincidencias();
+  limpiarFono(); $('bloqueFono').hidden = true;
   ['fNumDoc', 'fCodigo', 'fUsuario', 'fCarpeta', 'fResumen', 'fDistrital', 'fProveido', 'fDiligenciaOtra', 'fSupNota', 'fDilHora', 'fDilFecha', 'fPlazoFecha', 'fPlazoHora', 'fSupFecha']
     .forEach(i => $(i).value = '');
   ['fHacerMemo', 'fHacerOficio', 'fHacerCarta', 'fNoHacer', 'fOcultar'].forEach(i => $(i).checked = false);
@@ -1586,6 +1809,8 @@ function abrirForm({ editarId = null, padreId = null } = {}){
     $('fSupFecha').value = r.supFecha || ''; $('fSupNota').value = r.supNota || '';
     $('fOcultar').checked = !!r.ocultarPublico;
     actualizarObligatorios(); actualizarBloquesTipo();
+    if (fonoAplica() && puedeFono()) getDoc(doc(db, COL_FONO, editarId)).then(s => { if (s.exists() && editandoId === editarId) llenarFono(s.data()); })
+      .catch(err => console.error('No se pudo leer la fila del Drive 3', err));
   } else {
     ponerModo('nuevo');
   }
@@ -1757,6 +1982,8 @@ $('btnGuardarForm').onclick = async () => {
   }
   falta(tipoDoc === 'Solicitud de cambio de abogado' && !resultadoCambio, $('optResultado'), 'Falta el resultado de la solicitud de cambio.');
   falta($('fPlazo').value === 'otro' && !$('fPlazoFecha').value, $('fPlazoFecha'), 'Falta la fecha del plazo.');
+  const conFono = fonoAplica() && puedeFono();
+  falta(conFono && !$('fSubSede').value, $('fSubSede'), 'Falta la sub sede derivada (Fono Alegra).');
 
   const previoForm = editandoId ? { ...(cache.get(editandoId) || {}) } : null;
   const hacer = { memo: $('fHacerMemo').checked, oficio: $('fHacerOficio').checked, carta: $('fHacerCarta').checked, noHacer: $('fNoHacer').checked };
@@ -1838,6 +2065,8 @@ $('btnGuardarForm').onclick = async () => {
     if (esAnt) await sincronizarOpinion(idFila, datos, previo);
     if (esAnt) await recalcularEstado(padre.id);
     if (esAnt && !editandoId && tipoDoc === 'Informe del defensor') await cerrarPlazosDelCaso(padre.id, idFila);
+    if (conFono) await guardarFono(idFila, datos, !editandoId);
+    CARGA_MES.clear();
     $('fondoForm').hidden = true;
     avisar(editandoId ? 'Cambios guardados' : 'Registrado');
     if (!editandoId && Number(fecha.slice(0, 4)) !== anioElegido) avisar('Registrado en ' + fecha.slice(0, 4) + '. Cambia de año para verlo.', 5000);
@@ -2171,7 +2400,7 @@ onAuthStateChanged(auth, async user => {
     const nivel = nivelSeccion(ficha.data(), 'drive1');
     usuario = { correo, nombre: ficha.data().nombre || correo, rol: nivel === 'editar' ? 'abogado' : nivel === 'memos' ? 'asistente' : 'bloqueado',
       nota: efectivo.nota + (nivel === 'ver' && ficha.data().bloqueado !== true ? ' · solo puede ver' : ''),
-      esAdmin: ficha.data().esAdmin === true, avisos: ficha.data().avisos !== false };
+      esAdmin: ficha.data().esAdmin === true, avisos: ficha.data().avisos !== false, drive3: nivelSeccion(ficha.data(), 'drive3') };
     const navD2 = document.querySelector('.menu-drives a[href="index.html"]');
     if (navD2) navD2.hidden = nivelSeccion(ficha.data(), 'drive2') === 'sin';
     $('enlaceLicencias').hidden = nivelSeccion(ficha.data(), 'licencias') === 'sin';
@@ -2188,7 +2417,7 @@ onAuthStateChanged(auth, async user => {
     }
     $('enlacePermisos').hidden = !(ficha.data().esAdmin === true || ficha.data().puedeAutorizar === true);
     // La lista de asistentes sale de "asistentes" (sin permisos), así no hace falta leer las fichas del personal
-    await Promise.all([cargarAsistentes(), cargarFeriados(), cargarLicencias()]);
+    await Promise.all([cargarAsistentes(), cargarFeriados(), cargarLicencias(), cargarTurnosFono()]);
     const snapDef = await getDocs(collection(db, 'defensores'));
     DEFENSORES = snapDef.docs.map(d => ({ id: d.id, ...d.data() })).filter(d => d.activo !== false)
       .sort((a, b) => (a.area || '').localeCompare(b.area || '') || (a.orden ?? 999) - (b.orden ?? 999) || (a.nombre || '').localeCompare(b.nombre || '', 'es'));
