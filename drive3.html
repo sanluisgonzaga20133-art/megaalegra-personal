@@ -84,6 +84,7 @@
   tr.caso-marcado td:first-child{box-shadow:inset 2px 0 0 #fff, inset 0 2px 0 #fff, inset 0 -2px 0 #fff !important}
   tr.caso-marcado td:last-child{box-shadow:inset -2px 0 0 #fff, inset 0 2px 0 #fff, inset 0 -2px 0 #fff !important}
   .marca-caso{display:block;width:max-content;background:#0B2545;color:#fff;font-weight:800;font-size:11px;padding:2px 7px;border-radius:6px;margin:0 0 4px;white-space:nowrap;box-shadow:0 0 0 2px #fff}
+  .marca-caso .quitar-marca{margin-left:6px;background:#fff;color:#0B2545;border:none;border-radius:5px;font:inherit;font-size:10.5px;font-weight:800;padding:1px 6px;cursor:pointer}
   .etiqueta{display:inline-block;font-size:10.5px;font-weight:700;padding:1px 6px;border-radius:7px;white-space:nowrap;margin-top:2px}
   .etiqueta.nuevo{background:var(--verde-fondo);color:var(--verde)}
   .etiqueta.mismo{background:var(--celeste);color:var(--azul)}
@@ -359,20 +360,32 @@ function pintarLlamadas(){
   aplicarMarca();
 }
 // ---------- Marca del caso al que se llega (igual en todas las páginas) ----------
-// Borde azul oscuro de 3 px y la etiqueta "◀ Este es el caso"; se queda hasta hacer clic fuera de esa fila (y sobrevive si la tabla se vuelve a dibujar)
-let filaMarcadaId = null, marcadaEnMs = 0;
-function marcarFila(id){ filaMarcadaId = id; marcadaEnMs = Date.now(); aplicarMarca(); }
+// Borde azul oscuro de 3 px y la etiqueta "◀ Este es el caso". Sobrevive si la tabla se vuelve a dibujar.
+// Solo se quita al tocar OTRA fila de la tabla o con "✕ Quitar marca" (las ventanitas, el menú y las barras no la quitan).
+let filaMarcadaId = null;
+function marcarFila(id){ filaMarcadaId = id; aplicarMarca(); }
 function aplicarMarca(){
   document.querySelectorAll('tr.caso-marcado').forEach(t => { t.classList.remove('caso-marcado'); t.querySelectorAll('.marca-caso').forEach(m => m.remove()); });
   const fila = filaMarcadaId && document.getElementById('fila-' + filaMarcadaId);
   if (!fila) return;
   fila.classList.add('caso-marcado');
-  fila.firstElementChild.insertAdjacentHTML('afterbegin', '<span class="marca-caso">◀ Este es el caso</span>');
+  fila.firstElementChild.insertAdjacentHTML('afterbegin', '<span class="marca-caso">◀ Este es el caso <button type="button" class="quitar-marca" data-quitar-marca aria-label="Quitar marca">✕ Quitar marca</button></span>');
 }
+function quitarMarca(){ filaMarcadaId = null; aplicarMarca(); }
 document.addEventListener('click', e => {
-  if (!filaMarcadaId || Date.now() - marcadaEnMs < 400 || e.target.closest('tr.caso-marcado')) return;
-  filaMarcadaId = null; aplicarMarca();
+  if (!filaMarcadaId) return;
+  if (e.target.closest('[data-quitar-marca]')){ e.preventDefault(); e.stopPropagation(); quitarMarca(); return; }
+  const otra = e.target.closest('tbody tr[id^="fila-"]');
+  if (otra && !otra.classList.contains('caso-marcado')) quitarMarca();
 }, true);
+// Lleva la página hasta la fila (también en celular) y, si la tabla es ancha, la deja visible desde su inicio (donde está la etiqueta)
+function mostrarFila(fila){
+  const caja = fila.closest('.tabla-wrap');
+  if (caja) caja.scrollLeft = 0;
+  fila.scrollIntoView({ block: 'center', inline: 'start', behavior: 'smooth' });
+  // Por si la tabla se vuelve a dibujar mientras se desplaza
+  setTimeout(() => { const f = filaMarcadaId && document.getElementById('fila-' + filaMarcadaId); if (f){ if (caja) caja.scrollLeft = 0; f.scrollIntoView({ block: 'center', inline: 'start' }); } }, 700);
+}
 function nombreMes(mes){ return mes ? MESES_LARGOS[Number(mes.slice(5, 7)) - 1] + ' ' + mes.slice(0, 4) : ''; }
 let tBuscar = null;
 $('buscador').addEventListener('input', () => {
@@ -436,7 +449,7 @@ $('btnGuardarEdicion').onclick = async () => {
     avisar('Guardado');
     cerrarEdicion();
     pintarLlamadas();
-    const fila = $('fila-' + f.id); if (fila){ marcarFila(f.id); fila.scrollIntoView({ block: 'center' }); }
+    const fila = $('fila-' + f.id); if (fila){ marcarFila(f.id); mostrarFila(fila); }
   } catch (err){ error(err); }
   $('btnGuardarEdicion').disabled = false;
 };
