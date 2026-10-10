@@ -732,6 +732,8 @@ const NOMBRADAS_AL = ['Desalojo', 'Laboral', 'Desprotección Familiar', 'Procedi
 function categoriaAgenda(materia, area){
   if (area === 'Defensa de Víctimas') return DELITOS_V.includes(materia) ? materia : 'Otras';
   if (area === 'Equipo multidisciplinario') return DELITOS_V.includes(materia) ? 'Víctimas' : 'Asistencia Legal';
+  // Así llegan normalmente; si un caso es Desprotección Familiar, se elige en Otras categorías del área (suma solo en esa columna)
+  if (materia === 'Protección de NNA sin cuidados parentales o en riesgo') return 'Riesgo por Desprotección';
   if (materia === 'Desalojo (casa habitación)' || /desalojo/.test(norm(materia))) return 'Desalojo';
   if (materia === 'Nulidad de despido, despido arbitrario o beneficios sociales' || /laboral|despido|beneficios sociales|remuneraci|\bcts\b|reposicion/.test(norm(materia))) return 'Laboral';
   return NOMBRADAS_AL.includes(materia) ? materia : 'Otras materias';
