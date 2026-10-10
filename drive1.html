@@ -138,7 +138,7 @@
   /* Titular de licencia: quién le apoya */
   .bloque-apoyo{border:1.5px solid var(--dorado);background:#FFF8E8;border-radius:10px;padding:10px 12px}
   .aviso-lic{font-size:13px;font-weight:700;color:#6B4A0E;margin-bottom:4px}
-  .apoya{display:block;font-size:11px;font-weight:700;color:#6B4A0E}
+  .apoya{font-size:11.5px;font-weight:700;color:#6B4A0E}
   /* Coincidencias por nombre al registrar un caso nuevo (todos los años) */
   .coincidencias{border:1.5px solid var(--dorado);border-radius:9px;margin-top:6px;background:#FFFBF2}
   .coincidencias .titulo-coinc{padding:8px 10px;font-size:12.5px;font-weight:700;color:#6B4A0E;border-bottom:1px solid var(--linea)}
@@ -994,9 +994,9 @@ function pintar(){
       <td>${esc(r.codigo)}${tipo}</td>
       <td>${esc(r.numDoc)}</td>
       <td>${esc(r.usuario) || (r.porCompletar ? '<span class="falta">Falta</span>' : '')}</td>
-      <td>${r.abogadoActualNombre ? esc(r.abogadoActualNombre) + `<span class="chico">Antes: ${esc(r.abogadoNombre)}</span>` : esc(r.abogadoNombre)}${r.apoyoNombre ? `<span class="apoya">Le apoya: ${esc(r.apoyoNombre)}</span>` : ''}</td>
-      <td>${esc(r.abogadoActualNombre ? r.abogadoActualCelular : r.abogadoCelular)}</td>
-      <td>${esc(r.abogadoActualNombre ? r.abogadoActualCorreo : r.abogadoCorreo)}</td>
+      <td>${r.abogadoActualNombre ? esc(r.abogadoActualNombre) + `<span class="chico">Antes: ${esc(r.abogadoNombre)}</span>` : esc(r.abogadoNombre)}${r.apoyoNombre ? ` <span class="apoya">(Le apoya: ${esc(r.apoyoNombre)})</span>` : ''}</td>
+      <td>${esc(r.apoyoNombre ? r.apoyoCelular : r.abogadoActualNombre ? r.abogadoActualCelular : r.abogadoCelular)}</td>
+      <td>${esc(r.apoyoNombre ? r.apoyoCorreo : r.abogadoActualNombre ? r.abogadoActualCorreo : r.abogadoCorreo)}</td>
       <td>${esc(r.materia)}${detalleInforme}</td>
       <td>${esc(r.carpeta)}</td>
       <td>${dilig}</td>
@@ -2192,7 +2192,8 @@ $('btnDescargar').onclick = async () => {
     const filas = lista.map(r => ({
       'Fecha': fechaCorta(r.fecha), 'Tipo': r.padreId ? 'ANTECEDENTE DEL CASO ' + (r.padreCodigo || r.padreUsuario || '') : 'CASO NUEVO',
       'Tipo de documento': r.tipoDoc || '', 'Origen': r.origen, 'Documento de referencia': r.codigo, 'N° doc.': r.numDoc,
-      'Usuario': r.usuario, 'Abogado': r.abogadoNombre, 'Teléfono': r.abogadoCelular, 'Correo': r.abogadoCorreo,
+      'Usuario': r.usuario, 'Abogado': r.abogadoNombre + (r.apoyoNombre ? ' (Le apoya: ' + r.apoyoNombre + ')' : ''),
+      'Teléfono': r.apoyoNombre ? r.apoyoCelular : r.abogadoCelular, 'Correo': r.apoyoNombre ? r.apoyoCorreo : r.abogadoCorreo,
       'Materia o delito': r.materia, 'N° carpeta': r.carpeta,
       'Respuesta / resultado': r.respuesta || r.resultadoCambio || (esDerivacion(r.tipoDoc) ? 'DERIVADO A ' + destinoDerivacion(r) + (r.derivaMotivo ? ' · MOTIVO: ' + r.derivaMotivo : '') : '') || (r.opinionNum ? r.opinionNum + 'ª OPINIÓN' : ''),
       'Resumen': r.resumen || '', 'Estado del caso': r.estado || '',
