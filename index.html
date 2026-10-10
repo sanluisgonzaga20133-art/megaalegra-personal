@@ -584,6 +584,9 @@ const MATERIAS_ESPECIFICAS = [
 
 // Turno Consulta = Turno presencial: el caso se registra en su materia Y además suma en la columna Turno Consulta
 const ORIGEN_TURNO = "Turno presencial (Turno Consulta)";
+// Fono Alegra (línea 1884): columna del mes y, como referencia, el total del mes anterior por defensor (se calculan solos)
+const TOTAL_FONO = { nombre: 'Fono Alegra', titulo: 'Fono<br>Alegra', f: a => a.origen === 'Fono Alegra', origen: 'Fono Alegra' };
+const REF_FONO = { nombre: 'Fono Alegra', clave: 'fono', calculado: true };
 function esTurnoConsulta(a){ return a.origen === ORIGEN_TURNO || a.origen === "Turno presencial"; }
 
 // ---------- Las 3 áreas del Drive 2 (cada una con sus columnas, vías de llegada y casillas) ----------
@@ -598,10 +601,11 @@ const CASILLAS_TODAS = {
 const AREAS = {
   'Asistencia Legal': {
     corto: 'L', categoriaDefault: 'Otras materias', usaEspecificas: true,
-    referencias: [{ nombre: 'Nuevos', clave: 'nuevos' }, { nombre: 'Consultas', clave: 'consultas' }],
+    referencias: [{ nombre: 'Nuevos', clave: 'nuevos' }, { nombre: 'Consultas', clave: 'consultas' }, REF_FONO],
     categorias: ["Desalojo", "Laboral", "Desprotección Familiar", "Procedimiento Adm. de Adopción", "Riesgo por Desprotección", "Otras materias"],
     origenes: ["Mesa de partes virtual", "Fono Alegra", "Correo institucional", ORIGEN_TURNO],
     totales: [
+      TOTAL_FONO,
       { nombre: 'Turno Consulta', titulo: 'Turno<br>Consulta', f: esTurnoConsulta, origen: ORIGEN_TURNO },
       { nombre: 'Adulto Mayor', titulo: 'Adulto<br>Mayor', f: a => !!a.adultoMayor }
     ],
@@ -609,11 +613,12 @@ const AREAS = {
   },
   'Defensa de Víctimas': {
     corto: 'V', categoriaDefault: 'Otras', usaEspecificas: false,
-    referencias: [{ nombre: 'Nuevos', clave: 'nuevos' }, { nombre: 'Consultas', clave: 'consultas' }],
+    referencias: [{ nombre: 'Nuevos', clave: 'nuevos' }, { nombre: 'Consultas', clave: 'consultas' }, REF_FONO],
     categorias: ["Tortura", "Crimen organizado", "Apelaciones", "Discriminación", "Homicidio",
       "Acoso y violación sexual agravada", "Negligencia médica o lesiones graves", "Accidente de tránsito", "Otras"],
     origenes: ["Mesa de partes virtual", "Fono Alegra", "Correo institucional", "Turno presencial (Patrocinio presencial)", "Turno de flagrancia"],
     totales: [
+      TOTAL_FONO,
       { nombre: 'Patrocinio presencial', titulo: 'Patrocinio<br>presencial', f: a => a.origen === "Turno presencial (Patrocinio presencial)", origen: "Turno presencial (Patrocinio presencial)" },
       { nombre: 'Turno de flagrancia', titulo: 'Turno de<br>flagrancia', f: a => a.origen === "Turno de flagrancia", origen: "Turno de flagrancia" }
     ],
@@ -622,10 +627,11 @@ const AREAS = {
   'Equipo multidisciplinario': {
     corto: 'E', categoriaDefault: 'Atención', usaEspecificas: false,
     requiereMateria: true, ocultarColumnasCategoria: true,
-    referencias: [{ nombre: 'Consultas', clave: 'consultas' }, { nombre: 'Asesorías', clave: 'asesorias' }, { nombre: 'Informes técnicos', clave: 'informesTecnicos' }],
+    referencias: [{ nombre: 'Consultas', clave: 'consultas' }, { nombre: 'Asesorías', clave: 'asesorias' }, { nombre: 'Informes técnicos', clave: 'informesTecnicos' }, REF_FONO],
     categorias: ['Asistencia Legal', 'Víctimas'],
     origenes: ["Mesa de partes virtual", "Fono Alegra", "Correo institucional", "Turno presencial", "Turno peritos"],
     totales: [
+      TOTAL_FONO,
       { nombre: 'Turno peritos', titulo: 'Turno<br>peritos', f: a => a.origen === "Turno peritos", origen: "Turno peritos" },
       { nombre: 'Asistencia Legal', titulo: 'Asistencia<br>Legal', f: a => a.categoria === 'Asistencia Legal' },
       { nombre: 'Víctimas', titulo: 'Víctimas', f: a => a.categoria === 'Víctimas' },
@@ -906,6 +912,9 @@ function pintarLineaReasig(){
     '<span class="chico">' + (deuda ? 'Se le debe un caso a: ' + escHtml(deuda) : 'Nadie está debiendo: va por turno según el N° de orden.') + ' Si quien pierde el caso es el sugerido, pasa al siguiente. Cuenta desde el ' + inicioConteos.reasignaciones.split('-').reverse().join('/') + '.</span>';
   caja.hidden = false;
 }
+// Fono Alegra del mes anterior por defensor (referencia en gris)
+let fonoMesAnterior = {}, cortarAsigAnt = null;
+function mesAnteriorDe(mes){ let a = Number(mes.slice(0, 4)), m = Number(mes.slice(5, 7)) - 1; if (m === 0){ m = 12; a--; } return a + '-' + String(m).padStart(2, '0'); }
 function escucharMes(mes){
   if (mes === mesEscuchado) return;
   mesEscuchado = mes;
@@ -919,6 +928,13 @@ function escucharMes(mes){
   if (cortarAsig) cortarAsig();
   if (cortarReasig) cortarReasig();
   asignaciones = []; reasignacionesLog = [];
+  if (cortarAsigAnt) cortarAsigAnt();
+  fonoMesAnterior = {};
+  cortarAsigAnt = onSnapshot(query(collection(db, 'asignaciones'), where('mes', '==', mesAnteriorDe(mes))), snap => {
+    fonoMesAnterior = {};
+    snap.docs.forEach(x => { const a = x.data(); if (cuentaComoNuevo(a) && TOTAL_FONO.f(a)) fonoMesAnterior[a.defensorId] = (fonoMesAnterior[a.defensorId] || 0) + 1; });
+    pintarTabla();
+  }, err => console.error('No se pudieron leer los casos del mes anterior', err));
   cortarAsig = onSnapshot(query(collection(db, 'asignaciones'), where('mes', '==', mes)), snap => {
     asignaciones = snap.docs.map(d => ({ id: d.id, ...d.data() }));
     pintarTabla();
@@ -1118,7 +1134,7 @@ function pintarTabla(){
       ? `<td class="num cero" data-defensor="${d.id}" data-filtro="dia" data-valor="${diaElegido}">·</td>`
       : `<td class="num" data-defensor="${d.id}" data-filtro="dia" data-valor="${diaElegido}"><span class="badge-hoy ${claseColorHoy(nDia)}">${nDia}</span></td>`;
     const ref = REFERENCIA_MES_ANTERIOR[d.id] || {};
-    const celdasRef = AREA.referencias.map(r => `<td class="num ref-col">${ref[r.clave] ?? '—'}</td>`).join('');
+    const celdasRef = AREA.referencias.map(r => `<td class="num ref-col">${r.calculado ? (fonoMesAnterior[d.id] || '·') : (ref[r.clave] ?? '—')}</td>`).join('');
 
     const celdasCategoria = categoriasEnColumna().map(c => {
       const n = propias.filter(a => a.categoria === c).length;
