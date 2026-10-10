@@ -76,7 +76,14 @@
   td.largo{min-width:200px;max-width:320px;white-space:pre-wrap}
   td.nombre{font-weight:600;min-width:180px}
   td.num{text-align:center}
-  tr.destacada td{background:#FFF6D8}
+  /* Caso al que se llega ("Ir al caso", avisos, historial): borde azul oscuro alrededor de toda la fila + etiqueta. Se queda hasta hacer clic en otra parte */
+  tr.caso-marcado td{border-top:3px solid #0B2545 !important;border-bottom:3px solid #0B2545 !important}
+  tr.caso-marcado td:first-child{border-left:3px solid #0B2545 !important}
+  tr.caso-marcado td:last-child{border-right:3px solid #0B2545 !important}
+  tr.caso-marcado td{box-shadow:inset 0 2px 0 #fff, inset 0 -2px 0 #fff !important}
+  tr.caso-marcado td:first-child{box-shadow:inset 2px 0 0 #fff, inset 0 2px 0 #fff, inset 0 -2px 0 #fff !important}
+  tr.caso-marcado td:last-child{box-shadow:inset -2px 0 0 #fff, inset 0 2px 0 #fff, inset 0 -2px 0 #fff !important}
+  .marca-caso{display:block;width:max-content;background:#0B2545;color:#fff;font-weight:800;font-size:11px;padding:2px 7px;border-radius:6px;margin:0 0 4px;white-space:nowrap;box-shadow:0 0 0 2px #fff}
   .etiqueta{display:inline-block;font-size:10.5px;font-weight:700;padding:1px 6px;border-radius:7px;white-space:nowrap;margin-top:2px}
   .etiqueta.nuevo{background:var(--verde-fondo);color:var(--verde)}
   .etiqueta.mismo{background:var(--celeste);color:var(--azul)}
@@ -349,7 +356,23 @@ function pintarLlamadas(){
       ${[15, 16, 17, 18].map(i => `<td class="num">${esc(v[i])}</td>`).join('')}
     </tr>`;
   }).join('') || `<tr><td colspan="${COLUMNAS.length + 1}" class="vacio">${q ? 'Nada coincide con la búsqueda.' : 'No hay llamadas registradas en ' + nombreMes($('selMes').value) + '.'}</td></tr>`;
+  aplicarMarca();
 }
+// ---------- Marca del caso al que se llega (igual en todas las páginas) ----------
+// Borde azul oscuro de 3 px y la etiqueta "◀ Este es el caso"; se queda hasta hacer clic fuera de esa fila (y sobrevive si la tabla se vuelve a dibujar)
+let filaMarcadaId = null, marcadaEnMs = 0;
+function marcarFila(id){ filaMarcadaId = id; marcadaEnMs = Date.now(); aplicarMarca(); }
+function aplicarMarca(){
+  document.querySelectorAll('tr.caso-marcado').forEach(t => { t.classList.remove('caso-marcado'); t.querySelectorAll('.marca-caso').forEach(m => m.remove()); });
+  const fila = filaMarcadaId && document.getElementById('fila-' + filaMarcadaId);
+  if (!fila) return;
+  fila.classList.add('caso-marcado');
+  fila.firstElementChild.insertAdjacentHTML('afterbegin', '<span class="marca-caso">◀ Este es el caso</span>');
+}
+document.addEventListener('click', e => {
+  if (!filaMarcadaId || Date.now() - marcadaEnMs < 400 || e.target.closest('tr.caso-marcado')) return;
+  filaMarcadaId = null; aplicarMarca();
+}, true);
 function nombreMes(mes){ return mes ? MESES_LARGOS[Number(mes.slice(5, 7)) - 1] + ' ' + mes.slice(0, 4) : ''; }
 let tBuscar = null;
 $('buscador').addEventListener('input', () => {
@@ -413,7 +436,7 @@ $('btnGuardarEdicion').onclick = async () => {
     avisar('Guardado');
     cerrarEdicion();
     pintarLlamadas();
-    const fila = $('fila-' + f.id); if (fila){ fila.classList.add('destacada'); fila.scrollIntoView({ block: 'center' }); }
+    const fila = $('fila-' + f.id); if (fila){ marcarFila(f.id); fila.scrollIntoView({ block: 'center' }); }
   } catch (err){ error(err); }
   $('btnGuardarEdicion').disabled = false;
 };
