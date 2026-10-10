@@ -240,6 +240,12 @@
   .solo-lectura #cuerpoTabla .btn-rapido, .solo-lectura .btn-detalle-mas, .solo-lectura .btn-editar,
   .solo-lectura .btn-reasignar, .solo-lectura .btn-borrar, .solo-lectura .btn-borrar-reasig,
   .solo-lectura #btnRegistrarReasig{display:none !important}
+  /* Cambiar de abogado: nueva reasignación o corrección */
+  .cambio-abogado .tipo-cambio{display:flex;flex-direction:column;gap:4px;margin-top:6px;font-size:12px;font-weight:400}
+  .cambio-abogado{flex-wrap:wrap;gap:6px}
+  .cambio-abogado > span:first-child{flex:1 1 280px;min-width:0}
+  .cambio-abogado .tipo-cambio label{display:block;cursor:pointer;line-height:1.4;padding-left:22px;text-indent:-22px}
+  .cambio-abogado .tipo-cambio input{margin:0 6px 0 0;vertical-align:-2px}
   /* Ventana de registro del Drive 1 dentro de la Agenda */
   #marcoRegistro{position:fixed;inset:0;width:100%;height:100%;border:none;background:transparent;z-index:300;color-scheme:normal}
   #barraRegistroAgenda{position:fixed;left:max(16px, env(safe-area-inset-left,0px));bottom:calc(16px + env(safe-area-inset-bottom,0px));z-index:45;
@@ -782,9 +788,87 @@ function reasignarRegistro(registro, nuevoId){
     .catch(errorAlGuardar);
   updateDoc(doc(db, 'asignaciones', registro.id), { abogadoActualId: nuevoId }).catch(errorAlGuardar);
   ponerAbogadoActualDrive1(registro.id, nuevoId);
+  registrarCambio('Nueva reasignación (Agenda)', 'asignaciones', registro.id, { abogado: nombreDe(titularActual(registro)) }, { abogado: nombreDe(nuevoId) });
   registro.abogadoActualId = nuevoId;
   avisar('Reasignación registrada');
 }
+// ---------- Cambiar de abogado: "Nueva reasignación" o "Corregir" (el anterior nunca lo asumió) ----------
+function filaCambioAbogado(a, clase){
+  const reasignado = !!a.abogadoActualId && a.abogadoActualId !== a.defensorId;
+  const quien = escHtml(nombreDe(titularActual(a)));
+  return `<div class="${clase} cambio-abogado"><span>Pasa a: <select id="selReasignar-${a.id}" style="font-size:12px;padding:3px 6px;border-radius:5px">${opcionesReasignar(titularActual(a))}</select>
+    <span class="tipo-cambio">
+      <label><input type="radio" name="tipoCambio-${a.id}" value="nueva"> <b>Nueva reasignación</b> — ${quien} sí lo tuvo (cuenta −1 / +1 y compensación)</label>
+      <label><input type="radio" name="tipoCambio-${a.id}" value="corregir"> <b>${reasignado ? 'Corregir reasignación' : 'Corregir asignación'}</b> — ${quien} nunca lo asumió (${reasignado ? 'se quita su +1 y no entra a la compensación' : 'pasa como si se le hubiera asignado desde el inicio'})</label>
+    </span></span>
+    <span class="detalle-acciones"><button class="btn-reasignar-si" data-id="${a.id}">Confirmar</button><button class="btn-borrar-no">Cancelar</button></span></div>`;
+}
+// Registro de cambios (lo lee el administrador en Personal y permisos)
+async function registrarCambio(accion, coleccion, docId, antes, despues){
+  const claves = [...new Set([...Object.keys(antes || {}), ...Object.keys(despues || {})])];
+  try {
+    await setDoc(doc(collection(db, 'cambios')), { cuandoMs: Date.now(), quien: usuario.correo, quienNombre: usuario.nombre || usuario.correo, accion, coleccion, docId,
+      detalle: claves.filter(k => String((antes || {})[k] ?? '') !== String((despues || {})[k] ?? '')).map(k => ({ campo: k, antes: String((antes || {})[k] ?? ''), despues: String((despues || {})[k] ?? '') })) });
+  } catch (e){ console.error('No se pudo anotar en el registro de cambios', e); }
+}
+// Contacto del abogado para el Drive 1 (el que se muestra; nunca el personal)
+function datosAbogadoDrive1(id, prefijo){
+  const d = DEFENSORES.find(x => x.id === id) || {};
+  return { [prefijo + 'Id']: id, [prefijo + 'Nombre']: d.nombre || id, [prefijo + 'Celular']: d.celular || '', [prefijo + 'Correo']: d.correo || '' };
+}
+// Corregir: el anterior NUNCA asumió el caso.
+// · Sin reasignación ("Corregir asignación"): el caso pasa al nuevo como si se le hubiera asignado desde el inicio (el Mes se mueve; sin "Antes:" ni compensación).
+// · Con reasignación ("Corregir reasignación"): la última reasignación pasa a nombre del nuevo; el anterior pierde su +1 y no entra a la compensación.
+async function corregirAbogado(a, nuevoId){
+  const reasignado = !!a.abogadoActualId && a.abogadoActualId !== a.defensorId;
+  const sello = { corregidoPor: usuario.correo, corregidoEn: new Date().toISOString() };
+  try {
+    if (!reasignado){
+      if (nuevoId === a.defensorId) return;
+      const antes = a.defensorId;
+      await updateDoc(doc(db, 'asignaciones', a.id), { defensorId: nuevoId, corregidoDe: antes, ...sello });
+      const caso = await getDoc(doc(db, 'casos', a.id)).catch(() => null);
+      if (caso && caso.exists()) await updateDoc(caso.ref, datosAbogadoDrive1(nuevoId, 'abogado'));
+      try { const f = await getDoc(doc(db, 'fonoAlegra', a.id)); if (f.exists()) await updateDoc(f.ref, { defensorId: nuevoId, defensorNombre: nombreDe(nuevoId) }); } catch (e){ /* sin acceso al Drive 3 */ }
+      await registrarCambio('Corrigió asignación (nunca lo asumió)', 'asignaciones', a.id, { abogado: nombreDe(antes) }, { abogado: nombreDe(nuevoId) });
+      avisar('Asignación corregida: ahora es de ' + nombreDe(nuevoId) + ' desde el inicio');
+      return;
+    }
+    const lista = (await getDocs(query(collection(db, 'reasignaciones'), where('casoId', '==', a.id)))).docs
+      .map(d => ({ ref: d.ref, id: d.id, ...d.data() })).filter(r => r.aId === a.abogadoActualId)
+      .sort((x, y) => (x.fecha || '').localeCompare(y.fecha || '') || ((x.creadoEn && x.creadoEn.seconds) || 0) - ((y.creadoEn && y.creadoEn.seconds) || 0));
+    const r = lista.pop();
+    if (!r){ avisar('No se encontró la reasignación de este caso para corregirla.', 6000); return; }
+    if (nuevoId === r.deId){ avisar('Ese abogado es quien lo tenía antes de la reasignación. Si nunca debió reasignarse, borra la reasignación.', 7000); return; }
+    const antes = r.aId;
+    await updateDoc(r.ref, { aId: nuevoId, corregidoDe: antes, ...sello });
+    await updateDoc(doc(db, 'asignaciones', a.id), { abogadoActualId: nuevoId });
+    await ponerAbogadoActualDrive1(a.id, nuevoId);
+    // Si la reasignación vino de una "Solicitud de cambio de abogado" del Drive 1, ese documento también pasa al nuevo
+    const cambio = await getDoc(doc(db, 'casos', r.id)).catch(() => null);
+    if (cambio && cambio.exists() && cambio.data().tipoDoc === 'Solicitud de cambio de abogado') await updateDoc(cambio.ref, datosAbogadoDrive1(nuevoId, 'abogado'));
+    a.abogadoActualId = nuevoId;
+    await registrarCambio('Corrigió reasignación (nunca lo asumió)', 'reasignaciones', r.id, { pasaA: nombreDe(antes) }, { pasaA: nombreDe(nuevoId) });
+    avisar('Reasignación corregida: ' + nombreDe(antes) + ' nunca lo tuvo; ahora es de ' + nombreDe(nuevoId));
+  } catch (err){ errorAlGuardar(err); }
+}
+// Editar desde la Agenda: la misma ventana del Drive 1 (se guarda en los dos lados). Casos muy antiguos sin fila en el Drive 1: el formulario de la Agenda.
+async function editarCaso(id){
+  if (!MODO_ELEGIR && puedeRegistrar()){
+    try {
+      const caso = await getDoc(doc(db, 'casos', id));
+      if (caso.exists()){
+        crearMarcoRegistro();
+        document.getElementById('barraRegistroAgenda').hidden = true;
+        marcoRegistro.hidden = false;
+        if (marcoListo) enviarAlMarco({ tipo: 'editar', id }); else pendienteEdicion = id;
+        return;
+      }
+    } catch (e){ console.warn('No se pudo revisar el Drive 1', e); }
+  }
+  abrirModalEdicion(id);
+}
+let pendienteEdicion = null;
 function seccionReasignaciones(defId, mes){
   const lista = reasignacionesLog.filter(r => r.aId && (r.deId === defId || r.aId === defId) && r.fecha.slice(0, 7) === mes);
   if (lista.length === 0) return '';
@@ -966,6 +1050,12 @@ function buscarRegistro(id){ return asignaciones.find(a => a.id === id) || ultim
 // Borra un caso y sus reasignaciones ligadas (sin conteo fantasma)
 async function borrarCaso(id){
   try {
+    const a = buscarRegistro(id) || {};
+    try {
+      const f = await getDoc(doc(db, 'fonoAlegra', id));
+      if (f.exists() && confirm('Este caso tiene su fila en el Drive 3 (Fono Alegra). ¿Borrarla también?')) await deleteDoc(f.ref);
+    } catch (e){ /* sin acceso al Drive 3 */ }
+    registrarCambio('Borró caso (Agenda)', 'asignaciones', id, { abogado: nombreDe(a.defensorId), fecha: a.fecha || '', categoria: a.categoria || '' }, {});
     const ligadas = await getDocs(query(collection(db, 'reasignaciones'), where('casoId', '==', id)));
     await Promise.all(ligadas.docs.map(d => deleteDoc(d.ref)));
     await deleteDoc(doc(db, 'asignaciones', id));
@@ -1218,8 +1308,7 @@ function pintarTabla(){
             }
             const etiquetaReasig = a.abogadoActualId ? ` <span style="color:#7A3B57;font-weight:600">🔁 ahora lo ve: ${nombreDe(a.abogadoActualId)} (la asignación sigue contando aquí)</span>` : '';
             if (a.id === idPorReasignar){
-              const opciones = opcionesReasignar(titularActual(a));
-              return `<div class="detalle-item"><span>Reasignar a: <select id="selReasignar-${a.id}" style="font-size:12px;padding:3px 6px;border-radius:5px">${opciones}</select></span><span class="detalle-acciones"><button class="btn-reasignar-si" data-id="${a.id}">Confirmar</button><button class="btn-borrar-no">Cancelar</button></span></div>`;
+              return filaCambioAbogado(a, 'detalle-item');
             }
             if (!cuentaComoNuevo(a)) return filaDerivada(a, 'detalle-item');
             return `<div class="detalle-item"><span>${a.fecha} — ${a.categoria}${a.especifica ? ' (' + a.especifica + ' → Drive 1)' : ''}${Object.keys(CASILLAS_TODAS).filter(k => a[k]).map(k => ' · ' + (k === 'adultoMayor' ? '👵 ' : '') + CASILLAS_TODAS[k].split(' (')[0]).join('')} · ${a.origen}${etiquetaReasig}</span><span class="detalle-acciones"><button class="btn-editar" data-id="${a.id}">✎ Editar</button><button class="btn-reasignar" data-id="${a.id}">🔁 Reasignar</button><button class="btn-borrar" data-id="${a.id}">🗑 Borrar</button></span></div>`;
@@ -1277,8 +1366,7 @@ function pintarResultadosBusqueda(){
       return `<div class="resultado-busqueda"><span>¿Borrar el caso del ${a.fecha} (${a.categoria})?</span><span class="detalle-acciones"><button class="btn-borrar-si" data-id="${a.id}">Sí, borrar</button><button class="btn-borrar-no">Cancelar</button></span></div>`;
     }
     if (a.id === idPorReasignar){
-      const opciones = opcionesReasignar(titularActual(a));
-      return `<div class="resultado-busqueda"><span>Reasignar a: <select id="selReasignar-${a.id}" style="font-size:12px;padding:3px 6px;border-radius:5px">${opciones}</select></span><span class="detalle-acciones"><button class="btn-reasignar-si" data-id="${a.id}">Confirmar</button><button class="btn-borrar-no">Cancelar</button></span></div>`;
+      return filaCambioAbogado(a, 'resultado-busqueda');
     }
     if (!cuentaComoNuevo(a)) return filaDerivada(a, 'resultado-busqueda');
     const etiquetaReasig = a.abogadoActualId ? ` <span style="color:#7A3B57;font-weight:600">🔁 ahora lo ve: ${nombreDe(a.abogadoActualId)} (la asignación sigue contando aquí)</span>` : '';
@@ -1288,7 +1376,7 @@ function pintarResultadosBusqueda(){
 
 document.getElementById('resultadosBusqueda').addEventListener('click', function(e){
   const btnEditar = e.target.closest('.btn-editar');
-  if (btnEditar){ abrirModalEdicion(btnEditar.dataset.id); return; }
+  if (btnEditar){ editarCaso(btnEditar.dataset.id); return; }
   const btnReasignar = e.target.closest('.btn-reasignar');
   if (btnReasignar){ idPorReasignar = btnReasignar.dataset.id; idPorBorrar = null; pintarResultadosBusqueda(); return; }
   const btnReasignarSi = e.target.closest('.btn-reasignar-si');
@@ -1297,7 +1385,11 @@ document.getElementById('resultadosBusqueda').addEventListener('click', function
     const registro = buscarRegistro(id);
     const select = document.getElementById('selReasignar-' + id);
     if (select && select.value && !confirmarLicenciaProxima(select.value)) return;
-    if (registro && select && select.value) reasignarRegistro(registro, select.value);
+    if (registro && select && select.value){
+      const tipo = (document.querySelector('input[name="tipoCambio-' + id + '"]:checked') || {}).value;
+      if (!tipo){ avisar('Elige si es una nueva reasignación o una corrección.'); return; }
+      if (tipo === 'corregir') corregirAbogado(registro, select.value); else reasignarRegistro(registro, select.value);
+    }
     idPorReasignar = null;
     ejecutarBusqueda();
     pintarTabla();
@@ -1349,7 +1441,7 @@ function abrirRegistro(datos){
 window.addEventListener('message', e => {
   if (e.origin !== location.origin || !e.data || !e.data.megaalegra || !marcoRegistro || e.source !== marcoRegistro.contentWindow) return;
   const m = e.data, barra = document.getElementById('barraRegistroAgenda');
-  if (m.tipo === 'listo'){ marcoListo = true; if (pendienteRegistro){ enviarAlMarco({ tipo: 'abrir', datos: pendienteRegistro }); pendienteRegistro = null; } }
+  if (m.tipo === 'listo'){ marcoListo = true; if (pendienteRegistro){ enviarAlMarco({ tipo: 'abrir', datos: pendienteRegistro }); pendienteRegistro = null; } if (pendienteEdicion){ enviarAlMarco({ tipo: 'editar', id: pendienteEdicion }); pendienteEdicion = null; } }
   if (m.tipo === 'cerrado'){ marcoRegistro.hidden = true; barra.hidden = true; nombreEnCurso = ''; }
   if (m.tipo === 'abierto'){ marcoRegistro.hidden = false; barra.hidden = true; }
   if (m.tipo === 'minimizado'){ marcoRegistro.hidden = true; barra.textContent = m.texto; barra.hidden = false; }
@@ -1399,7 +1491,7 @@ document.getElementById('cuerpoTabla').addEventListener('click', function(e){
   const btnDetalle = e.target.closest('.btn-detalle-mas');
   if (btnDetalle){ if (confirmarLicenciaProxima(btnDetalle.dataset.defensor)) abrirModal(btnDetalle.dataset.defensor, btnDetalle.dataset.nombre); return; }
   const btnEditar = e.target.closest('.btn-editar');
-  if (btnEditar){ abrirModalEdicion(btnEditar.dataset.id); return; }
+  if (btnEditar){ editarCaso(btnEditar.dataset.id); return; }
   const btnReasignar = e.target.closest('.btn-reasignar');
   if (btnReasignar){ idPorReasignar = btnReasignar.dataset.id; idPorBorrar = null; pintarTabla(); return; }
   const btnReasignarSi = e.target.closest('.btn-reasignar-si');
@@ -1408,7 +1500,11 @@ document.getElementById('cuerpoTabla').addEventListener('click', function(e){
     const registro = buscarRegistro(id);
     const select = document.getElementById('selReasignar-' + id);
     if (select && select.value && !confirmarLicenciaProxima(select.value)) return;
-    if (registro && select && select.value) reasignarRegistro(registro, select.value);
+    if (registro && select && select.value){
+      const tipo = (document.querySelector('input[name="tipoCambio-' + id + '"]:checked') || {}).value;
+      if (!tipo){ avisar('Elige si es una nueva reasignación o una corrección.'); return; }
+      if (tipo === 'corregir') corregirAbogado(registro, select.value); else reasignarRegistro(registro, select.value);
+    }
     idPorReasignar = null;
     pintarTabla();
     return;
