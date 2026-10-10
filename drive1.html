@@ -138,6 +138,14 @@
   .resultados-caso{border:1px solid var(--linea);border-radius:8px;margin-top:6px;max-height:220px;overflow:auto}
   .resultado-caso{padding:8px 10px;font-size:12.5px;border-bottom:1px solid var(--linea);cursor:pointer}
   .resultado-caso:hover{background:var(--papel)}
+  /* Datos para la Agenda dentro del formulario del Drive 1 */
+  .bloque-agenda{border:1px dashed var(--linea);border-radius:10px;padding:8px 10px;background:#FCFAF6}
+  .columna-agenda{font-size:12.5px;color:var(--gris);margin-bottom:6px}
+  .columna-agenda b{color:var(--tinta)}
+  .bloque-agenda details{margin:4px 0 8px}
+  .bloque-agenda summary{cursor:pointer;font-size:12.5px;font-weight:700;color:var(--azul);padding:3px 0}
+  .bloque-agenda details .opciones{margin-top:6px}
+  .casilla-turno{display:flex;align-items:center;gap:8px;font-size:13px;font-weight:600;margin-top:8px}
   /* Bloque Fono Alegra (columnas de la hoja del Drive 3) */
   .bloque-fono{border:1.5px solid var(--celeste-linea);background:#F4FAFD;border-radius:10px;padding:10px 12px}
   .titulo-fono{font-size:12.5px;font-weight:700;color:var(--azul);margin-bottom:4px}
@@ -441,6 +449,29 @@
         <select id="fMateria"></select>
         <input type="text" id="fMateriaOtra" class="may" placeholder="¿Cuál?" style="margin-top:6px" hidden>
       </div>
+      <!-- Lo que la Agenda (Drive 2) necesita para contar: columna, casillas, grupo y turno -->
+      <div class="ancho bloque-agenda" id="bloqueAgenda">
+        <div class="columna-agenda">Columna en la Agenda: <b id="txtColumnaAgenda">—</b></div>
+        <details id="otrasCategorias" hidden>
+          <summary>Otras categorías del área</summary>
+          <div class="opciones" id="optOtrasCat"></div>
+          <div class="ayuda">Si eliges una, el caso suma en esa columna en lugar de la que sale de la materia.</div>
+        </details>
+        <div id="bloqueCasillas">
+          <label class="campo">El usuario es… (casillas de la Agenda)</label>
+          <div class="casillas">
+            <label><input type="checkbox" id="fCasAdultoMayor"> Adulto mayor</label>
+            <label><input type="checkbox" id="fCasLgtbi"> LGTBI</label>
+            <label><input type="checkbox" id="fCasIndigena"> Indígenas y otros (quechuahablantes, comunidades afro)</label>
+            <label><input type="checkbox" id="fCasConadis"> CONADIS</label>
+          </div>
+        </div>
+        <div id="bloqueGrupoEquipo" hidden>
+          <label class="campo">Grupo del usuario (el caso va en una sola columna)</label>
+          <div class="opciones" id="optGrupoEquipo"></div>
+        </div>
+        <label class="casilla-turno" id="bloqueTurno" hidden><input type="checkbox" id="fTurno"> <span id="txtTurno">Llegó por Turno de flagrancia</span></label>
+      </div>
     </div>
 
     <!-- Origen Fono Alegra: las columnas de la hoja de Fono Alegra que el Drive 1 no tiene. Se guardan SOLO en el Drive 3 (fonoAlegra) -->
@@ -701,8 +732,8 @@ const NOMBRADAS_AL = ['Desalojo', 'Laboral', 'Desprotección Familiar', 'Procedi
 function categoriaAgenda(materia, area){
   if (area === 'Defensa de Víctimas') return DELITOS_V.includes(materia) ? materia : 'Otras';
   if (area === 'Equipo multidisciplinario') return DELITOS_V.includes(materia) ? 'Víctimas' : 'Asistencia Legal';
-  if (materia === 'Desalojo (casa habitación)') return 'Desalojo';
-  if (materia === 'Nulidad de despido, despido arbitrario o beneficios sociales') return 'Laboral';
+  if (materia === 'Desalojo (casa habitación)' || /desalojo/.test(norm(materia))) return 'Desalojo';
+  if (materia === 'Nulidad de despido, despido arbitrario o beneficios sociales' || /laboral|despido|beneficios sociales|remuneraci|\bcts\b|reposicion/.test(norm(materia))) return 'Laboral';
   return NOMBRADAS_AL.includes(materia) ? materia : 'Otras materias';
 }
 const CASILLAS_VACIAS = { adultoMayor: false, lgtbi: false, indigena: false, conadis: false, presencial: false, menorEdad: false };
@@ -1698,6 +1729,84 @@ $('fApoyo').addEventListener('change', dirigirAlApoyo);
 $('fFecha').addEventListener('change', actualizarApoyo);
 $('fAbogado').addEventListener('change', actualizarApoyo);
 
+// ---------- Datos que la Agenda (Drive 2) necesita para contar, dentro del formulario ----------
+// Columna (sale de la materia; "Otras categorías del área" para las poco comunes), casillas, grupo del Equipo y turno.
+// Se guardan en el Drive 1 y pasan a la Agenda UNA sola vez al guardar.
+const OTRAS_CATEGORIAS = { 'Asistencia Legal': ['Desprotección Familiar', 'Procedimiento Adm. de Adopción', 'Riesgo por Desprotección'] };
+const GRUPOS_EQUIPO = [['', 'Ninguno'], ['adultoMayor', 'Adulto mayor'], ['menorEdad', 'Menores de edad'], ['lgtbi', 'LGTBI'], ['indigena', 'Indígenas y otros'], ['conadis', 'CONADIS']];
+const NOMBRE_GRUPO = Object.fromEntries(GRUPOS_EQUIPO.filter(g => g[0]));
+const TURNO_AREA = { 'Defensa de Víctimas': 'Turno de flagrancia', 'Equipo multidisciplinario': 'Turno peritos' };
+const CASILLAS_FORM = [['adultoMayor', 'fCasAdultoMayor'], ['lgtbi', 'fCasLgtbi'], ['indigena', 'fCasIndigena'], ['conadis', 'fCasConadis']];
+let categoriaManual = '', grupoEquipo = '', agendaCargada = true;
+const materiaElegida = () => $('fMateria').value === 'Otra' ? may($('fMateriaOtra').value) : $('fMateria').value;
+function leerAgendaForm(area){
+  const esEquipo = area === 'Equipo multidisciplinario';
+  return {
+    casillas: esEquipo ? {} : Object.fromEntries(CASILLAS_FORM.map(([k, el]) => [k, $(el).checked])),
+    grupoEquipo: esEquipo ? grupoEquipo : '',
+    categoriaManual: esEquipo ? '' : categoriaManual,
+    turno: TURNO_AREA[area] && $('fTurno').checked ? TURNO_AREA[area] : ''
+  };
+}
+// Lo que se escribe en "asignaciones" (las mismas claves que usa la Agenda)
+function camposAgenda(d){
+  const am = categoriaAgenda(d.materia, d.area);
+  if (d.area === 'Equipo multidisciplinario'){
+    const g = d.grupoEquipo || '';
+    return { categoria: g ? NOMBRE_GRUPO[g] : am, areaMateria: am, grupo: g, ...CASILLAS_VACIAS, ...(g ? { [g]: true } : {}) };
+  }
+  return { categoria: d.categoriaManual || am, areaMateria: '', ...CASILLAS_VACIAS, ...(d.casillas || {}) };
+}
+function pintarAgendaForm(){
+  const area = $('fArea').value, esEquipo = area === 'Equipo multidisciplinario';
+  const otras = OTRAS_CATEGORIAS[area] || [];
+  $('otrasCategorias').hidden = !otras.length;
+  $('optOtrasCat').innerHTML = otras.map(c => `<div class="opcion ${c === categoriaManual ? 'activo' : ''}" data-v="${esc(c)}">${esc(c)}</div>`).join('');
+  if (otras.includes(categoriaManual)) $('otrasCategorias').open = true;
+  $('bloqueCasillas').hidden = esEquipo;
+  $('bloqueGrupoEquipo').hidden = !esEquipo;
+  $('optGrupoEquipo').innerHTML = GRUPOS_EQUIPO.map(([k, t]) => `<div class="opcion ${k === grupoEquipo ? 'activo' : ''}" data-v="${k}">${esc(t)}</div>`).join('');
+  $('bloqueTurno').hidden = !TURNO_AREA[area];
+  $('txtTurno').textContent = 'Llegó por ' + (TURNO_AREA[area] || '');
+  const c = camposAgenda({ area, materia: materiaElegida(), ...leerAgendaForm(area) });
+  $('txtColumnaAgenda').textContent = materiaElegida() || categoriaManual || grupoEquipo ? c.categoria : '— (elige la materia)';
+}
+function limpiarAgendaForm(){
+  categoriaManual = ''; grupoEquipo = ''; agendaCargada = true;
+  CASILLAS_FORM.forEach(([, el]) => $(el).checked = false);
+  $('fTurno').checked = false; $('otrasCategorias').open = false;
+  pintarAgendaForm();
+}
+// Al editar: primero lo guardado en el Drive 1; si es un caso viejo (sin esos datos), se trae de la Agenda
+function cargarAgendaForm(r){
+  const desdeDrive1 = r.casillas || r.grupoEquipo !== undefined || r.categoriaManual !== undefined;
+  const poner = (cas, grupo, catManual, turno) => {
+    CASILLAS_FORM.forEach(([k, el]) => $(el).checked = !!(cas || {})[k]);
+    grupoEquipo = grupo || ''; categoriaManual = catManual || ''; $('fTurno').checked = !!turno;
+    pintarAgendaForm();
+  };
+  poner(r.casillas, r.grupoEquipo, r.categoriaManual, r.turno);
+  if (desdeDrive1) return;
+  agendaCargada = false; // hasta leer la Agenda no se tocan sus casillas
+  getDoc(doc(db, 'asignaciones', idAsignacion(r))).then(s => {
+    if (editandoId !== r.id) return;
+    agendaCargada = true;
+    if (!s.exists()) return;
+    const a = s.data();
+    const cas = Object.fromEntries(CASILLAS_FORM.map(([k]) => [k, !!a[k]]));
+    const derivada = categoriaAgenda(r.materia || '', r.area);
+    const manual = r.area !== 'Equipo multidisciplinario' && a.categoria && a.categoria !== derivada ? a.categoria : '';
+    poner(cas, a.grupo || '', manual, r.turno || (a.origen === 'Turno de flagrancia' || a.origen === 'Turno peritos'));
+    tomarFotoForm();
+  }).catch(err => console.warn('No se pudo leer la Agenda de este caso', err));
+}
+$('optOtrasCat').addEventListener('click', e => { const o = e.target.closest('.opcion'); if (!o) return; categoriaManual = categoriaManual === o.dataset.v ? '' : o.dataset.v; pintarAgendaForm(); });
+$('optGrupoEquipo').addEventListener('click', e => { const o = e.target.closest('.opcion'); if (!o) return; grupoEquipo = o.dataset.v; pintarAgendaForm(); });
+$('fArea').addEventListener('change', () => { categoriaManual = ''; pintarAgendaForm(); });
+// Al cambiar la materia, la columna vuelve a salir de la materia
+['change', 'input'].forEach(t => { $('fMateria').addEventListener(t, () => { if (!(OTRAS_CATEGORIAS[$('fArea').value] || []).includes(categoriaManual)) categoriaManual = ''; pintarAgendaForm(); }); $('fMateriaOtra').addEventListener(t, pintarAgendaForm); });
+[...CASILLAS_FORM.map(c => c[1]), 'fTurno'].forEach(el => $(el).addEventListener('change', pintarAgendaForm));
+
 // ---------- Fono Alegra (línea 1884): las columnas de la hoja del Drive 3 dentro del formulario ----------
 // Supuesto 1 (mismo usuario, "Pasar al mismo abogado"): antecedente, NO cuenta en la Agenda; igual se crea su fila en el Drive 3.
 // Supuesto 2 (caso nuevo): cuenta en la Agenda (origen Fono Alegra) y se crea su fila en el Drive 3.
@@ -1864,6 +1973,7 @@ function limpiarForm(){
   $('fDiligenciaOtra').hidden = true; $('bloquePlazoOtro').hidden = true;
   marcar($('optOrigen'), ''); marcar($('optResultado'), ''); marcar($('optPrioridad'), 'normal');
   llenarMaterias(); llenarAbogados(); llenarDirigido();
+  limpiarAgendaForm();
   asistenteManual = false; turnoSugerencia++;
   llenarAsistentes(''); $('bloqueAsistente').hidden = true; $('ayudaAsistente').textContent = '';
   $('errorForm').hidden = true; limpiarFaltas();
@@ -1900,6 +2010,7 @@ function abrirForm({ editarId = null, padreId = null } = {}){
     origen = r.origen || ''; marcar($('optOrigen'), origen);
     $('fUsuario').value = r.usuario || ''; $('fArea').value = r.area || 'Asistencia Legal'; $('fCarpeta').value = r.carpeta || '';
     llenarMaterias(r.materia); llenarAbogados(r.abogadoId);
+    if (!r.padreId) cargarAgendaForm(r);
     $('fRespuesta').value = r.respuesta || ''; $('fDistrital').value = r.distrital || ''; $('fResumen').value = r.resumen || '';
     if (esDerivacion(r.tipoDoc)){
       $('fDerivaTipo').value = r.derivaTipo || 'Otra Dirección Distrital';
@@ -2026,9 +2137,8 @@ async function sincronizarAgenda(id, previo, datos){
     if (!previo){
       await setDoc(doc(db, 'asignaciones', idA), {
         defensorId: datos.abogadoId, area: datos.area, fecha: datos.fecha, mes: datos.mes,
-        categoria: categoriaAgenda(datos.materia, datos.area), especifica: datos.materia,
-        areaMateria: datos.area === 'Equipo multidisciplinario' ? categoriaAgenda(datos.materia, datos.area) : '',
-        origen: origenAgenda(datos.origen, datos.area, ''), ...CASILLAS_VACIAS, desdeDrive1: true,
+        especifica: datos.materia, ...camposAgenda(datos),
+        origen: origenAgenda(datos.origen, datos.area, datos.turno || ''), desdeDrive1: true,
         creadoPor: usuario.correo, creadoEn: serverTimestamp()
       });
       return;
@@ -2037,11 +2147,13 @@ async function sincronizarAgenda(id, previo, datos){
     const cambios = {};
     if (previo.abogadoId !== datos.abogadoId) cambios.defensorId = datos.abogadoId;
     if (previo.fecha !== datos.fecha) Object.assign(cambios, { fecha: datos.fecha, mes: datos.mes });
-    if ((previo.materia || '') !== datos.materia){
-      cambios.especifica = datos.materia;
-      if (datos.area !== 'Equipo multidisciplinario') cambios.categoria = categoriaAgenda(datos.materia, datos.area);
+    if ((previo.materia || '') !== datos.materia) cambios.especifica = datos.materia;
+    // Columna, casillas y grupo: lo que se ve en el formulario (que se cargó de la Agenda al abrir) es lo que vale
+    if (agendaCargada){
+      const a = (await getDoc(doc(db, 'asignaciones', idA))).data() || {};
+      Object.entries(camposAgenda(datos)).forEach(([k, v]) => { if ((a[k] ?? '') !== (v ?? '')) cambios[k] = v; });
     }
-    if ((previo.origen || '') !== datos.origen) cambios.origen = origenAgenda(datos.origen, datos.area, previo.turno);
+    if ((previo.origen || '') !== datos.origen || (previo.turno || '') !== (datos.turno || '')) cambios.origen = origenAgenda(datos.origen, datos.area, datos.turno || '');
     if (Object.keys(cambios).length) await updateDoc(doc(db, 'asignaciones', idA), { ...cambios, editadoPor: usuario.correo, editadoEn: serverTimestamp() });
   } catch (err){ console.error(err); avisar('Se guardó en el Drive 1, pero no se pudo actualizar la Agenda.', 6000); }
 }
@@ -2214,7 +2326,7 @@ $('btnGuardarForm').onclick = async () => {
     });
     datos.estadoTexto = textoEstado(datos);
   } else {
-    Object.assign(datos, { padreId: null, usuario: may($('fUsuario').value), area: $('fArea').value, carpeta: may($('fCarpeta').value), materia });
+    Object.assign(datos, { padreId: null, usuario: may($('fUsuario').value), area: $('fArea').value, carpeta: may($('fCarpeta').value), materia, ...leerAgendaForm($('fArea').value) });
   }
 
   if (esAnt && !editandoId) datos.abogadoAnteriorId = padre.abogadoActualId || padre.abogadoId || '';
