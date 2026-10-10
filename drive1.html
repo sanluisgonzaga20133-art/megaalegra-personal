@@ -204,6 +204,11 @@
     box-shadow:0 2px 6px rgba(36,30,27,.12)}
   .btn-x:hover{background:#FBEEEC;border-color:#D91023;color:#A10C1A}
 
+  /* Dentro de la Agenda (?embebido=1): solo se ve la ventana de registro, sobre la Agenda */
+  html.embebido, html.embebido body{background:transparent !important}
+  html.embebido body{padding:0}
+  html.embebido #app, html.embebido #ventanitas, html.embebido #avisosEsquina, html.embebido #pantallaLogin,
+  html.embebido #barraRegistro, html.embebido #btnVerAgenda, html.embebido #fondoHist{display:none !important}
   /* Ventana de registro: barra de título para moverla, minimizarla y ver la Agenda */
   .barra-ventana{position:sticky;top:-20px;z-index:6;display:flex;align-items:center;gap:8px;flex-wrap:wrap;background:#fff;
     margin:-20px -22px 6px;padding:14px 22px 8px;border-bottom:1px solid var(--linea);cursor:move;touch-action:none;border-radius:16px 16px 0 0}
@@ -379,7 +384,7 @@
     <div class="barra-ventana" id="barraForm" title="Arrastra desde aquí para mover la ventana">
       <h2 id="tituloForm">Registrar caso</h2>
       <div class="botones-ventana">
-        <a class="btn-ventana agenda" id="btnVerAgenda" href="index.html" target="_blank" rel="noopener">Ver Agenda (Drive 2) ↗</a>
+        <a class="btn-ventana agenda" id="btnVerAgenda" href="index.html?elegir=1" target="_blank" rel="opener" title="Abre la Agenda para elegir al abogado; vuelve aquí con lo elegido">Ver Agenda (Drive 2) ↗</a>
         <button type="button" class="btn-ventana" id="btnMinForm" aria-label="Minimizar" title="Minimizar">—</button>
         <button type="button" class="btn-ventana" id="btnCerrarForm" aria-label="Cerrar" title="Cerrar">✕</button>
       </div>
@@ -744,6 +749,9 @@ function idAsignacion(r){ return r.asignacionId || r.id; }
 
 // ---------------- Utilidades ----------------
 const $ = id => document.getElementById(id);
+// Dentro de la Agenda (Drive 2) esta página muestra solo la ventana de registro
+const EMBEBIDO = new URLSearchParams(location.search).has('embebido');
+if (EMBEBIDO) document.documentElement.classList.add('embebido');
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const may = s => String(s || '').trim().toUpperCase();
 const norm = s => String(s || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
@@ -2078,6 +2086,7 @@ const hayCambiosForm = () => estadoForm() !== fotoForm;
 function cerrarForm(preguntar = true){
   if (preguntar && hayCambiosForm() && !confirm('¿Descartar lo escrito?')) return false;
   $('fondoForm').hidden = true; formMinimizado = false; $('barraRegistro').hidden = true;
+  avisarAgenda({ tipo: 'cerrado' });
   return true;
 }
 // Minimizar: queda una barrita abajo; la tabla de atrás se usa normal; al tocarla vuelve todo lo escrito
@@ -2087,8 +2096,9 @@ function minimizarForm(){
   const nombre = modo === 'antecedente' && padre ? padre.usuario : $('fUsuario').value.trim();
   $('barraRegistro').textContent = (editandoId ? 'Edición en curso: ' : 'Registro en curso: ') + (nombre || '(sin nombre todavía)');
   $('barraRegistro').hidden = false;
+  avisarAgenda({ tipo: 'minimizado', texto: $('barraRegistro').textContent });
 }
-function restaurarForm(){ formMinimizado = false; $('barraRegistro').hidden = true; $('fondoForm').hidden = false; limitarPosForm(); }
+function restaurarForm(){ formMinimizado = false; $('barraRegistro').hidden = true; $('fondoForm').hidden = false; limitarPosForm(); avisarAgenda({ tipo: 'abierto' }); }
 $('btnMinForm').onclick = minimizarForm;
 $('btnCerrarForm').onclick = () => cerrarForm();
 $('barraRegistro').onclick = restaurarForm;
@@ -2114,6 +2124,87 @@ $('barraForm').addEventListener('pointermove', e => {
 });
 ['pointerup', 'pointercancel'].forEach(t => $('barraForm').addEventListener(t, () => { arrastre = null; }));
 window.addEventListener('resize', () => { if (!$('fondoForm').hidden) limitarPosForm(); });
+
+// ---------- Registro desde la Agenda (Drive 2) ----------
+// La Agenda abre ESTA misma ventana (dentro de ella, ?embebido=1) o, en modo elegir, devuelve el abogado a esta pestaña.
+// "+" manda solo el abogado; "···" manda además los datos de la Agenda (fecha, categoría, materia, casillas, grupo, origen).
+// Si hay un registro abierto o minimizado, se completa ese; si no, se abre uno nuevo empezando por el nombre.
+function avisarAgenda(m){ if (EMBEBIDO) parent.postMessage({ megaalegra: true, ...m }, location.origin); }
+const ORIGEN_DESDE_AGENDA = {
+  'Mesa de partes virtual': ['Mesa de partes virtual', false], 'Fono Alegra': ['Correo Fono Alegra', false],
+  'Correo institucional': ['Correo electrónico', false], 'Turno presencial (Turno Consulta)': ['Presencial (formato)', false],
+  'Turno presencial (Patrocinio presencial)': ['Presencial (formato)', false], 'Turno presencial': ['Presencial (formato)', false],
+  'Turno de flagrancia': ['Presencial (formato)', true], 'Turno peritos': ['Presencial (formato)', true]
+};
+function ponerMateria(txt){
+  if (!txt) return;
+  const existe = [...$('fMateria').options].some(o => o.value === txt);
+  $('fMateria').value = existe ? txt : 'Otra';
+  $('fMateriaOtra').value = existe ? '' : may(txt);
+  $('fMateriaOtra').hidden = existe;
+  $('fMateria').dispatchEvent(new Event('change'));
+}
+function aplicarDatosAgenda(d){
+  if (d.area && $('fArea').value !== d.area && modo === 'nuevo' && !editandoId){ $('fArea').value = d.area; $('fArea').dispatchEvent(new Event('change')); }
+  if (d.fecha){ $('fFecha').value = d.fecha; $('fFecha').dispatchEvent(new Event('change')); }
+  if (d.origenAgenda && ORIGEN_DESDE_AGENDA[d.origenAgenda]){
+    const [o, conTurno] = ORIGEN_DESDE_AGENDA[d.origenAgenda];
+    const op = [...$('optOrigen').children].find(c => c.dataset.v === o);
+    if (op && origen !== o) op.click();
+    $('fTurno').checked = conTurno;
+  }
+  if (d.conDatos && modo === 'nuevo'){
+    const area = $('fArea').value;
+    if (area === 'Equipo multidisciplinario'){ ponerMateria(d.especifica); grupoEquipo = d.grupo || ''; }
+    else if (area === 'Defensa de Víctimas'){ if (DELITOS_V.includes(d.categoria)) ponerMateria(d.categoria); else ponerMateria(d.especifica); }
+    else {
+      if (d.especifica) ponerMateria(d.especifica);
+      else if (d.categoria === 'Desalojo') ponerMateria('Desalojo (casa habitación)');
+      else if (d.categoria === 'Laboral') ponerMateria('Nulidad de despido, despido arbitrario o beneficios sociales');
+      if ((OTRAS_CATEGORIAS[area] || []).includes(d.categoria)) categoriaManual = d.categoria;
+    }
+    if (area !== 'Equipo multidisciplinario') CASILLAS_FORM.forEach(([k, el]) => $(el).checked = !!(d.casillas || {})[k]);
+  }
+  if (d.abogadoId){
+    if (![...$('fAbogado').options].some(o => o.value === d.abogadoId)) llenarAbogados();
+    $('fAbogado').value = d.abogadoId;
+    $('fAbogado').dispatchEvent(new Event('change'));
+    abogadoFonoManual = true;
+  }
+  pintarAgendaForm();
+  revisarFaltas();
+}
+async function recibirDesdeAgenda(d){
+  if (!usuario || usuario.rol !== 'abogado'){ avisar('Para registrar casos necesitas permiso de Editar en el Drive 1.', 6000); avisarAgenda({ tipo: 'cerrado' }); return; }
+  const hayRegistro = formMinimizado || !$('fondoForm').hidden;
+  if (!hayRegistro){
+    abrirForm();
+    await new Promise(res => setTimeout(res, 0)); // primero se toma la foto del formulario vacío (así, al cerrar, pregunta antes de perder lo que vino de la Agenda)
+  } else if (formMinimizado) restaurarForm();
+  else avisarAgenda({ tipo: 'abierto' });
+  aplicarDatosAgenda(d);
+  if (modo === 'nuevo' && !$('fUsuario').value.trim()) $('fUsuario').focus();
+  if (!EMBEBIDO){
+    const ab = DEFENSORES.find(x => x.id === d.abogadoId);
+    avisar('Desde la Agenda: ' + (ab ? ab.nombre : 'datos') + (hayRegistro ? ' pasó a tu registro abierto.' : '.'), 5000);
+    try { window.focus(); } catch (e) {}
+  }
+}
+window.addEventListener('message', e => {
+  if (e.origin !== location.origin || !e.data || !e.data.megaalegra) return;
+  if (e.data.tipo === 'abrir') recibirDesdeAgenda(e.data.datos || {});
+  if (e.data.tipo === 'restaurar') restaurarForm();
+});
+// Si la Agenda se abrió por su cuenta (sin "Ver Agenda ↗"), avisa por este canal
+if (!EMBEBIDO && 'BroadcastChannel' in window){
+  new BroadcastChannel('megaalegra-registro').onmessage = e => { if (e.data && e.data.tipo === 'abrir') recibirDesdeAgenda(e.data.datos || {}); };
+}
+// La Agenda en modo elegir muestra el nombre del usuario que se está registrando
+$('btnVerAgenda').addEventListener('click', () => {
+  const nombre = modo === 'antecedente' && padre ? padre.usuario : $('fUsuario').value.trim();
+  $('btnVerAgenda').href = 'index.html?elegir=1' + (nombre ? '&nombre=' + encodeURIComponent(nombre) : '');
+});
+$('fUsuario').addEventListener('input', () => avisarAgenda({ tipo: 'nombre', nombre: $('fUsuario').value.trim() }));
 $('btnCancelarForm').onclick = () => cerrarForm();
 
 function vencimientoPlazo(previo){
@@ -2361,6 +2452,7 @@ $('btnGuardarForm').onclick = async () => {
     CARGA_MES.clear();
     cerrarForm(false);
     avisar(editandoId ? 'Cambios guardados' : 'Registrado');
+    avisarAgenda({ tipo: 'guardado', texto: editandoId ? 'Cambios guardados en el Drive 1 y la Agenda' : 'Registrado en el Drive 1 y en la Agenda' });
     if (!editandoId && Number(fecha.slice(0, 4)) !== anioElegido) avisar('Registrado en ' + fecha.slice(0, 4) + '. Cambia de año para verlo.', 5000);
     pintar();
   } catch (err){ errorAlGuardar(err); $('btnGuardarForm').disabled = false; }
@@ -2775,6 +2867,7 @@ onAuthStateChanged(auth, async user => {
     $('usuarioSesion').textContent = usuario.nombre + (usuario.rol === 'abogado' ? ' · puede registrar y editar' : usuario.rol === 'bloqueado' ? '' : ' · anota N° de memo, oficio y carta') + usuario.nota;
     if (usuario.rol === 'bloqueado') document.body.classList.add('bloqueado');
     $('pantallaLogin').hidden = true; $('app').hidden = false;
+    if (EMBEBIDO){ avisarAgenda({ tipo: 'listo' }); return; }
     pintarAnios(); escucharAnio(anioElegido);
     iniciarAvisos();
     if (usuario.esAdmin){ convertirDevolucionesViejas(); copiarOpinionesViejas(); }

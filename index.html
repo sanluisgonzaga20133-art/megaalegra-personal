@@ -239,7 +239,16 @@
   /* Asistentes: solo ven y descargan */
   .solo-lectura #cuerpoTabla .btn-rapido, .solo-lectura .btn-detalle-mas, .solo-lectura .btn-editar,
   .solo-lectura .btn-reasignar, .solo-lectura .btn-borrar, .solo-lectura .btn-borrar-reasig,
-  .solo-lectura #btnRegistrarReasig, .solo-lectura #btnDeshacer{display:none !important}
+  .solo-lectura #btnRegistrarReasig{display:none !important}
+  /* Ventana de registro del Drive 1 dentro de la Agenda */
+  #marcoRegistro{position:fixed;inset:0;width:100%;height:100%;border:none;background:transparent;z-index:300;color-scheme:normal}
+  #barraRegistroAgenda{position:fixed;left:max(16px, env(safe-area-inset-left,0px));bottom:calc(16px + env(safe-area-inset-bottom,0px));z-index:45;
+    max-width:min(460px, calc(100vw - 32px));background:#241E1B;color:#fff;border:2px solid #fff;border-radius:12px;padding:10px 14px;
+    font:inherit;font-weight:700;font-size:13.5px;box-shadow:0 6px 18px rgba(0,0,0,.28);cursor:pointer;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  #barraRegistroAgenda::after{content:"  ▲ Abrir";opacity:.75;font-weight:600}
+  #bandaElegir{position:fixed;top:calc(8px + env(safe-area-inset-top,0px));left:16px;right:16px;z-index:60;box-shadow:0 6px 18px rgba(0,0,0,.25);background:#2C6478;color:#fff;border-radius:10px;padding:10px 14px;margin:0 0 10px;
+    font-size:13.5px;font-weight:600;display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+  #bandaElegir button{background:#fff;color:#2C6478;border:none;border-radius:8px;padding:5px 10px;font:inherit;font-weight:700;cursor:pointer}
 
   .pie-nota{font-size:12.5px;color:var(--gris);margin-top:14px;line-height:1.5}
 
@@ -394,7 +403,6 @@
       <input type="date" id="selDia" style="padding:6px 10px;border-radius:7px;border:none;font-family:inherit;font-size:14px;font-weight:600">
       <button class="btn-descargar" id="btnVistaInforme">🖨 Vista previa del informe</button>
       <button class="btn-descargar" id="btnDescargar">⬇ Descargar Excel</button>
-      <button class="btn-descargar" id="btnDeshacer" disabled>↺ Deshacer último</button>
       <button class="btn-descargar" id="btnRegistrarReasig">🔁 Registrar reasignación</button>
       <button class="btn-descargar" id="btnBuscar">🔍 Buscar caso de otro mes</button>
     </div>
@@ -516,6 +524,11 @@
     </div>
   </div>
 </div>
+
+<!-- Registro del Drive 1 minimizado dentro de la Agenda: al tocarla vuelve con todo lo escrito -->
+<button type="button" id="barraRegistroAgenda" hidden></button>
+<!-- Modo elegir (abierta desde "Ver Agenda ↗" del Drive 1) -->
+<div id="bandaElegir" hidden>Modo elegir: toca <b>+</b> de un abogado para pasarlo al registro del Drive 1, o <b>···</b> para pasar también los datos. <button type="button" id="btnSalirElegir">Volver sin elegir</button></div>
 
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
@@ -1304,31 +1317,58 @@ document.getElementById('resultadosBusqueda').addEventListener('click', function
   if (btnBorrarNo){ idPorBorrar = null; idPorReasignar = null; pintarResultadosBusqueda(); return; }
 });
 
-let ultimaAccion = null; // para "Deshacer último"
+// "+": solo elige al abogado y lo pasa a la ventana de registro del Drive 1 (la Agenda ya no registra por su cuenta)
+function registrarRapido(defensorId){ abrirRegistro({ abogadoId: defensorId, area: AREA_NOMBRE }); }
 
-function registrarRapido(defensorId){
-  if (AREA.requiereMateria){
-    const d = DEFENSORES.find(x => x.id === defensorId);
-    abrirModal(defensorId, d ? d.nombre : '');
-    return;
-  }
-  const fecha = document.getElementById('selDia').value || hoyIso();
-  const ref = doc(collection(db, 'asignaciones'));
-  const nueva = { defensorId, area: AREA_NOMBRE, fecha, mes: fecha.slice(0, 7), categoria: AREA.categoriaDefault, especifica: '',
-    origen: 'Mesa de partes virtual', ...casillasVacias() };
-  setDoc(ref, { ...nueva, ...marcaCreacion() }).then(() => crearFilaDrive1(ref.id, nueva)).catch(errorAlGuardar);
-  ultimaAccion = { id: ref.id };
-  document.getElementById('btnDeshacer').disabled = false;
-  pintarTabla();
+// ---------- Ventana de registro del Drive 1 dentro de la Agenda ----------
+// Es la MISMA ventana del Drive 1 (se mueve, se minimiza, busca nombres). Al guardar, todo queda en el Drive 1 y la Agenda suma sola.
+// En modo elegir (abierta desde "Ver Agenda ↗" del Drive 1) lo elegido vuelve al formulario abierto en el Drive 1.
+const MODO_ELEGIR = new URLSearchParams(location.search).has('elegir');
+const NOMBRE_EN_DRIVE1 = new URLSearchParams(location.search).get('nombre') || '';
+let marcoRegistro = null, marcoListo = false, pendienteRegistro = null, nombreEnCurso = '';
+function puedeRegistrar(){ return usuario && usuario.rol === 'abogado' && usuario.drive1 === 'editar'; }
+function crearMarcoRegistro(){
+  if (marcoRegistro || MODO_ELEGIR || !puedeRegistrar()) return;
+  marcoRegistro = document.createElement('iframe');
+  marcoRegistro.id = 'marcoRegistro';
+  marcoRegistro.title = 'Registrar caso (Drive 1)';
+  marcoRegistro.src = 'drive1.html?embebido=1';
+  marcoRegistro.hidden = true;
+  document.body.appendChild(marcoRegistro);
 }
-
-document.getElementById('btnDeshacer').addEventListener('click', () => {
-  if (!ultimaAccion) return;
-  borrarCaso(ultimaAccion.id);
-  ultimaAccion = null;
-  document.getElementById('btnDeshacer').disabled = true;
-  pintarTabla();
+function enviarAlMarco(m){ marcoRegistro.contentWindow.postMessage({ megaalegra: true, ...m }, location.origin); }
+function abrirRegistro(datos){
+  if (MODO_ELEGIR){ enviarAlDrive1(datos); return; }
+  if (!puedeRegistrar()){ avisar('Para registrar casos necesitas permiso de Editar en el Drive 1.', 6000); return; }
+  crearMarcoRegistro();
+  document.getElementById('barraRegistroAgenda').hidden = true;
+  marcoRegistro.hidden = false;
+  if (marcoListo) enviarAlMarco({ tipo: 'abrir', datos });
+  else { pendienteRegistro = datos; avisar('Abriendo el registro del Drive 1…', 2500); }
+}
+window.addEventListener('message', e => {
+  if (e.origin !== location.origin || !e.data || !e.data.megaalegra || !marcoRegistro || e.source !== marcoRegistro.contentWindow) return;
+  const m = e.data, barra = document.getElementById('barraRegistroAgenda');
+  if (m.tipo === 'listo'){ marcoListo = true; if (pendienteRegistro){ enviarAlMarco({ tipo: 'abrir', datos: pendienteRegistro }); pendienteRegistro = null; } }
+  if (m.tipo === 'cerrado'){ marcoRegistro.hidden = true; barra.hidden = true; nombreEnCurso = ''; }
+  if (m.tipo === 'abierto'){ marcoRegistro.hidden = false; barra.hidden = true; }
+  if (m.tipo === 'minimizado'){ marcoRegistro.hidden = true; barra.textContent = m.texto; barra.hidden = false; }
+  if (m.tipo === 'nombre') nombreEnCurso = m.nombre || '';
+  if (m.tipo === 'guardado') avisar(m.texto || 'Registrado');
 });
+document.getElementById('barraRegistroAgenda').addEventListener('click', () => {
+  document.getElementById('barraRegistroAgenda').hidden = true;
+  marcoRegistro.hidden = false;
+  enviarAlMarco({ tipo: 'restaurar' });
+});
+// Modo elegir: lo elegido vuelve a la pestaña del Drive 1 y esta pestaña se cierra
+function enviarAlDrive1(datos){
+  const m = { megaalegra: true, tipo: 'abrir', datos };
+  if (window.opener && !window.opener.closed) window.opener.postMessage(m, location.origin);
+  else if ('BroadcastChannel' in window) new BroadcastChannel('megaalegra-registro').postMessage(m);
+  window.close();
+  setTimeout(() => avisar('Listo: lo elegido pasó al registro del Drive 1. Vuelve a esa pestaña.', 10000), 300);
+}
 
 document.getElementById('cuerpoTabla').addEventListener('click', function(e){
   const btnReSi = e.target.closest('.btn-borrar-reasig-si');
@@ -1629,8 +1669,9 @@ function abrirModal(defensorId, nombre){
   idEditando = null;
   defensorActivo = defensorId;
   origenElegido = null;
-  document.getElementById('modalNombre').textContent = 'Nueva asignación';
-  document.getElementById('modalSub').textContent = nombre;
+  const usuarioEnCurso = MODO_ELEGIR ? NOMBRE_EN_DRIVE1 : nombreEnCurso;
+  document.getElementById('modalNombre').textContent = 'Datos para el registro' + (usuarioEnCurso ? ' de ' + usuarioEnCurso : '');
+  document.getElementById('modalSub').textContent = 'Abogado: ' + nombre + ' · con "Continuar" pasa al registro del Drive 1, donde lo revisas y guardas.';
   document.getElementById('campoFecha').value = hoyIso();
   selMateria.selectedIndex = 0;
   selMateria.disabled = false;
@@ -1645,7 +1686,7 @@ function abrirModal(defensorId, nombre){
   document.getElementById('avisoOrigen').style.display = 'none';
   document.getElementById('confirmacionGuardado').style.display = 'none';
   document.getElementById('btnGuardar').disabled = false;
-  document.getElementById('btnGuardar').textContent = 'Guardar';
+  document.getElementById('btnGuardar').textContent = 'Continuar';
   document.getElementById('fondoModal').hidden = false;
 }
 
@@ -1698,6 +1739,7 @@ function abrirModalEdicion(id){
   document.getElementById('fondoModal').hidden = false;
 }
 function cerrarModal(){ document.getElementById('fondoModal').hidden = true; }
+document.getElementById('btnSalirElegir').addEventListener('click', () => { window.close(); setTimeout(() => avisar('Puedes cerrar esta pestaña y volver al Drive 1.', 8000), 300); });
 document.getElementById('btnCancelar').addEventListener('click', cerrarModal);
 document.getElementById('fondoModal').addEventListener('click', e => { if (e.target.id === 'fondoModal') cerrarModal(); });
 
@@ -1745,13 +1787,12 @@ document.getElementById('btnGuardar').addEventListener('click', () => {
     const enBusqueda = ultimaBusqueda.find(a => a.id === idEditando);
     if (enBusqueda){ Object.assign(enBusqueda, cambios); pintarResultadosBusqueda(); }
   } else {
-    const fecha = document.getElementById('campoFecha').value || hoyIso();
-    const ref = doc(collection(db, 'asignaciones'));
-    const nueva = { defensorId: defensorActivo, area: AREA_NOMBRE, fecha, mes: fecha.slice(0, 7), categoria: categoriaElegida,
-      especifica: especifica || '', origen: origenElegido, ...leerCasillas(), ...extraEquipo };
-    setDoc(ref, { ...nueva, ...marcaCreacion() }).then(() => crearFilaDrive1(ref.id, nueva)).catch(errorAlGuardar);
-    ultimaAccion = { id: ref.id };
-    document.getElementById('btnDeshacer').disabled = false;
+    // "Continuar": no guarda aquí; pasa el abogado y los datos a la ventana de registro del Drive 1
+    cerrarModal();
+    abrirRegistro({ abogadoId: defensorActivo, area: AREA_NOMBRE, fecha: document.getElementById('campoFecha').value || hoyIso(),
+      categoria: categoriaElegida, especifica: especifica || '', casillas: leerCasillas(), grupo: AREA.gruposExclusivos ? grupoElegido : '',
+      origenAgenda: origenElegido, conDatos: true });
+    return;
   }
 
   document.getElementById('confirmacionGuardado').style.display = 'block';
@@ -1859,7 +1900,7 @@ async function cambiarArea(nombre){
   AREA_NOMBRE = nombre; AREA = AREAS[nombre]; CATEGORIAS = AREA.categorias; ORIGENES = AREA.origenes;
   document.getElementById('selArea').value = nombre;
   try { localStorage.setItem('megaalegra-area', nombre); } catch (e) {}
-  detalleAbiertoId = null; ultimaAccion = null; ultimaBusqueda = [];
+  detalleAbiertoId = null; ultimaBusqueda = [];
   await cargarDefensoresArea();
   construirFormulario();
   llenarSelectsDefensores();
@@ -1979,7 +2020,8 @@ onAuthStateChanged(auth, async user => {
     }
     const efectivo = rolEfectivo(ficha.data());
     const nivel = nivelSeccion(ficha.data(), 'drive2');
-    usuario = { correo, nombre: ficha.data().nombre || correo, rol: nivel === 'editar' ? 'abogado' : 'lectura', nota: efectivo.nota, area: ficha.data().area || '' };
+    usuario = { correo, nombre: ficha.data().nombre || correo, rol: nivel === 'editar' ? 'abogado' : 'lectura', nota: efectivo.nota, area: ficha.data().area || '',
+      drive1: nivelSeccion(ficha.data(), 'drive1') };
     const navD1 = document.querySelector('.menu-drives a[href="drive1.html"]');
     if (navD1) navD1.hidden = nivelSeccion(ficha.data(), 'drive1') === 'sin';
     document.getElementById('enlaceLicencias').hidden = nivelSeccion(ficha.data(), 'licencias') === 'sin';
@@ -2006,6 +2048,8 @@ onAuthStateChanged(auth, async user => {
     escucharHistorialReasig();
     escucharLicencias();
     await cambiarArea(areaInicial);
+    crearMarcoRegistro(); // se prepara en segundo plano para que "+" y "···" abran al instante
+    if (MODO_ELEGIR){ document.getElementById('bandaElegir').hidden = false; document.body.style.paddingTop = (document.getElementById('bandaElegir').offsetHeight + 20) + 'px'; }
 
     document.body.classList.toggle('solo-lectura', usuario.rol !== 'abogado');
     document.getElementById('usuarioSesion').textContent =
