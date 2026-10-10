@@ -1,0 +1,611 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Drive 3 · Fono Alegra · MEGA ALEGRA</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Source+Serif+4:opsz,wght@8..60,600&family=Public+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+<style>
+  :root{
+    --rojo:#D91023; --rojo-oscuro:#A10C1A; --dorado:#B8873A; --tinta:#241E1B; --gris:#6A635C; --gris-claro:#9A938A;
+    --papel:#F7F2EA; --linea:#E6DECF; --celda:#D9D2C5; --verde:#3F6B52; --verde-fondo:#EAF2ED; --azul:#2C6478; --ambar-fondo:#FFF3D6; --ambar:#6B4A0E;
+    --celeste:#E6F3FA; --celeste-linea:#6CB4D8;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0}
+  body{font-family:'Public Sans',system-ui,sans-serif;background:var(--papel);color:var(--tinta);padding:max(10px, env(safe-area-inset-top,0px)) 12px 30px}
+  [hidden]{display:none !important}
+  button,input,select,textarea{font:inherit}
+  :focus-visible{outline:2px solid var(--azul);outline-offset:2px}
+
+  #pantallaLogin{min-height:100vh;display:flex;align-items:center;justify-content:center;padding:20px}
+  .caja-login{background:#fff;border:1px solid var(--linea);border-radius:14px;padding:28px;max-width:380px;width:100%}
+  .caja-login h2{font-family:'Source Serif 4',Georgia,serif;margin:0 0 12px;color:var(--rojo-oscuro)}
+  .caja-login input{width:100%;padding:10px 12px;border:1px solid var(--linea);border-radius:8px;margin:4px 0 10px}
+  #msgLogin{margin-top:12px;font-size:13px;font-weight:600;color:var(--rojo-oscuro);min-height:18px}
+
+  .barra-sesion{display:flex;justify-content:space-between;align-items:center;gap:10px;margin-bottom:8px;font-size:12.5px;color:var(--gris)}
+  .barra-sesion button{background:#fff;border:1px solid var(--linea);border-radius:8px;padding:4px 12px;cursor:pointer}
+  .menu-drives{display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin:0 0 10px;padding:6px;background:#fff;border:1px solid var(--linea);border-radius:12px}
+  .menu-drives a{padding:7px 12px;border-radius:8px;font-size:13.5px;font-weight:600;color:var(--tinta);text-decoration:none;white-space:nowrap}
+  .menu-drives a:hover{background:var(--papel)}
+  .menu-drives a.actual{background:var(--tinta);color:#fff}
+
+  header{background:var(--rojo);color:#fff;border-radius:14px;padding:12px 18px;margin-bottom:10px}
+  header::after{content:"";display:block;height:3px;background:var(--dorado);margin-top:10px;border-radius:2px}
+  header h1{font-family:'Source Serif 4',Georgia,serif;font-weight:600;font-size:19px;margin:0 0 2px}
+  header p{margin:0;font-size:14px;color:rgba(255,255,255,.9)}
+  .acciones-cab{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}
+  .acciones-cab .btn{background:#fff;color:var(--rojo-oscuro)}
+  .acciones-cab .btn.sec{background:transparent;color:#fff;border:1.5px solid rgba(255,255,255,.7)}
+
+  .pestanas{display:flex;gap:4px;margin:0 0 10px;flex-wrap:wrap}
+  .pestana{padding:9px 16px;border-radius:9px;border:1px solid var(--linea);background:#fff;font-weight:700;font-size:14px;cursor:pointer;color:var(--gris)}
+  .pestana.activa{background:var(--tinta);border-color:var(--tinta);color:#fff}
+
+  .caja{background:#fff;border:1px solid var(--linea);border-radius:12px;padding:14px;margin-bottom:10px}
+  .caja h3{margin:0 0 8px;font-size:15px}
+  .ayuda{font-size:12.5px;color:var(--gris);line-height:1.5;margin:4px 0}
+  .fila-form{display:flex;gap:8px;flex-wrap:wrap;align-items:end}
+  .fila-form label{font-size:12px;font-weight:700;display:flex;flex-direction:column;gap:3px}
+  .fila-form input, .fila-form select, .fila-form textarea{padding:8px 10px;border:1.5px solid var(--linea);border-radius:8px;background:var(--papel);min-width:160px;max-width:100%}
+  .fila-form label.ancho{flex:1 1 300px}
+  .fila-form label.ancho textarea, .fila-form label.ancho input{width:100%}
+  .fila-form textarea{min-height:58px;resize:vertical}
+  .btn{padding:8px 14px;border-radius:8px;border:none;background:var(--rojo);color:#fff;font-weight:700;cursor:pointer;text-decoration:none;display:inline-block}
+  .btn:disabled{background:#D8CFC3;cursor:default}
+  .btn.sec{background:#fff;color:var(--tinta);border:1.5px solid var(--linea)}
+  .btn.chico{padding:4px 10px;font-size:12px}
+  .advertencia{background:var(--ambar-fondo);color:var(--ambar);border-radius:8px;padding:8px 10px;font-size:13px;margin:0 0 10px}
+  .advertencia a{color:var(--ambar);font-weight:700}
+
+  .barra{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin:0 0 10px}
+  .barra label{font-size:13px;font-weight:700;display:flex;align-items:center;gap:6px}
+  .barra input, .barra select{padding:8px 10px;border:1.5px solid var(--linea);border-radius:9px;background:#fff}
+  .barra input[type=search]{flex:1;min-width:220px;max-width:520px}
+  .cuenta{font-size:12.5px;font-weight:700;color:var(--gris)}
+
+  .tabla-wrap{background:#fff;border:1px solid var(--celda);border-radius:10px;overflow:auto;max-height:calc(100vh - 160px)}
+  table{border-collapse:collapse;width:max-content;min-width:100%}
+  th{position:sticky;top:0;z-index:2;background:#EFE9DD;text-align:left;font-size:11.5px;font-weight:700;padding:7px 8px;border:1px solid var(--celda);white-space:nowrap}
+  td{padding:5px 8px;border:1px solid var(--celda);font-size:12.5px;vertical-align:top;background:#fff}
+  td .chico{display:block;font-size:11px;color:var(--gris);font-weight:400}
+  td.largo{min-width:200px;max-width:320px;white-space:pre-wrap}
+  td.nombre{font-weight:600;min-width:180px}
+  td.num{text-align:center}
+  tr.destacada td{background:#FFF6D8}
+  .etiqueta{display:inline-block;font-size:10.5px;font-weight:700;padding:1px 6px;border-radius:7px;white-space:nowrap;margin-top:2px}
+  .etiqueta.nuevo{background:var(--verde-fondo);color:var(--verde)}
+  .etiqueta.mismo{background:var(--celeste);color:var(--azul)}
+  .apoya{font-size:11px;font-weight:700;color:var(--ambar)}
+  .acciones{display:flex;flex-direction:column;gap:4px}
+  .acciones a, .acciones button{font-size:11.5px;font-weight:700;color:var(--azul);background:none;border:none;padding:0;cursor:pointer;text-align:left;text-decoration:underline;text-underline-offset:2px}
+  .vacio{padding:18px;text-align:center;color:var(--gris)}
+
+  /* Conteo */
+  .conteos{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,560px),1fr));gap:10px}
+  .conteo h4{margin:0 0 6px;font-size:13.5px}
+  .conteo table{width:100%;min-width:0}
+  .conteo td, .conteo th{padding:4px 6px;font-size:11.5px}
+  .conteo tr.total td{font-weight:800;background:#F6F1E8}
+  .conteo td.cero{color:var(--gris-claro)}
+
+  /* Turnos */
+  .turnos-tabla td{min-width:170px}
+  .turnos-tabla td.cab{font-weight:700;background:#F6F1E8;min-width:160px}
+  .chip{display:flex;align-items:center;justify-content:space-between;gap:6px;background:var(--papel);border:1px solid var(--linea);border-radius:7px;padding:3px 6px;margin-bottom:4px;font-size:12px}
+  .chip.malo{background:#FBEEEC;border-color:var(--rojo);color:var(--rojo-oscuro)}
+  .chip.lic{background:var(--ambar-fondo)}
+  .chip button{border:none;background:none;color:var(--rojo-oscuro);font-weight:800;cursor:pointer;padding:0 2px}
+  .turnos-tabla select{width:100%;padding:4px 6px;border:1px dashed var(--linea);border-radius:7px;background:#fff;font-size:12px}
+
+  #sinAcceso{background:#fff;border:1px solid var(--linea);border-radius:12px;padding:20px}
+  #aviso{position:fixed;left:50%;bottom:calc(20px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);background:#222;color:#fff;
+    padding:10px 16px;border-radius:10px;font-size:13.5px;font-weight:600;z-index:99;display:none;max-width:90vw}
+</style>
+</head>
+<body>
+<div id="pantallaLogin">
+  <div id="cargandoSesion" style="text-align:center;color:#6A635C;font-size:15px;font-weight:600">Cargando MEGA ALEGRA…</div>
+  <div class="caja-login" id="cajaLogin" hidden>
+    <h2>MEGA ALEGRA · Fono Alegra</h2>
+    <label for="loginCorreo" style="font-size:13px;font-weight:700">Correo</label>
+    <input type="email" id="loginCorreo" autocomplete="username">
+    <label for="loginClave" style="font-size:13px;font-weight:700">Contraseña</label>
+    <input type="password" id="loginClave" autocomplete="current-password">
+    <button class="btn" id="btnEntrar" style="width:100%;padding:11px">Entrar</button>
+    <div id="msgLogin"></div>
+  </div>
+</div>
+<div id="aviso" role="status" aria-live="polite"></div>
+
+<div id="app" hidden>
+  <div class="barra-sesion"><span id="usuarioSesion"></span><button id="btnSalir">Salir</button></div>
+  <nav class="menu-drives" aria-label="Drives">
+    <a href="drive1.html" data-seccion="drive1" hidden>Drive 1 · Registro de casos</a>
+    <a href="index.html" data-seccion="drive2" hidden>Drive 2 · Agenda diaria</a>
+    <a href="drive3.html" class="actual" aria-current="page">Drive 3 · Fono Alegra</a>
+    <a href="licencias.html" data-seccion="licencias" hidden>Licencias</a>
+    <a href="permisos.html" id="enlacePermisos" hidden>Personal y permisos</a>
+  </nav>
+  <div id="sinAcceso" hidden>No tienes acceso al Drive 3 · Fono Alegra. Si lo necesitas, pídeselo al Coordinador.</div>
+
+  <div id="contenido" hidden>
+    <header>
+      <h1>Drive 3 · Fono Alegra</h1>
+      <p>Línea 1884 · una fila por ciudadano atendido</p>
+      <div class="acciones-cab">
+        <a class="btn" id="btnRegistrar" href="drive1.html?registrar=fono" hidden>+ Registrar llamada (en el Drive 1)</a>
+        <button class="btn sec" id="btnExcel">⬇ Excel del mes</button>
+      </div>
+    </header>
+
+    <div class="pestanas" role="tablist">
+      <button class="pestana activa" data-pestana="llamadas" role="tab">Llamadas</button>
+      <button class="pestana" data-pestana="conteo" role="tab">Conteo</button>
+      <button class="pestana" data-pestana="turnos" role="tab">Turnos</button>
+    </div>
+
+    <!-- ===== Llamadas ===== -->
+    <section id="secLlamadas">
+      <div id="faltanFilas"></div>
+
+      <!-- Editar lo que es solo del Drive 3 (lo demás se cambia en el Drive 1) -->
+      <section class="caja" id="cajaEditar" hidden style="border-color:var(--celeste-linea)">
+        <h3 id="tituloEditar">Editar llamada</h3>
+        <p class="ayuda">Fecha, usuario, defensor y materia se cambian en el Drive 1 (así no se escriben dos veces).</p>
+        <div class="fila-form">
+          <label>Sub sede derivada<select id="eSubSede"><option value="">— Elegir —</option><option>LIMA CENTRO</option><option>MIRAFLORES</option></select></label>
+          <label>Documento Nacional<input type="text" id="eDni" inputmode="numeric" autocomplete="off"></label>
+          <label>Teléfono de contacto<input type="text" id="eTelefono" inputmode="tel" autocomplete="off"></label>
+          <label>Correo electrónico<input type="text" id="eCorreo" inputmode="email" autocomplete="off"></label>
+          <label class="ancho">Dirección domiciliaria<input type="text" id="eDireccion" autocomplete="off"></label>
+        </div>
+        <div class="fila-form" style="margin-top:8px">
+          <label class="ancho">Gestiones realizadas<textarea id="eGestHechas"></textarea></label>
+          <label class="ancho">Gestiones por realizar<textarea id="eGestPorHacer"></textarea></label>
+          <label class="ancho">Dificultades presentadas<textarea id="eDificultades"></textarea></label>
+        </div>
+        <div class="fila-form" style="margin-top:8px">
+          <label>Usuario acepta el patrocinio<select id="eAcepta"><option>Sí</option><option>No</option></select></label>
+          <label>Carpeta defensorial creada<select id="eCarpeta"><option>No</option><option>Sí</option></select></label>
+          <label>Se verificó trato al usuario<select id="eTrato"><option>Sí</option><option>No</option></select></label>
+          <label>Nivel de satisfacción<select id="eSatisfaccion"><option>Buena</option><option>Regular</option><option>Mala</option></select></label>
+        </div>
+        <div class="fila-form" style="margin-top:10px">
+          <button class="btn" id="btnGuardarEdicion">Guardar cambios</button>
+          <button class="btn sec" id="btnCancelarEdicion">Cancelar</button>
+        </div>
+      </section>
+
+      <div class="barra">
+        <label>Mes <input type="month" id="selMes"></label>
+        <input type="search" id="buscador" placeholder="Buscar en todos los meses: nombre, DNI, teléfono, defensor o materia" aria-label="Buscar">
+        <span class="cuenta" id="cuenta"></span>
+      </div>
+      <div class="tabla-wrap"><table>
+        <thead><tr id="encLlamadas"></tr></thead>
+        <tbody id="cuerpoLlamadas"></tbody>
+      </table></div>
+    </section>
+
+    <!-- ===== Conteo ===== -->
+    <section id="secConteo" hidden>
+      <div class="barra">
+        <label>Año <select id="selAnio"></select></label>
+        <span class="ayuda">Llamadas atendidas por defensor y mes (todas: caso nuevo y mismo abogado). La columna Fono Alegra de la Agenda cuenta solo los casos nuevos.</span>
+      </div>
+      <div class="conteos" id="conteos"></div>
+    </section>
+
+    <!-- ===== Turnos ===== -->
+    <section id="secTurnos" hidden>
+      <p class="ayuda" id="ayudaTurnos"></p>
+      <div id="avisosTurnos"></div>
+      <div class="tabla-wrap" style="max-height:none"><table class="turnos-tabla">
+        <thead><tr><th>Sub sede · Área</th><th>Lunes</th><th>Martes</th><th>Miércoles</th><th>Jueves</th><th>Viernes</th></tr></thead>
+        <tbody id="cuerpoTurnos"></tbody>
+      </table></div>
+      <div class="fila-form" style="margin-top:10px" id="botonesTurnos" hidden>
+        <button class="btn" id="btnGuardarTurnos" disabled>Guardar turnos</button>
+        <button class="btn sec" id="btnDeshacerTurnos" disabled>Deshacer cambios</button>
+      </div>
+    </section>
+  </div>
+</div>
+
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
+import { getAuth, onAuthStateChanged, signInWithEmailAndPassword, signOut } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
+import { initializeFirestore, collection, doc, getDoc, getDocs, setDoc, updateDoc, query, where } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+
+const fbApp = initializeApp({
+  apiKey: "AIzaSyBHxewV5R3CAj-5i3AzCgfdKvwI5A3jXnA",
+  authDomain: "defensapublica-limacentro.firebaseapp.com",
+  projectId: "defensapublica-limacentro",
+  storageBucket: "defensapublica-limacentro.firebasestorage.app",
+  messagingSenderId: "595677954487",
+  appId: "1:595677954487:web:8a68160c5927bf5cf0a832"
+});
+const auth = getAuth(fbApp);
+const db = initializeFirestore(fbApp, { experimentalForceLongPolling: true });
+
+const $ = id => document.getElementById(id);
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+function avisar(t, ms = 3500){ const a = $('aviso'); a.textContent = t; a.style.display = 'block'; clearTimeout(avisar.t); avisar.t = setTimeout(() => a.style.display = 'none', ms); }
+function hoyIso(){ const d = new Date(); return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'); }
+function fechaCorta(iso){ return iso ? iso.slice(8, 10) + '/' + iso.slice(5, 7) + '/' + iso.slice(0, 4) : ''; }
+const diaMes = iso => iso.slice(8, 10) + '/' + iso.slice(5, 7);
+const norm = s => String(s || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+const may = s => String(s || '').trim().toUpperCase();
+function error(err){
+  console.error(err);
+  avisar(err && err.code === 'permission-denied' ? 'Firebase no dio permiso para este cambio.' : 'No se pudo guardar. Revisa tu conexión.', 6000);
+}
+// Mismo cálculo de permisos que en el Drive 1, la Agenda y Licencias
+function nivelSeccion(f, s){
+  if (f.esAdmin === true) return 'editar';
+  const temporal = f.rol === 'asistente' && f.permisoTemporalHasta && f.permisoTemporalHasta.toDate && f.permisoTemporalHasta.toDate() > new Date();
+  let n;
+  if (temporal && (s === 'drive1' || s === 'drive2')) n = 'editar';
+  else if ((f.permisos || {})[s]) n = f.permisos[s];
+  else n = 'sin';
+  if (f.bloqueado === true && n !== 'sin') n = 'ver';
+  return n;
+}
+
+const COL_FONO = 'fonoAlegra';
+const ORIGEN_FONO = 'Correo Fono Alegra';
+const MESES = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Set', 'Oct', 'Nov', 'Dic'];
+const MESES_LARGOS = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Setiembre', 'Octubre', 'Noviembre', 'Diciembre'];
+const AREA_CORTA = { 'Asistencia Legal': 'Asistencia', 'Defensa de Víctimas': 'Víctimas', 'Equipo multidisciplinario': 'Equipo multidisciplinario' };
+const SEDES = ['LIMA CENTRO', 'MIRAFLORES'];
+const AREAS_TURNO = ['Defensa de Víctimas', 'Asistencia Legal'];
+const DIAS = ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes'];
+
+let yo = null, nivel = 'sin', puedeTurnos = false, puedeDrive1 = false;
+let DEFS = [], LICENCIAS = [];
+const defPorId = id => DEFS.find(d => d.id === id);
+const puedeEditar = () => nivel === 'editar';
+
+// ---------- Registro de cambios (sin datos personales: de DNI, teléfono, correo y dirección solo se anota que cambiaron) ----------
+const PERSONALES = ['dni', 'telefono', 'correo', 'direccion'];
+async function registrarCambio(accion, coleccion, id, antes, despues){
+  const txt = v => typeof v === 'object' && v !== null ? JSON.stringify(v) : String(v ?? '');
+  const claves = [...new Set([...Object.keys(antes || {}), ...Object.keys(despues || {})])];
+  const detalle = claves.filter(k => txt((antes || {})[k]) !== txt((despues || {})[k]))
+    .map(k => PERSONALES.includes(k) ? { campo: k, antes: '', despues: '(cambiado)' } : { campo: k, antes: txt((antes || {})[k]), despues: txt((despues || {})[k]) });
+  try {
+    await setDoc(doc(collection(db, 'cambios')), { cuandoMs: Date.now(), quien: yo.correo, quienNombre: yo.nombre || yo.correo, accion, coleccion, docId: id, detalle });
+  } catch (e){ console.error('No se pudo anotar en el registro de cambios', e); }
+}
+
+// ---------- Licencias (para marcar a quien está de licencia en los turnos) ----------
+function licenciaHoy(defId){
+  const hoy = hoyIso();
+  return LICENCIAS.filter(l => l.defensorId === defId && l.inicio <= hoy && hoy <= l.fin).sort((a, b) => b.fin.localeCompare(a.fin))[0] || null;
+}
+
+// ================= Llamadas =================
+let LLAMADAS = [];          // las del mes elegido
+let TODAS = null;           // todas (solo se cargan al buscar)
+let editandoId = null;
+const COLUMNAS = ['Fecha de ingreso', 'Nombre del usuario/a', 'Documento Nacional', 'Teléfono de contacto', 'Correo electrónico', 'Dirección domiciliaria',
+  'Dir. Distrital', 'Sub Sede derivada', 'Área', 'Día Turno', 'Defensor/a Público/a asignado/a', 'Materia / Delito', 'Gestiones realizadas',
+  'Gestiones por realizar', 'Dificultades presentada (DESCRIBIR)', 'Usuario acepta el patrocinio Sí / No', 'Carpeta defensorial creada (SI / NO)',
+  'Se verificó trato al usuario con llamada', 'Nivel de satisfacción'];
+// Las 19 columnas de la hoja, en el mismo orden
+function valoresFila(f){
+  return [fechaCorta(f.fecha), f.usuario, f.dni, f.telefono, f.correo, f.direccion, f.dirDistrital || 'LIMA CENTRO', f.subSede, AREA_CORTA[f.area] || f.area || '',
+    f.diaTurno, (f.defensorNombre || '') + (f.apoyoNombre ? ' (Le apoya: ' + f.apoyoNombre + ')' : ''), f.materia, f.gestionesRealizadas, f.gestionesPorRealizar,
+    f.dificultades, f.aceptaPatrocinio, f.carpetaCreada, f.tratoVerificado, f.satisfaccion];
+}
+const ordenFila = (a, b) => (b.fecha || '').localeCompare(a.fecha || '') || (b.creadoEnMs || 0) - (a.creadoEnMs || 0);
+async function cargarMes(){
+  const mes = $('selMes').value;
+  $('cuerpoLlamadas').innerHTML = `<tr><td colspan="${COLUMNAS.length + 1}" class="vacio">Cargando…</td></tr>`;
+  try {
+    const snap = await getDocs(query(collection(db, COL_FONO), where('mes', '==', mes)));
+    LLAMADAS = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+  } catch (e){ console.error(e); LLAMADAS = []; avisar('No se pudieron leer las llamadas (' + (e.code || e.message) + ').', 7000); }
+  pintarLlamadas();
+  revisarFaltantes(mes);
+}
+async function cargarTodas(){
+  if (TODAS) return TODAS;
+  const snap = await getDocs(collection(db, COL_FONO));
+  TODAS = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+  return TODAS;
+}
+function pintarLlamadas(){
+  const q = norm($('buscador').value.trim());
+  let lista;
+  if (q && TODAS){
+    const palabras = q.split(/\s+/);
+    lista = TODAS.filter(f => { const t = norm([f.usuario, f.dni, f.telefono, f.correo, f.defensorNombre, f.apoyoNombre, f.materia, f.subSede, f.direccion].join(' | ')); return palabras.every(p => t.includes(p)); });
+  } else lista = LLAMADAS;
+  lista = lista.slice().sort(ordenFila);
+  $('cuenta').textContent = q ? lista.length + ' resultado' + (lista.length === 1 ? '' : 's') + ' en todos los meses'
+    : lista.length + ' llamada' + (lista.length === 1 ? '' : 's') + ' en ' + nombreMes($('selMes').value);
+  $('encLlamadas').innerHTML = '<th>Acciones</th>' + COLUMNAS.map(c => `<th>${esc(c)}</th>`).join('');
+  $('cuerpoLlamadas').innerHTML = lista.map(f => {
+    const v = valoresFila(f);
+    const tipo = f.casoNuevo === false ? '<span class="etiqueta mismo">Mismo abogado</span>' : '<span class="etiqueta nuevo">Caso nuevo</span>';
+    const defensor = `${esc(f.defensorNombre || '')}${f.apoyoNombre ? ` <span class="apoya">(Le apoya: ${esc(f.apoyoNombre)})</span>` : ''}`;
+    const largo = i => `<td class="largo">${esc(v[i])}</td>`;
+    return `<tr id="fila-${esc(f.id)}">
+      <td><div class="acciones">${puedeEditar() ? `<button data-editar="${esc(f.id)}">✎ Editar</button>` : ''}${puedeDrive1 && f.registroId ? `<a href="drive1.html?caso=${encodeURIComponent(f.registroId)}">Ir al caso ↗</a>` : ''}</div></td>
+      <td style="white-space:nowrap">${esc(v[0])}</td>
+      <td class="nombre">${esc(v[1])}${tipo}</td>
+      ${[2, 3, 4].map(i => `<td>${esc(v[i])}</td>`).join('')}
+      ${largo(5)}
+      ${[6, 7, 8, 9].map(i => `<td>${esc(v[i])}</td>`).join('')}
+      <td class="nombre">${defensor}</td>
+      <td>${esc(v[11])}</td>
+      ${largo(12)}${largo(13)}${largo(14)}
+      ${[15, 16, 17, 18].map(i => `<td class="num">${esc(v[i])}</td>`).join('')}
+    </tr>`;
+  }).join('') || `<tr><td colspan="${COLUMNAS.length + 1}" class="vacio">${q ? 'Nada coincide con la búsqueda.' : 'No hay llamadas registradas en ' + nombreMes($('selMes').value) + '.'}</td></tr>`;
+}
+function nombreMes(mes){ return mes ? MESES_LARGOS[Number(mes.slice(5, 7)) - 1] + ' ' + mes.slice(0, 4) : ''; }
+let tBuscar = null;
+$('buscador').addEventListener('input', () => {
+  clearTimeout(tBuscar);
+  tBuscar = setTimeout(async () => {
+    if ($('buscador').value.trim()){ try { await cargarTodas(); } catch (e){ console.error(e); avisar('No se pudo buscar en todos los meses.', 5000); } }
+    pintarLlamadas();
+  }, 250);
+});
+$('selMes').addEventListener('change', () => { cerrarEdicion(); cargarMes(); });
+
+// Casos del Drive 1 con origen Fono Alegra que todavía no tienen su fila aquí (creados desde la Agenda o por quien no tiene Editar en el Drive 3)
+async function revisarFaltantes(mes){
+  $('faltanFilas').innerHTML = '';
+  if (!puedeDrive1) return;
+  try {
+    const snap = await getDocs(query(collection(db, 'casos'), where('mes', '==', mes)));
+    const ids = new Set(LLAMADAS.map(f => f.id));
+    const faltan = snap.docs.map(d => ({ id: d.id, ...d.data() })).filter(r => r.origen === ORIGEN_FONO && !ids.has(r.id));
+    if (!faltan.length) return;
+    $('faltanFilas').innerHTML = `<div class="advertencia">⚠ ${faltan.length} registro${faltan.length === 1 ? '' : 's'} de Fono Alegra en el Drive 1 sin su fila aquí. Ábrelo en el Drive 1 con Editar para completar los datos del Drive 3: ` +
+      faltan.sort((a, b) => a.fecha.localeCompare(b.fecha)).map(r => `<a href="drive1.html?editar=${encodeURIComponent(r.id)}">${esc(fechaCorta(r.fecha))} · ${esc(r.usuario || '(sin nombre)')}</a>`).join(' · ') + '</div>';
+  } catch (e){ console.warn('No se pudo revisar el Drive 1', e); }
+}
+
+// ---------- Editar lo que es solo del Drive 3 ----------
+const CAMPOS_EDITABLES = [['eSubSede', 'subSede'], ['eDni', 'dni'], ['eTelefono', 'telefono'], ['eCorreo', 'correo'], ['eDireccion', 'direccion'],
+  ['eGestHechas', 'gestionesRealizadas'], ['eGestPorHacer', 'gestionesPorRealizar'], ['eDificultades', 'dificultades'],
+  ['eAcepta', 'aceptaPatrocinio'], ['eCarpeta', 'carpetaCreada'], ['eTrato', 'tratoVerificado'], ['eSatisfaccion', 'satisfaccion']];
+const POR_DEFECTO = { aceptaPatrocinio: 'Sí', carpetaCreada: 'No', tratoVerificado: 'Sí', satisfaccion: 'Buena' };
+function buscarLlamada(id){ return LLAMADAS.find(f => f.id === id) || (TODAS || []).find(f => f.id === id); }
+function abrirEdicion(id){
+  const f = buscarLlamada(id); if (!f) return;
+  editandoId = id;
+  $('tituloEditar').textContent = 'Editar llamada de ' + (f.usuario || '') + ' · ' + fechaCorta(f.fecha);
+  CAMPOS_EDITABLES.forEach(([el, k]) => $(el).value = f[k] || POR_DEFECTO[k] || '');
+  $('cajaEditar').hidden = false;
+  $('cajaEditar').scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+function cerrarEdicion(){ editandoId = null; $('cajaEditar').hidden = true; }
+$('btnCancelarEdicion').onclick = cerrarEdicion;
+$('cuerpoLlamadas').addEventListener('click', e => { const b = e.target.closest('[data-editar]'); if (b) abrirEdicion(b.dataset.editar); });
+$('btnGuardarEdicion').onclick = async () => {
+  const f = buscarLlamada(editandoId); if (!f) return;
+  if (!$('eSubSede').value){ avisar('Elige la sub sede.'); $('eSubSede').focus(); return; }
+  const nuevo = {};
+  CAMPOS_EDITABLES.forEach(([el, k]) => {
+    let v = $(el).value.trim();
+    if (['direccion', 'gestionesRealizadas', 'gestionesPorRealizar', 'dificultades'].includes(k)) v = may(v);
+    if (k === 'correo') v = v.toLowerCase();
+    nuevo[k] = v;
+  });
+  const cambios = Object.fromEntries(Object.entries(nuevo).filter(([k, v]) => (f[k] || '') !== v));
+  if (!Object.keys(cambios).length){ cerrarEdicion(); return; }
+  $('btnGuardarEdicion').disabled = true;
+  try {
+    await updateDoc(doc(db, COL_FONO, f.id), { ...cambios, actualizadoPor: yo.correo, actualizadoEnMs: Date.now() });
+    const antes = Object.fromEntries(Object.keys(cambios).map(k => [k, f[k] || '']));
+    await registrarCambio('Editó llamada de Fono Alegra (' + fechaCorta(f.fecha) + ')', COL_FONO, f.id, antes, cambios);
+    Object.assign(f, cambios);
+    avisar('Guardado');
+    cerrarEdicion();
+    pintarLlamadas();
+    const fila = $('fila-' + f.id); if (fila){ fila.classList.add('destacada'); fila.scrollIntoView({ block: 'center' }); }
+  } catch (err){ error(err); }
+  $('btnGuardarEdicion').disabled = false;
+};
+
+// ---------- Excel del mes: las 19 columnas de la hoja, en orden de llegada ----------
+$('btnExcel').onclick = () => {
+  const mes = $('selMes').value;
+  const filas = LLAMADAS.slice().sort((a, b) => ordenFila(b, a)).map(f => Object.fromEntries(COLUMNAS.map((c, i) => [c, valoresFila(f)[i] ?? ''])));
+  if (!filas.length){ avisar('No hay llamadas en ' + nombreMes(mes) + '.'); return; }
+  const hoja = XLSX.utils.json_to_sheet(filas, { header: COLUMNAS });
+  const libro = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(libro, hoja, (MESES[Number(mes.slice(5, 7)) - 1] + '-' + mes.slice(0, 4)).toUpperCase());
+  XLSX.writeFile(libro, 'Fono_Alegra_' + mes + '.xlsx');
+};
+
+// ================= Conteo (como la pestaña "Conteo" de la hoja) =================
+async function pintarConteo(){
+  const anio = Number($('selAnio').value);
+  $('conteos').innerHTML = '<div class="vacio">Cargando…</div>';
+  let lista = [];
+  try { lista = (await getDocs(query(collection(db, COL_FONO), where('anio', '==', anio)))).docs.map(d => d.data()); }
+  catch (e){ console.error(e); $('conteos').innerHTML = '<div class="vacio">No se pudo leer el conteo.</div>'; return; }
+  const grupos = {};
+  lista.forEach(f => {
+    const g = (f.subSede || 'SIN SUB SEDE') + ' · ' + (AREA_CORTA[f.area] || f.area || 'Sin área');
+    const m = Number((f.fecha || '').slice(5, 7)) - 1;
+    const nombre = (defPorId(f.defensorId) || {}).nombre || f.defensorNombre || '(sin defensor)';
+    const fila = ((grupos[g] = grupos[g] || {})[nombre] = grupos[g][nombre] || Array(12).fill(0));
+    if (m >= 0) fila[m]++;
+  });
+  const orden = ['LIMA CENTRO · Víctimas', 'LIMA CENTRO · Asistencia', 'MIRAFLORES · Víctimas', 'MIRAFLORES · Asistencia'];
+  const claves = [...new Set([...orden.filter(g => grupos[g]), ...Object.keys(grupos).sort()])];
+  const totalAnual = Array(12).fill(0);
+  const celdas = arr => arr.map(n => `<td class="num ${n ? '' : 'cero'}">${n || '·'}</td>`).join('');
+  const tablas = claves.map(g => {
+    const filas = Object.entries(grupos[g]).sort((a, b) => a[0].localeCompare(b[0], 'es'));
+    const tot = Array(12).fill(0);
+    filas.forEach(([, a]) => a.forEach((n, i) => { tot[i] += n; totalAnual[i] += n; }));
+    return `<div class="caja conteo"><h4>${esc(g)}</h4><div class="tabla-wrap" style="max-height:none"><table>
+      <thead><tr><th>#</th><th>Defensor/a Público/a</th>${MESES.map(m => `<th>${m}</th>`).join('')}<th>Total</th></tr></thead>
+      <tbody>${filas.map(([n, a], i) => `<tr><td class="num">${i + 1}</td><td class="nombre">${esc(n)}</td>${celdas(a)}<td class="num"><b>${a.reduce((x, y) => x + y, 0)}</b></td></tr>`).join('')}
+      <tr class="total"><td></td><td>TOTAL</td>${celdas(tot)}<td class="num">${tot.reduce((x, y) => x + y, 0)}</td></tr></tbody></table></div></div>`;
+  }).join('');
+  $('conteos').innerHTML = tablas
+    ? `<div class="caja conteo" style="grid-column:1/-1"><h4>Conteo total de los cuadros · ${anio}</h4><div class="tabla-wrap" style="max-height:none"><table>
+        <thead><tr><th></th>${MESES.map(m => `<th>${m}</th>`).join('')}<th>Total</th></tr></thead>
+        <tbody><tr class="total"><td>TOTAL</td>${celdas(totalAnual)}<td class="num">${totalAnual.reduce((x, y) => x + y, 0)}</td></tr></tbody></table></div></div>` + tablas
+    : `<div class="vacio">No hay llamadas registradas en ${anio}.</div>`;
+}
+$('selAnio').addEventListener('change', pintarConteo);
+
+// ================= Turnos (pestaña "Datos Matriz" de la hoja) =================
+// Misma tabla inicial que usa el Drive 1 mientras no exista "turnos/fonoAlegra" en Firebase. Día: 1 = lunes … 5 = viernes.
+const TURNOS_FONO_INICIAL = {
+  'LIMA CENTRO|Defensa de Víctimas': {
+    1: ['VLADIMIR_TALENAS_QUISPE', 'LEADY_VANNESA_PACO_HUERTA_DE_FLORES', 'LUIS_CARLO_MUENTE_MAURICIO', 'LUIS_MARTIN_CHACALTANA_HUASASQUICHE', 'CARMELA_LUZ_ERAZO_MANRIQUE'],
+    2: ['JOHSSY_LUZ_QUISPE_APONTE', 'MARIANA_BARBOZA_BECERRA', 'ARNOLD_HUAMAN_PAIMA', 'INGRID_DANIELA_RIVERA_MARTINEZ', 'CASTORINA_QUIROZ_VASQUEZ', 'LISSI_INDIRA_TRUJILLO_ROLDAN'],
+    3: ['PERCY_HERMAN_AMPUERO_LINARES', 'MERY_PAJA_OLVEA', 'LUPE_LULY_GOMEZ_HUAMAN', 'MILAGROS_DE_LA_CRUZ_CRISOLO', 'MYRCEA_VASQUEZ_PIZARRO'],
+    4: ['WILBERT_ELI_GUIZADO_SICOS', 'LIZETH_MERCADO_LAGUNA', 'LESLY_KATHERINE_ROJAS_VALDEZ', 'RUTH_GIOVANNA_VARGAS_ANTAURCO', 'JENNY_ROCIO_ORTEGA_OLVEA', 'KATHERINE_HIDALGO_BUSTAMENTE'],
+    5: ['CARMEN_ANTONIA_BERROCAL_GONZALES', 'LAURA_ISABEL_RODRIGUEZ_BELLEZA', 'GUILLEMO_ALEJANDRO_HUAMAN', 'EDUARDO_ALVARO_GUILLEN_RAMOS', 'ESLEYMAN_JOVANY_CORDOVA_DE_LA_ROSA', 'DANNY_ILLACONZA_MORALES']
+  },
+  'LIMA CENTRO|Asistencia Legal': {
+    1: ['CHIRA_PAREDES__LUIS_ENRIQUE', 'COLQUI_GANTO__JOHNY_BERNABE'],
+    2: ['BUSTINZA_ROBLES__MARIA_COQUI', 'DORREGARAY_OVIEDO__PATRICIA'],
+    3: ['QUINTANA_ZAPATA__MYRNA_SORAYA', 'BAO_HERRERA__MARIA_EUGENIA_AMELIA', 'ARCE_VILLAR__CELIA_MARISELA'],
+    4: ['RAMOS_ANDRADE__ANGEL', 'SALAS_MACEDO__SANDRA', 'ZUNIGA_TATAJE__TALIA_ARIADNE'],
+    5: ['PRIETO_GALLARDO__VICKY_ROSALINA', 'SOTO_LUDENA__JAVIER_ANTENOR']
+  },
+  'MIRAFLORES|Defensa de Víctimas': Object.fromEntries([1, 2, 3, 4, 5].map(d => [d, ['LILIANA_MARGOTH_GALINDO_SARAS', 'OSCAR_ARCE_ZAVALA']])),
+  'MIRAFLORES|Asistencia Legal': Object.fromEntries([1, 2, 3, 4, 5].map(d => [d, ['FAUSTOR_LAU__GLORIA_ANTONIA', 'VILCHEZ_CHAVARRI__FERNANDO_ABRAHAM', 'PILARES_FLOREZ__MARITZA_ANGELICA', 'FUERTES_FLORES__JULIA_BEATRIZ']]))
+};
+let TURNOS = null, TURNOS_GUARDADOS = null, turnosEnFirebase = false;
+const copia = o => JSON.parse(JSON.stringify(o));
+async function cargarTurnos(){
+  try {
+    const s = await getDoc(doc(db, 'turnos', 'fonoAlegra'));
+    turnosEnFirebase = s.exists() && !!s.data().tabla;
+    TURNOS_GUARDADOS = turnosEnFirebase ? s.data().tabla : TURNOS_FONO_INICIAL;
+  } catch (e){ console.warn('No se pudo leer la tabla de turnos', e); TURNOS_GUARDADOS = TURNOS_FONO_INICIAL; }
+  TURNOS = copia(TURNOS_GUARDADOS);
+  pintarTurnos();
+}
+// Igual que en el Drive 1: el código del defensor o, si no coincide, sus apellidos
+function defensorDeTurno(clave){
+  const d = DEFS.find(x => x.id === clave && x.activo !== false);
+  if (d) return d;
+  const ap = norm(clave).split(/[\s,_]+/).filter(Boolean);
+  const hallados = DEFS.filter(x => x.activo !== false && ap.every(p => norm(x.nombre).split(/[\s,_]+/).includes(p)));
+  return hallados.length === 1 ? hallados[0] : null;
+}
+const legible = id => String(id).replace(/_+/g, ' ').trim();
+const hayCambiosTurnos = () => JSON.stringify(TURNOS) !== JSON.stringify(TURNOS_GUARDADOS);
+function pintarTurnos(){
+  $('ayudaTurnos').innerHTML = (puedeTurnos
+    ? 'Quién atiende Fono Alegra cada día, por sub sede y área. Con ✕ quitas a alguien y con la lista de abajo agregas; luego toca <b>Guardar turnos</b>. El Drive 1 lo usa para sugerir al de menos carga del mes.'
+    : 'Quién atiende Fono Alegra cada día, por sub sede y área. Solo puede cambiarlo quien tiene la casilla <b>Turnos</b> en Personal y permisos.')
+    + (turnosEnFirebase ? '' : ' <i>Todavía es la tabla inicial (copiada de "Datos Matriz").</i>');
+  const malos = {}; // nombre → dónde está (sub sede · área: días)
+  $('cuerpoTurnos').innerHTML = SEDES.flatMap(sede => AREAS_TURNO.map(area => {
+    const clave = sede + '|' + area, fila = TURNOS[clave] || {};
+    return `<tr><td class="cab">${esc(sede)} · ${esc(AREA_CORTA[area])}</td>${[1, 2, 3, 4, 5].map(dia => {
+      const ids = fila[dia] || [];
+      const chips = ids.map((id, i) => {
+        const d = defensorDeTurno(id), lic = d && licenciaHoy(d.id);
+        if (!d){ const k = legible(id), donde = sede + ' · ' + AREA_CORTA[area]; ((malos[k] = malos[k] || {})[donde] = malos[k][donde] || []).push(DIAS[dia - 1].toLowerCase()); }
+        return `<div class="chip ${!d ? 'malo' : lic ? 'lic' : ''}"><span>${esc(d ? d.nombre : legible(id))}${!d ? ' — no está en Defensores' : lic ? ' — de licencia hasta ' + diaMes(lic.fin) : ''}</span>${puedeTurnos ? `<button data-quitar="${esc(clave)}|${dia}|${i}" aria-label="Quitar">✕</button>` : ''}</div>`;
+      }).join('');
+      const usados = new Set(ids.map(id => (defensorDeTurno(id) || {}).id));
+      const agregar = puedeTurnos ? `<select data-agregar="${esc(clave)}|${dia}" aria-label="Agregar defensor"><option value="">+ Agregar…</option>${
+        DEFS.filter(d => d.activo !== false && d.area === area && !usados.has(d.id)).map(d => `<option value="${esc(d.id)}">${esc(d.nombre)}</option>`).join('')}</select>` : '';
+      return `<td>${chips || '<span class="ayuda">Nadie</span>'}${agregar}</td>`;
+    }).join('')}</tr>`;
+  })).join('');
+  const lista = Object.entries(malos).map(([k, donde]) => '<b>' + esc(k) + '</b> (' + Object.entries(donde).map(([lugar, dias]) => esc(lugar) + ': ' + dias.join(', ')).join('; ') + ')');
+  $('avisosTurnos').innerHTML = lista.length ? `<div class="advertencia">⚠ No están en la lista de Defensores (o están de baja): ${lista.join(' · ')}. ${puedeTurnos ? 'Quítalos o pon a otro defensor.' : ''}</div>` : '';
+  $('botonesTurnos').hidden = !puedeTurnos;
+  $('btnGuardarTurnos').disabled = $('btnDeshacerTurnos').disabled = !hayCambiosTurnos();
+}
+$('cuerpoTurnos').addEventListener('click', e => {
+  const b = e.target.closest('[data-quitar]'); if (!b) return;
+  const [sede, area, dia, i] = b.dataset.quitar.split('|');
+  TURNOS[sede + '|' + area][dia].splice(Number(i), 1);
+  pintarTurnos();
+});
+$('cuerpoTurnos').addEventListener('change', e => {
+  const s = e.target.closest('[data-agregar]'); if (!s || !s.value) return;
+  const [sede, area, dia] = s.dataset.agregar.split('|'), clave = sede + '|' + area;
+  TURNOS[clave] = TURNOS[clave] || {};
+  (TURNOS[clave][dia] = TURNOS[clave][dia] || []).push(s.value);
+  pintarTurnos();
+});
+$('btnDeshacerTurnos').onclick = () => { TURNOS = copia(TURNOS_GUARDADOS); pintarTurnos(); };
+$('btnGuardarTurnos').onclick = async () => {
+  const nombres = t => Object.fromEntries(Object.entries(t).flatMap(([clave, dias]) => Object.entries(dias).map(([dia, ids]) =>
+    [clave.replace('|', ' · ') + ' · ' + DIAS[dia - 1], ids.map(id => (defensorDeTurno(id) || { nombre: id }).nombre).join(', ')])));
+  $('btnGuardarTurnos').disabled = true;
+  try {
+    await setDoc(doc(db, 'turnos', 'fonoAlegra'), { tabla: TURNOS, actualizadoPor: yo.correo, actualizadoEn: new Date().toISOString() });
+    await registrarCambio('Cambió los turnos de Fono Alegra', 'turnos', 'fonoAlegra', nombres(TURNOS_GUARDADOS), nombres(TURNOS));
+    TURNOS_GUARDADOS = copia(TURNOS); turnosEnFirebase = true;
+    avisar('Turnos guardados. El Drive 1 los usa al recargar.');
+  } catch (err){ error(err); }
+  pintarTurnos();
+};
+window.addEventListener('beforeunload', e => { if (TURNOS && hayCambiosTurnos()){ e.preventDefault(); e.returnValue = ''; } });
+
+// ---------- Pestañas ----------
+document.querySelector('.pestanas').addEventListener('click', e => {
+  const p = e.target.dataset.pestana; if (!p) return;
+  document.querySelectorAll('.pestana').forEach(b => b.classList.toggle('activa', b.dataset.pestana === p));
+  $('secLlamadas').hidden = p !== 'llamadas';
+  $('secConteo').hidden = p !== 'conteo';
+  $('secTurnos').hidden = p !== 'turnos';
+  if (p === 'conteo') pintarConteo();
+  if (p === 'turnos' && !TURNOS) cargarTurnos();
+});
+
+// ---------- Sesión ----------
+$('btnEntrar').onclick = async () => {
+  try { await signInWithEmailAndPassword(auth, $('loginCorreo').value.trim().toLowerCase(), $('loginClave').value); }
+  catch (e){ $('msgLogin').textContent = 'No se pudo entrar (' + e.code + ').'; }
+};
+$('btnSalir').onclick = () => signOut(auth);
+onAuthStateChanged(auth, async user => {
+  if (!user){ $('app').hidden = true; $('pantallaLogin').hidden = false; $('cargandoSesion').hidden = true; $('cajaLogin').hidden = false; return; }
+  try {
+    const correo = (user.email || '').toLowerCase();
+    const ficha = await getDoc(doc(db, 'staff', correo));
+    if (!ficha.exists()){ $('msgLogin').textContent = 'Tu correo no está autorizado.'; $('cargandoSesion').hidden = true; $('cajaLogin').hidden = false; await signOut(auth); return; }
+    const f = ficha.data();
+    yo = { correo, ...f };
+    nivel = nivelSeccion(f, 'drive3');
+    puedeTurnos = f.esAdmin === true || ((f.permisos || {}).turnos === 'editar' && f.bloqueado !== true);
+    puedeDrive1 = nivelSeccion(f, 'drive1') !== 'sin';
+    document.querySelectorAll('.menu-drives [data-seccion]').forEach(a => a.hidden = nivelSeccion(f, a.dataset.seccion) === 'sin');
+    $('enlacePermisos').hidden = !(f.esAdmin === true || f.puedeAutorizar === true);
+    $('usuarioSesion').textContent = (f.nombre || correo) + (nivel === 'editar' ? ' · puede editar el Drive 3' : nivel === 'ver' ? ' · solo puede ver' : '');
+    $('pantallaLogin').hidden = true; $('app').hidden = false;
+    if (nivel === 'sin'){ $('sinAcceso').hidden = false; $('contenido').hidden = true; return; }
+    $('contenido').hidden = false;
+    // Registrar una llamada es registrar en el Drive 1 (así se llenan solos el Drive 1, la Agenda y el Drive 3)
+    $('btnRegistrar').hidden = !(puedeEditar() && nivelSeccion(f, 'drive1') === 'editar');
+    const hoy = hoyIso(), anioActual = Number(hoy.slice(0, 4));
+    $('selMes').value = hoy.slice(0, 7);
+    $('selAnio').innerHTML = Array.from({ length: anioActual - 2024 }, (_, i) => anioActual - i).map(a => `<option>${a}</option>`).join('');
+    const [sd, sl] = await Promise.all([getDocs(collection(db, 'defensores')), getDocs(collection(db, 'licencias')).catch(() => ({ docs: [] }))]);
+    DEFS = sd.docs.map(d => ({ id: d.id, ...d.data() }))
+      .sort((a, b) => (a.area || '').localeCompare(b.area || '') || (a.orden ?? 999) - (b.orden ?? 999) || (a.nombre || '').localeCompare(b.nombre || '', 'es'));
+    LICENCIAS = sl.docs.map(d => ({ id: d.id, ...d.data() }));
+    await cargarMes();
+  } catch (e){ console.error(e); $('msgLogin').textContent = 'No se pudo cargar tu acceso (' + (e.code || e.message) + ').'; $('cargandoSesion').hidden = true; $('cajaLogin').hidden = false; }
+});
+</script>
+</body>
+</html>

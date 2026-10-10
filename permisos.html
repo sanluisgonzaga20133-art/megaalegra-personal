@@ -105,6 +105,7 @@
   <nav class="menu-drives" aria-label="Drives">
     <a href="drive1.html">Drive 1 · Registro de casos</a>
     <a href="index.html">Drive 2 · Agenda diaria</a>
+    <a href="drive3.html" id="enlaceDrive3" hidden>Drive 3 · Fono Alegra</a>
     <a href="licencias.html" id="enlaceLicencias" hidden>Licencias</a>
     <a href="permisos.html" class="actual" aria-current="page">Personal y permisos</a>
   </nav>
@@ -756,6 +757,7 @@ onAuthStateChanged(auth, async user => {
     if (!ficha.exists()){ $('msgLogin').textContent = 'Tu correo no está autorizado.'; $('cargandoSesion').hidden = true; $('cajaLogin').hidden = false; await signOut(auth); return; }
     yo = { correo, ...ficha.data() };
     $('enlaceLicencias').hidden = !(esAdmin() || ['ver', 'editar'].includes((yo.permisos || {}).licencias));
+    $('enlaceDrive3').hidden = !(esAdmin() || ['ver', 'editar'].includes((yo.permisos || {}).drive3));
     $('pantallaLogin').hidden = true; $('app').hidden = false;
     $('usuarioSesion').textContent = (yo.nombre || correo) + (esAdmin() ? ' · administrador' : puedeAutorizar() ? ' · puede autorizar asistentes' : '');
     if (!puedeAutorizar()){

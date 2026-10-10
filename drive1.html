@@ -272,6 +272,7 @@
   <nav class="menu-drives" aria-label="Drives">
     <a href="drive1.html" class="actual" aria-current="page">Drive 1 · Registro de casos</a>
     <a href="index.html">Drive 2 · Agenda diaria</a>
+    <a href="drive3.html" id="enlaceDrive3" hidden>Drive 3 · Fono Alegra</a>
     <a href="licencias.html" id="enlaceLicencias" hidden>Licencias</a>
     <a href="permisos.html" id="enlacePermisos" hidden>Personal y permisos</a>
     <span class="separador" aria-hidden="true"></span>
@@ -1671,7 +1672,7 @@ const TURNOS_FONO_INICIAL = {
   'LIMA CENTRO|Defensa de Víctimas': {
     1: ['VLADIMIR_TALENAS_QUISPE', 'LEADY_VANNESA_PACO_HUERTA_DE_FLORES', 'LUIS_CARLO_MUENTE_MAURICIO', 'LUIS_MARTIN_CHACALTANA_HUASASQUICHE', 'CARMELA_LUZ_ERAZO_MANRIQUE'],
     2: ['JOHSSY_LUZ_QUISPE_APONTE', 'MARIANA_BARBOZA_BECERRA', 'ARNOLD_HUAMAN_PAIMA', 'INGRID_DANIELA_RIVERA_MARTINEZ', 'CASTORINA_QUIROZ_VASQUEZ', 'LISSI_INDIRA_TRUJILLO_ROLDAN'],
-    3: ['PERCY_HERMAN_AMPUERO_LINARES', 'RIOJAS DIAZ', 'MERY_PAJA_OLVEA', 'LUPE_LULY_GOMEZ_HUAMAN', 'MILAGROS_DE_LA_CRUZ_CRISOLO', 'MYRCEA_VASQUEZ_PIZARRO'],
+    3: ['PERCY_HERMAN_AMPUERO_LINARES', 'MERY_PAJA_OLVEA', 'LUPE_LULY_GOMEZ_HUAMAN', 'MILAGROS_DE_LA_CRUZ_CRISOLO', 'MYRCEA_VASQUEZ_PIZARRO'],
     4: ['WILBERT_ELI_GUIZADO_SICOS', 'LIZETH_MERCADO_LAGUNA', 'LESLY_KATHERINE_ROJAS_VALDEZ', 'RUTH_GIOVANNA_VARGAS_ANTAURCO', 'JENNY_ROCIO_ORTEGA_OLVEA', 'KATHERINE_HIDALGO_BUSTAMENTE'],
     5: ['CARMEN_ANTONIA_BERROCAL_GONZALES', 'LAURA_ISABEL_RODRIGUEZ_BELLEZA', 'GUILLEMO_ALEJANDRO_HUAMAN', 'EDUARDO_ALVARO_GUILLEN_RAMOS', 'ESLEYMAN_JOVANY_CORDOVA_DE_LA_ROSA', 'DANNY_ILLACONZA_MORALES']
   },
@@ -2324,6 +2325,33 @@ $('ventanitas').addEventListener('click', e => {
   if (b) irAFila(b.dataset.ir);
 });
 
+// Enlaces que llegan desde el Drive 3 (Fono Alegra)
+async function abrirDesdeEnlace(){
+  const p = new URLSearchParams(location.search);
+  if (![...p.keys()].length) return;
+  history.replaceState(null, '', location.pathname);
+  const traer = async id => { if (cache.has(id)) return cache.get(id); const s = await getDoc(doc(db, COL, id)); if (!s.exists()) return null; const r = { id: s.id, ...s.data() }; cache.set(id, r); return r; };
+  try {
+    if (p.get('registrar') === 'fono' && usuario.rol === 'abogado'){
+      abrirForm();
+      const o = [...$('optOrigen').children].find(c => c.dataset.v === ORIGEN_FONO);
+      if (o) o.click();
+      $('fUsuario').focus();
+    } else if (p.get('editar') && usuario.rol === 'abogado'){
+      const r = await traer(p.get('editar'));
+      if (!r){ avisar('No se encontró ese registro en el Drive 1.'); return; }
+      if (r.padreId) await traer(r.padreId);
+      abrirForm({ editarId: r.id });
+    } else if (p.get('caso')){
+      const r = await traer(p.get('caso'));
+      if (!r){ avisar('No se encontró ese registro en el Drive 1.'); return; }
+      // Espera a que llegue el año del registro (si no, al dibujarse la tabla se pierde el resaltado)
+      if (r.anio && r.anio !== anioElegido){ anioElegido = r.anio; limiteFilas = 200; pintarAnios(); escucharAnio(r.anio); }
+      for (let i = 0; i < 80 && $('estadoCarga').textContent; i++) await new Promise(res => setTimeout(res, 150));
+      irAFila(r.id);
+    }
+  } catch (err){ console.error(err); avisar('No se pudo abrir el registro del enlace.', 5000); }
+}
 // Lleva a la fila del caso: cambia de año si hace falta, quita filtros y la resalta
 async function irAFila(id){
   const r = pendMemo.get(id) || pendPlazo.get(id) || pendSup.get(id) || cache.get(id);
@@ -2486,6 +2514,7 @@ onAuthStateChanged(auth, async user => {
     const navD2 = document.querySelector('.menu-drives a[href="index.html"]');
     if (navD2) navD2.hidden = nivelSeccion(ficha.data(), 'drive2') === 'sin';
     $('enlaceLicencias').hidden = nivelSeccion(ficha.data(), 'licencias') === 'sin';
+    $('enlaceDrive3').hidden = nivelSeccion(ficha.data(), 'drive3') === 'sin';
     // Enlaces a las hojas de Google: solo para quien tiene acceso a ese drive
     let hojasVisibles = 0;
     document.querySelectorAll('.menu-drives a.hoja[data-drive]').forEach(a => { a.hidden = nivelSeccion(ficha.data(), a.dataset.drive) === 'sin'; if (!a.hidden) hojasVisibles++; });
@@ -2510,6 +2539,7 @@ onAuthStateChanged(auth, async user => {
     pintarAnios(); escucharAnio(anioElegido);
     iniciarAvisos();
     if (usuario.esAdmin){ convertirDevolucionesViejas(); copiarOpinionesViejas(); }
+    abrirDesdeEnlace();
   } catch (err){
     console.error(err);
     msgLogin.textContent = 'No se pudo cargar tu acceso (' + (err.code || err.message) + ').';
