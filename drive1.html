@@ -135,6 +135,10 @@
   .bloque-fono{border:1.5px solid var(--celeste-linea);background:#F4FAFD;border-radius:10px;padding:10px 12px}
   .titulo-fono{font-size:12.5px;font-weight:700;color:var(--azul);margin-bottom:4px}
   .dato-fijo{padding:9px 10px;border:1px dashed var(--linea);border-radius:8px;font-size:13px;font-weight:600;background:#fff}
+  /* Titular de licencia: quién le apoya */
+  .bloque-apoyo{border:1.5px solid var(--dorado);background:#FFF8E8;border-radius:10px;padding:10px 12px}
+  .aviso-lic{font-size:13px;font-weight:700;color:#6B4A0E;margin-bottom:4px}
+  .apoya{display:block;font-size:11px;font-weight:700;color:#6B4A0E}
   /* Coincidencias por nombre al registrar un caso nuevo (todos los años) */
   .coincidencias{border:1.5px solid var(--dorado);border-radius:9px;margin-top:6px;background:#FFFBF2}
   .coincidencias .titulo-coinc{padding:8px 10px;font-size:12.5px;font-weight:700;color:#6B4A0E;border-bottom:1px solid var(--linea)}
@@ -469,6 +473,13 @@
       <label class="campo" for="fAbogado" id="etiquetaAbogado">Abogado <span class="obl">*</span></label>
       <select id="fAbogado"></select>
       <div class="ayuda" id="ayudaAbogado">El teléfono y el correo del abogado se completan solos.</div>
+    </div>
+    <!-- "Pasar al mismo abogado" con el titular de licencia: el registro sigue a su nombre y se anota quién le apoya -->
+    <div class="bloque bloque-apoyo" id="bloqueApoyo" hidden>
+      <div class="aviso-lic" id="avisoLicTitular" role="status"></div>
+      <label class="campo" for="fApoyo">Le apoya <span class="obl">*</span></label>
+      <select id="fApoyo"></select>
+      <div class="ayuda" id="ayudaApoyo"></div>
     </div>
 
     <!-- Solo para antecedentes, según el tipo de documento -->
@@ -873,7 +884,7 @@ function ordenRegistro(a, b){ return a.fecha.localeCompare(b.fecha) || (a.creado
 function textoBusqueda(r){
   return norm([r.codigo, codigoNorm(r.codigo), codigoNorm(r.padreCodigo), r.numDoc, r.usuario, r.abogadoNombre, r.carpeta, r.materia, r.origen, r.tipoDoc, r.proveido,
     r.memoNum, r.oficioNum, r.resumen, r.respuesta, r.distrital, r.dirigidoA, r.padreCodigo, r.padreUsuario, r.estado,
-    r.diligencia, r.supNota, r.asistenteNombre].join(' | '));
+    r.diligencia, r.supNota, r.asistenteNombre, r.apoyoNombre].join(' | '));
 }
 
 // ---------------- Pintar la tabla ----------------
@@ -983,7 +994,7 @@ function pintar(){
       <td>${esc(r.codigo)}${tipo}</td>
       <td>${esc(r.numDoc)}</td>
       <td>${esc(r.usuario) || (r.porCompletar ? '<span class="falta">Falta</span>' : '')}</td>
-      <td>${r.abogadoActualNombre ? esc(r.abogadoActualNombre) + `<span class="chico">Antes: ${esc(r.abogadoNombre)}</span>` : esc(r.abogadoNombre)}</td>
+      <td>${r.abogadoActualNombre ? esc(r.abogadoActualNombre) + `<span class="chico">Antes: ${esc(r.abogadoNombre)}</span>` : esc(r.abogadoNombre)}${r.apoyoNombre ? `<span class="apoya">Le apoya: ${esc(r.apoyoNombre)}</span>` : ''}</td>
       <td>${esc(r.abogadoActualNombre ? r.abogadoActualCelular : r.abogadoCelular)}</td>
       <td>${esc(r.abogadoActualNombre ? r.abogadoActualCorreo : r.abogadoCorreo)}</td>
       <td>${esc(r.materia)}${detalleInforme}</td>
@@ -1127,7 +1138,7 @@ async function abrirHistorial(raizId, actualId){
     $('subHist').textContent = raiz ? [raiz.usuario, raiz.abogadoNombre, raiz.materia].filter(Boolean).join(' · ') : 'El caso original ya no existe.';
     $('listaHist').innerHTML = lista.map(x => {
       const desc = x.padreId
-        ? [x.tipoDoc, x.numDoc, x.respuesta || x.resultadoCambio || (x.distrital ? 'A ' + x.distrital : '') || (x.opinionNum ? ordinal(x.opinionNum) + ' opinión · ' + x.abogadoNombre : ''), x.resumen].filter(Boolean).join(' · ')
+        ? [x.tipoDoc, x.numDoc, x.apoyoNombre ? 'Le apoya: ' + x.apoyoNombre : '', x.respuesta || x.resultadoCambio || (x.distrital ? 'A ' + x.distrital : '') || (x.opinionNum ? ordinal(x.opinionNum) + ' opinión · ' + x.abogadoNombre : ''), x.resumen].filter(Boolean).join(' · ')
         : ['Caso nuevo', x.origen, x.memoNum ? 'Memo ' + x.memoNum : ''].filter(Boolean).join(' · ');
       return `<div class="linea-hist ${x.id === actualId ? 'actual' : ''}">
         <span class="fecha">${fechaCorta(x.fecha)}</span>
@@ -1450,6 +1461,7 @@ function actualizarBloquesTipo(){
   else if ($('ayudaAbogado').textContent === AYUDA_MISMO) $('ayudaAbogado').textContent = AYUDA_ABOGADO;
   actualizarAbogadoLabel();
   actualizarBloqueFono();
+  actualizarApoyo();
 }
 function actualizarAbogadoLabel(){
   const t = modo === 'antecedente' ? $('fTipoDoc').value : '';
@@ -1555,7 +1567,8 @@ async function buscarCoincidencias(){
   const mostrar = res.slice(0, 40);
   $('coincidencias').innerHTML = `<div class="titulo-coinc">Este nombre ya tiene ${res.length} caso${res.length === 1 ? '' : 's'} registrado${res.length === 1 ? '' : 's'} (todos los años, lo más reciente primero)${res.length > mostrar.length ? '. Se muestran los ' + mostrar.length + ' más recientes: escribe más del nombre para afinar' : ''}.</div>
     <div class="lista-coinc">${mostrar.map(r => {
-      const actual = r.abogadoActualNombre || r.abogadoNombre || '(sin abogado)';
+      const dAct = DEFENSORES.find(x => x.id === (r.abogadoActualId || r.abogadoId));
+      const actual = (r.abogadoActualNombre || r.abogadoNombre || '(sin abogado)') + (dAct ? textoLicencia(dAct) : '');
       const antes = r.abogadoActualNombre && r.abogadoActualNombre !== r.abogadoNombre ? ` <span class="ayuda" style="display:inline">(antes ${esc(r.abogadoNombre)})</span>` : '';
       return `<div class="coincidencia">
         <span class="anio-coinc">${esc(String(r.anio || (r.fecha || '').slice(0, 4)))}</span><b>${esc(r.usuario)}</b>${marcasDelCaso(r, hijosDe[r.id] || [])}<br>
@@ -1583,6 +1596,67 @@ $('coincidencias').addEventListener('click', e => {
   actualizarBloquesTipo();
   $('bloquePadre').scrollIntoView({ block: 'center', behavior: 'smooth' });
 });
+
+// ---------- "Pasar al mismo abogado" con el titular de licencia en la fecha del registro ----------
+// El registro sigue a nombre del titular (el caso es suyo); se anota "Le apoya" con el abogado elegido.
+// Se sugiere su apoyo de la página Licencias (si tiene varios, se elige entre ellos); si no tiene, la lista normal sin los de licencia.
+// No cuenta en la Agenda (es un documento de un caso ya asignado). Si se proyecta memo u oficio, va dirigido a quien apoya.
+let apoyoPrecargado = '', dirigidoAuto = '';
+function licenciaDelTitular(){
+  if (modo !== 'antecedente' || $('fTipoDoc').value !== TIPO_MISMO_ABOGADO || !padre) return null;
+  const d = DEFENSORES.find(x => x.id === $('fAbogado').value);
+  if (!d) return null;
+  return { d, lic: licenciaEn(d.id, $('fFecha').value || hoyIso()) };
+}
+function actualizarApoyo(){
+  const t = licenciaDelTitular();
+  const mostrar = !!t && (!!t.lic || (!!editandoId && !!apoyoPrecargado));
+  $('bloqueApoyo').hidden = !mostrar;
+  if (!mostrar){ $('fApoyo').innerHTML = ''; return; }
+  const previo = $('fApoyo').value || apoyoPrecargado;
+  $('avisoLicTitular').textContent = t.lic
+    ? `${t.d.nombre} está de licencia hasta ${diaMes(t.lic.fin)}. El registro queda a su nombre; elige quién le apoya.`
+    : `${t.d.nombre} no está de licencia en esta fecha, pero este registro tenía apoyo.`;
+  const bloqueado = d => deLicenciaHoy(d) && d.id !== apoyoPrecargado;
+  const opcion = d => `<option value="${esc(d.id)}" ${bloqueado(d) ? 'disabled style="color:#9A938A"' : ''}>${esc(d.nombre + textoLicencia(d))}</option>`;
+  const apoyos = ((t.lic && t.lic.apoyos) || []).map(a => DEFENSORES.find(x => x.id === a.id) || { id: a.id, nombre: a.nombre, area: a.area, celular: a.celular, correo: a.correo })
+    .filter(d => d.id !== t.d.id);
+  const usables = apoyos.filter(d => !bloqueado(d));
+  if (usables.length){
+    $('fApoyo').innerHTML = (usables.length > 1 ? '<option value="">— Elige entre sus apoyos —</option>' : '') +
+      `<optgroup label="Apoyo registrado en Licencias">${apoyos.map(opcion).join('')}</optgroup>`;
+    $('ayudaApoyo').textContent = usables.length > 1 ? `Tiene ${usables.length} abogados de apoyo: elige uno.` : 'Sugerido: su apoyo registrado en Licencias.';
+  } else {
+    const area = t.d.area;
+    const otros = DEFENSORES.filter(d => d.id !== t.d.id);
+    $('fApoyo').innerHTML = '<option value="">— Elegir —</option>' +
+      `<optgroup label="${esc(area || 'Su área')}">${otros.filter(d => d.area === area).map(opcion).join('')}</optgroup>` +
+      `<optgroup label="Otras áreas">${otros.filter(d => d.area !== area).map(opcion).join('')}</optgroup>`;
+    $('ayudaApoyo').textContent = apoyos.length ? 'Sus apoyos registrados también están de licencia: elige a otro.' : 'No tiene apoyo registrado en Licencias: elige a quién le apoya.';
+  }
+  if (previo && [...$('fApoyo').options].some(o => o.value === previo && !o.disabled)) $('fApoyo').value = previo;
+  dirigirAlApoyo();
+}
+function apoyoElegido(){
+  if ($('bloqueApoyo').hidden || !$('fApoyo').value) return null;
+  const id = $('fApoyo').value;
+  const t = licenciaDelTitular();
+  const deLic = ((t && t.lic && t.lic.apoyos) || []).find(a => a.id === id) || {};
+  const d = DEFENSORES.find(x => x.id === id) || {};
+  const nombre = d.nombre || deLic.nombre || ($('fApoyo').selectedOptions[0] || {}).textContent || '';
+  return { id, nombre, celular: d.celular || deLic.celular || '', correo: d.correo || deLic.correo || '' };
+}
+// Memo, oficio o carta: dirigido a quien apoya (si no se eligió otro destinatario a mano)
+function dirigirAlApoyo(){
+  const a = apoyoElegido();
+  const proyecta = $('fHacerMemo').checked || $('fHacerOficio').checked || $('fHacerCarta').checked;
+  const actual = $('fDirigido').value;
+  if (a && proyecta && (!actual || actual === dirigidoAuto)){ llenarDirigido(a.nombre); dirigidoAuto = $('fDirigido').value; }
+}
+$('fApoyo').addEventListener('change', dirigirAlApoyo);
+['fHacerMemo', 'fHacerOficio', 'fHacerCarta'].forEach(i => $(i).addEventListener('change', dirigirAlApoyo));
+$('fFecha').addEventListener('change', actualizarApoyo);
+$('fAbogado').addEventListener('change', actualizarApoyo);
 
 // ---------- Fono Alegra (línea 1884): las columnas de la hoja del Drive 3 dentro del formulario ----------
 // Supuesto 1 (mismo usuario, "Pasar al mismo abogado"): antecedente, NO cuenta en la Agenda; igual se crea su fila en el Drive 3.
@@ -1719,7 +1793,7 @@ function datosFono(idFila, datos){
     usuario: datos.usuario, dni: $('fDni').value.trim(), telefono: $('fTelefono').value.trim(),
     correo: $('fCorreoUsuario').value.trim().toLowerCase(), direccion: may($('fDireccion').value),
     dirDistrital: 'LIMA CENTRO', subSede: $('fSubSede').value, area: datos.area, diaTurno: dia === null ? '' : DIAS_SEMANA[dia],
-    defensorId: datos.abogadoId, defensorNombre: datos.abogadoNombre, materia: datos.materia,
+    defensorId: datos.abogadoId, defensorNombre: datos.abogadoNombre, apoyoNombre: datos.apoyoNombre || '', materia: datos.materia,
     gestionesRealizadas: may($('fGestHechas').value), gestionesPorRealizar: may($('fGestPorHacer').value), dificultades: may($('fDificultades').value),
     aceptaPatrocinio: $('fAcepta').value, carpetaCreada: $('fCarpetaCreada').value, tratoVerificado: $('fTrato').value, satisfaccion: $('fSatisfaccion').value,
     registroId: idFila, casoId: datos.padreId || idFila, casoNuevo: !datos.padreId, codigo: datos.padreId ? datos.padreCodigo : datos.codigo,
@@ -1737,6 +1811,7 @@ function limpiarForm(){
   editandoId = null; padre = null; origen = ''; prioridad = 'normal'; resultadoCambio = ''; ultimaReferenciaAuto = '';
   coincidenciasDescartadas = ''; clearTimeout(tCoincidencias); ocultarCoincidencias();
   limpiarFono(); $('bloqueFono').hidden = true;
+  apoyoPrecargado = ''; dirigidoAuto = ''; $('bloqueApoyo').hidden = true; $('fApoyo').innerHTML = '';
   ['fNumDoc', 'fCodigo', 'fUsuario', 'fCarpeta', 'fResumen', 'fDistrital', 'fProveido', 'fDiligenciaOtra', 'fSupNota', 'fDilHora', 'fDilFecha', 'fPlazoFecha', 'fPlazoHora', 'fSupFecha']
     .forEach(i => $(i).value = '');
   ['fHacerMemo', 'fHacerOficio', 'fHacerCarta', 'fNoHacer', 'fOcultar'].forEach(i => $(i).checked = false);
@@ -1767,6 +1842,7 @@ function abrirForm({ editarId = null, padreId = null } = {}){
   } else if (editarId){
     const r = cache.get(editarId);
     editandoId = editarId;
+    apoyoPrecargado = r.apoyoId || '';
     $('tituloForm').textContent = 'Editar registro';
     $('btnGuardarForm').textContent = 'Guardar cambios';
     $('bloqueTipoRegistro').hidden = true;
@@ -1809,6 +1885,8 @@ function abrirForm({ editarId = null, padreId = null } = {}){
     $('fSupFecha').value = r.supFecha || ''; $('fSupNota').value = r.supNota || '';
     $('fOcultar').checked = !!r.ocultarPublico;
     actualizarObligatorios(); actualizarBloquesTipo();
+    if (r.apoyoId && [...$('fApoyo').options].some(o => o.value === r.apoyoId)) $('fApoyo').value = r.apoyoId;
+    dirigidoAuto = r.apoyoNombre && r.dirigidoA === r.apoyoNombre ? r.dirigidoA : '';
     if (fonoAplica() && puedeFono()) getDoc(doc(db, COL_FONO, editarId)).then(s => { if (s.exists() && editandoId === editarId) llenarFono(s.data()); })
       .catch(err => console.error('No se pudo leer la fila del Drive 3', err));
   } else {
@@ -1983,6 +2061,7 @@ $('btnGuardarForm').onclick = async () => {
   falta(tipoDoc === 'Solicitud de cambio de abogado' && !resultadoCambio, $('optResultado'), 'Falta el resultado de la solicitud de cambio.');
   falta($('fPlazo').value === 'otro' && !$('fPlazoFecha').value, $('fPlazoFecha'), 'Falta la fecha del plazo.');
   const conFono = fonoAplica() && puedeFono();
+  falta(!$('bloqueApoyo').hidden && !$('fApoyo').value, $('fApoyo'), 'Falta elegir quién le apoya.');
   falta(conFono && !$('fSubSede').value, $('fSubSede'), 'Falta la sub sede derivada (Fono Alegra).');
 
   const previoForm = editandoId ? { ...(cache.get(editandoId) || {}) } : null;
@@ -1996,7 +2075,8 @@ $('btnGuardarForm').onclick = async () => {
   if (abogNuevo && !confirmarLicenciaProxima(abog)) return;
   limpiarFaltas();
 
-  const dirigido = $('fDirigido').value.startsWith('OTRA') ? may($('fDirigidoOtro').value) : $('fDirigido').value;
+  let dirigido = $('fDirigido').value.startsWith('OTRA') ? may($('fDirigidoOtro').value) : $('fDirigido').value;
+  if (!dirigido && apoyoElegido() && ($('fHacerMemo').checked || $('fHacerOficio').checked || $('fHacerCarta').checked)) dirigido = apoyoElegido().nombre;
   const diligencia = $('fDiligencia').value === 'Otra' ? may($('fDiligenciaOtra').value) : $('fDiligencia').value;
   const fecha = $('fFecha').value;
 
@@ -2010,6 +2090,7 @@ $('btnGuardarForm').onclick = async () => {
     proveido: may($('fProveido').value), dirigidoA: dirigido,
     ...vencimientoPlazo(previoForm),
     supFecha: $('fSupFecha').value, supNota: may($('fSupNota').value),
+    ...(a => ({ apoyoId: a ? a.id : '', apoyoNombre: a ? a.nombre : '', apoyoCelular: a ? a.celular : '', apoyoCorreo: a ? a.correo : '' }))(apoyoElegido()),
     ocultarPublico: $('fOcultar').checked
   };
   // Asistente que proyecta: si cambia, cuenta de nuevo sus 4 días desde hoy
