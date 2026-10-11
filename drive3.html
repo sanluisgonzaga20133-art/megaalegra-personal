@@ -227,7 +227,7 @@
       </section>
       <div class="barra">
         <label>Año <select id="selAnio"></select></label>
-        <span class="ayuda">Casos nuevos por Fono Alegra, por defensor y mes (las llamadas de quien vuelve a llamar quedan como antecedente en el Drive 1 y no se cuentan aquí).</span>
+        <span class="ayuda">Casos nuevos por Fono Alegra, por defensor/a (o servidor/a en el Equipo) y mes (las llamadas de quien vuelve a llamar quedan como antecedente en el Drive 1 y no se cuentan aquí).</span>
       </div>
       <div class="conteos" id="conteos"></div>
     </section>
@@ -558,7 +558,7 @@ async function pintarConteo(){
     const tot = Array(12).fill(0);
     filas.forEach(([, a]) => a.forEach((n, i) => { tot[i] += n; totalAnual[i] += n; }));
     return `<div class="caja conteo"><h4>${esc(g)}</h4><div class="tabla-wrap" style="max-height:none"><table>
-      <thead><tr><th>#</th><th>Defensor/a Público/a</th>${MESES.map(m => `<th>${m}</th>`).join('')}<th>Total</th></tr></thead>
+      <thead><tr><th>#</th><th>${/Equipo/.test(g) ? 'Servidor/a' : 'Defensor/a Público/a'}</th>${MESES.map(m => `<th>${m}</th>`).join('')}<th>Total</th></tr></thead>
       <tbody>${filas.map(([n, a], i) => `<tr><td class="num">${i + 1}</td><td class="nombre">${esc(n)}</td>${celdas(a)}<td class="num"><b>${a.reduce((x, y) => x + y, 0)}</b></td></tr>`).join('')}
       <tr class="total"><td></td><td>TOTAL</td>${celdas(tot)}<td class="num">${tot.reduce((x, y) => x + y, 0)}</td></tr></tbody></table></div></div>`;
   }).join('');

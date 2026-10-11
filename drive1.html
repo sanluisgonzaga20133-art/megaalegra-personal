@@ -1632,11 +1632,15 @@ function actualizarBloquesTipo(){
   actualizarBloqueFono();
   actualizarApoyo();
 }
+// Equipo multidisciplinario: peritos y licenciados → "Servidor/a" (no "Abogado"/"Defensor")
+function areaDelRegistro(){ return modo === 'antecedente' && padre ? (padre.area || $('fArea').value) : $('fArea').value; }
+const personaDe = area => area === 'Equipo multidisciplinario' ? 'Servidor/a' : 'Abogado';
 function actualizarAbogadoLabel(){
   const t = modo === 'antecedente' ? $('fTipoDoc').value : '';
-  const texto = t === 'Solicitud de nueva opinión' ? 'Abogado que dará la opinión'
-    : t === 'Solicitud de cambio de abogado' && resultadoCambio === 'Procede (reasignado)' ? 'Abogado que queda a cargo del caso'
-    : 'Abogado';
+  const p = personaDe(areaDelRegistro());
+  const texto = t === 'Solicitud de nueva opinión' ? p + ' que dará la opinión'
+    : t === 'Solicitud de cambio de abogado' && resultadoCambio === 'Procede (reasignado)' ? p + ' que queda a cargo del caso'
+    : p;
   $('etiquetaAbogado').innerHTML = texto + ' <span class="obl">*</span>';
 }
 function actualizarObligatorios(){ $('oblCodigo').hidden = origen !== 'Mesa de partes virtual'; }
@@ -1906,7 +1910,7 @@ function cargarAgendaForm(r){
 }
 $('optOtrasCat').addEventListener('click', e => { const o = e.target.closest('.opcion'); if (!o) return; categoriaManual = categoriaManual === o.dataset.v ? '' : o.dataset.v; pintarAgendaForm(); });
 $('optGrupoEquipo').addEventListener('click', e => { const o = e.target.closest('.opcion'); if (!o) return; grupoEquipo = o.dataset.v; pintarAgendaForm(); });
-$('fArea').addEventListener('change', () => { categoriaManual = ''; pintarAgendaForm(); });
+$('fArea').addEventListener('change', () => { categoriaManual = ''; pintarAgendaForm(); actualizarAbogadoLabel(); });
 // Al cambiar la materia, la columna vuelve a salir de la materia
 ['change', 'input'].forEach(t => { $('fMateria').addEventListener(t, () => { if (!(OTRAS_CATEGORIAS[$('fArea').value] || []).includes(categoriaManual)) categoriaManual = ''; pintarAgendaForm(); }); $('fMateriaOtra').addEventListener(t, pintarAgendaForm); });
 [...CASILLAS_FORM.map(c => c[1]), 'fTurno'].forEach(el => $(el).addEventListener('change', pintarAgendaForm));
@@ -2636,7 +2640,7 @@ $('btnGuardarForm').onclick = async () => {
   falta(!origen, $('optOrigen'), 'Falta el origen.');
   falta(origen === 'Mesa de partes virtual' && !$('fCodigo').value.trim(), $('fCodigo'), 'Falta el código de mesa de partes virtual.');
   falta(!esAnt && !materia, $('fMateria').value === 'Otra' ? $('fMateriaOtra') : $('fMateria'), $('fMateria').value === 'Otra' ? 'Falta escribir la materia o delito.' : 'Falta la materia o delito.');
-  falta(!abog, $('fAbogado'), 'Falta el abogado.');
+  falta(!abog, $('fAbogado'), personaDe(areaDelRegistro()) === 'Servidor/a' ? 'Falta el servidor/a.' : 'Falta el abogado.');
   const abogNuevo = abog && abog.id !== abogadoPrecargado; // solo se revisa a quien se asigna ahora
   falta(abogNuevo && deLicenciaHoy(abog), $('fAbogado'), abog ? abog.nombre + textoLicencia(abog) + ': elige a otro abogado.' : '');
   falta(tipoDoc === 'Informe del defensor' && !$('fRespuesta').value, $('fRespuesta'), 'Falta la respuesta del defensor.');
