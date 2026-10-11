@@ -7,7 +7,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Source+Serif+4:opsz,wght@8..60,600&family=Public+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
-<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/xlsx-js-style@1.2.0/dist/xlsx.bundle.js"></script>
 <style>
   :root{
     --rojo:#D91023; --rojo-oscuro:#A10C1A; --dorado:#B8873A; --tinta:#241E1B; --gris:#6A635C; --gris-claro:#9A938A;
@@ -99,6 +99,10 @@
   .informe table{width:100%;min-width:0;max-width:640px}
   .informe td, .informe th{padding:6px 10px;font-size:13px}
   .informe tr.total td{font-weight:800;background:#F6F1E8}
+  .informe h4{font-size:13.5px;margin:14px 0 6px}
+  .informe td.resaltado, .informe th.resaltado{background:#FFF2CC !important;font-weight:800}
+  .informe tr.resaltado-fila td{background:#FFF2CC !important;font-weight:800}
+  .informe .nota-res{font-size:11.5px;color:var(--gris)}
   @media (max-width:600px){ .informe td, .informe th{padding:5px 5px;font-size:11.5px} .informe th{white-space:normal} }
   @media print{
     body{background:#fff;padding:0}
@@ -220,8 +224,21 @@
     <section id="secConteo" hidden>
       <section class="caja" id="informeMes">
         <div class="barra no-imprimir">
-          <label>Informe del mes <input type="month" id="selMesInforme"></label>
-          <button class="btn" id="btnImprimirInforme">🖨 Imprimir informe</button>
+          <label>Ver <select id="tipoInforme">
+            <option value="mes">Informe del mes</option>
+            <option value="acumulado">Acumulado del año (enero al mes)</option>
+            <option value="rango">Rango de fechas (desde – hasta)</option>
+            <option value="anio">Año completo</option>
+          </select></label>
+          <label data-para="mes acumulado">Mes <input type="month" id="selMesInforme"></label>
+          <label data-para="rango" hidden>Desde <input type="date" id="informeDesde"></label>
+          <label data-para="rango" hidden>Hasta <input type="date" id="informeHasta"></label>
+          <label data-para="anio" hidden>Año <select id="informeAnio"></select></label>
+        </div>
+        <div class="barra no-imprimir">
+          <button class="btn" id="btnImprimirInforme">🖨 Imprimir lo que se ve</button>
+          <button class="btn sec" id="btnExcelInforme">⬇ Excel consolidado</button>
+          <span class="ayuda" id="ayudaInforme"></span>
         </div>
         <div id="cuerpoInforme"></div>
       </section>
@@ -480,16 +497,7 @@ $('btnGuardarEdicion').onclick = async () => {
 };
 
 // ---------- Excel del mes: las 19 columnas de la hoja, en orden de llegada ----------
-$('btnExcel').onclick = () => {
-  const mes = $('selMes').value;
-  const filas = LLAMADAS.slice().sort((a, b) => ordenFila(b, a)).map(f => Object.fromEntries(COLUMNAS.map((c, i) => [c, valoresFila(f)[i] ?? ''])));
-  if (!filas.length){ avisar('No hay llamadas en ' + nombreMes(mes) + '.'); return; }
-  const hoja = XLSX.utils.json_to_sheet(filas, { header: COLUMNAS });
-  const libro = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(libro, hoja, (MESES[Number(mes.slice(5, 7)) - 1] + '-' + mes.slice(0, 4)).toUpperCase());
-  XLSX.utils.book_append_sheet(libro, XLSX.utils.aoa_to_sheet(filasInforme(LLAMADAS, mes)), 'Resumen');
-  XLSX.writeFile(libro, 'Fono_Alegra_' + mes + '.xlsx');
-};
+$('btnExcel').onclick = () => descargarConsolidado({ tipo: 'mes', mes: $('selMes').value });
 
 // ================= Informe del mes: Hombres, Mujeres, Total población y LGTB (por área) =================
 // Cada usuario es Mujer u Hombre (Total población = Hombres + Mujeres). LGTB se cuenta aparte, dentro de ese total.
@@ -503,34 +511,173 @@ function resumenInforme(lista){
   });
   return { por, tot };
 }
-function filasInforme(lista, mes){
-  const { por, tot } = resumenInforme(lista);
-  const filas = [['Informe Fono Alegra (línea 1884) — ' + nombreMes(mes) + ' — Defensa Pública Lima Centro'], [],
-    ['Área', 'Hombres', 'Mujeres', 'Total población', 'LGTB']];
-  Object.entries(por).forEach(([a, x]) => filas.push([a, x.h, x.m, x.h + x.m, x.lgtb]));
-  filas.push(['TOTAL', tot.h, tot.m, tot.h + tot.m, tot.lgtb]);
-  if (tot.sin) filas.push([], ['Casos sin dato de sexo (registrados antes de pedir el sexo): ' + tot.sin]);
-  return filas;
+// ================= Períodos: mes, acumulado del año, rango y año completo =================
+// Todo cuenta por FECHA DE INGRESO y solo casos nuevos. El mes elegido se resalta en el acumulado.
+const MESES_MAY = ['ENERO', 'FEBRERO', 'MARZO', 'ABRIL', 'MAYO', 'JUNIO', 'JULIO', 'AGOSTO', 'SETIEMBRE', 'OCTUBRE', 'NOVIEMBRE', 'DICIEMBRE'];
+const finDeMes = mes => mes + '-' + String(new Date(Number(mes.slice(0, 4)), Number(mes.slice(5, 7)), 0).getDate()).padStart(2, '0');
+function mesesEntre(desde, hasta){ const r = []; let a = Number(desde.slice(0, 4)), m = Number(desde.slice(5, 7)); const fin = hasta.slice(0, 7);
+  for (let i = 0; i < 400; i++){ const k = a + '-' + String(m).padStart(2, '0'); r.push(k); if (k >= fin) break; m++; if (m > 12){ m = 1; a++; } } return r; }
+const nombreMesCorto = k => MESES[Number(k.slice(5, 7)) - 1] + (k.slice(0, 4) !== '' ? ' ' + k.slice(2, 4) : '');
+async function llamadasEntre(desde, hasta){
+  const snap = await getDocs(query(collection(db, COL_FONO), where('fecha', '>=', desde), where('fecha', '<=', hasta)));
+  return snap.docs.map(d => ({ id: d.id, ...d.data() })).filter(f => f.casoNuevo !== false && f.fecha >= desde && f.fecha <= hasta);
 }
+// Lo que se eligió: { tipo, titulo (para títulos y archivo), desde, hasta, meses, resaltado, conteoDesde }
+function periodoElegido(p = null){
+  const t = p ? p.tipo : $('tipoInforme').value;
+  if (t === 'mes' || t === 'acumulado'){
+    const mes = p ? p.mes : $('selMesInforme').value, anio = mes.slice(0, 4);
+    const nombre = MESES_MAY[Number(mes.slice(5, 7)) - 1] + ' ' + anio;
+    if (t === 'mes') return { tipo: t, titulo: nombre, desde: mes + '-01', hasta: finDeMes(mes), conteoDesde: anio + '-01-01', meses: mesesEntre(anio + '-01-01', mes + '-01'), resaltado: mes };
+    return { tipo: t, titulo: 'ENERO A ' + nombre + ' (ACUMULADO)', desde: anio + '-01-01', hasta: finDeMes(mes), conteoDesde: anio + '-01-01', meses: mesesEntre(anio + '-01-01', mes + '-01'), resaltado: mes };
+  }
+  if (t === 'rango'){
+    const d = p ? p.desde : $('informeDesde').value, h = p ? p.hasta : $('informeHasta').value;
+    return { tipo: t, titulo: 'DEL ' + fechaCorta(d) + ' AL ' + fechaCorta(h), desde: d, hasta: h, conteoDesde: d, meses: d && h ? mesesEntre(d, h) : [], resaltado: '' };
+  }
+  const anio = p ? p.anio : $('informeAnio').value;
+  return { tipo: 'anio', titulo: 'AÑO ' + anio, desde: anio + '-01-01', hasta: anio + '-12-31', conteoDesde: anio + '-01-01', meses: mesesEntre(anio + '-01-01', anio + '-12-01'), resaltado: '' };
+}
+// Grupos del Conteo: sede y área, en el orden de la hoja
+const GRUPOS_ORDEN = [['LIMA CENTRO', 'Defensa de Víctimas'], ['LIMA CENTRO', 'Asistencia Legal'], ['MIRAFLORES', 'Defensa de Víctimas'], ['MIRAFLORES', 'Asistencia Legal'], ['LIMA CENTRO', 'Equipo multidisciplinario'], ['MIRAFLORES', 'Equipo multidisciplinario']];
+const NOMBRE_AREA_MAY = { 'Defensa de Víctimas': 'DEFENSA DE VÍCTIMAS', 'Asistencia Legal': 'ASISTENCIA LEGAL', 'Equipo multidisciplinario': 'EQUIPO MULTIDISCIPLINARIO' };
+function conteoPorGrupo(lista, meses){
+  const g = {};
+  lista.forEach(f => {
+    const sede = f.subSede || 'SIN SUB SEDE', area = f.area || 'Sin área', clave = sede + '|' + area;
+    const i = meses.indexOf((f.fecha || '').slice(0, 7)); if (i < 0) return;
+    const nombre = (defPorId(f.defensorId) || {}).nombre || f.defensorNombre || '(sin asignar)';
+    const grupo = g[clave] = g[clave] || { sede, area, filas: {} };
+    (grupo.filas[nombre] = grupo.filas[nombre] || Array(meses.length).fill(0))[i]++;
+  });
+  const orden = [...GRUPOS_ORDEN.map(([s, a]) => s + '|' + a).filter(k => g[k]), ...Object.keys(g).filter(k => !GRUPOS_ORDEN.some(([s, a]) => s + '|' + a === k)).sort()];
+  const general = Array(meses.length).fill(0);
+  const grupos = orden.map(k => {
+    const x = g[k], filas = Object.entries(x.filas).sort((a, b) => a[0].localeCompare(b[0], 'es')).map(([nombre, v]) => ({ nombre, v, total: v.reduce((a, b) => a + b, 0) }));
+    const tot = Array(meses.length).fill(0); filas.forEach(f => f.v.forEach((n, i) => { tot[i] += n; general[i] += n; }));
+    return { titulo: x.sede + ' — ' + (NOMBRE_AREA_MAY[x.area] || x.area.toUpperCase()), persona: x.area === 'Equipo multidisciplinario' ? 'Servidor/a' : 'Defensor/a Público/a', filas, tot, total: tot.reduce((a, b) => a + b, 0) };
+  });
+  return { grupos, general, totalGeneral: general.reduce((a, b) => a + b, 0) };
+}
+
+// ---------- En pantalla (y para imprimir) ----------
+let pidiendoInforme = 0;
 async function pintarInforme(){
-  const mes = $('selMesInforme').value;
+  const t = $('tipoInforme').value;
+  document.querySelectorAll('#informeMes [data-para]').forEach(l => l.hidden = !l.dataset.para.split(' ').includes(t));
+  const p = periodoElegido();
+  if (!p.desde || !p.hasta || p.hasta < p.desde){ $('cuerpoInforme').innerHTML = '<div class="vacio">Elige las fechas del período.</div>'; return; }
+  $('ayudaInforme').textContent = t === 'mes' ? 'El Excel trae el mes elegido (casos y Resumen) y el Conteo de enero al mes, con el mes resaltado.' : 'El Excel trae los casos del período, el Conteo por mes y el Resumen por área y por mes.';
+  const yo = ++pidiendoInforme;
   $('cuerpoInforme').innerHTML = '<div class="vacio">Cargando…</div>';
-  let lista = [];
-  try { lista = (await getDocs(query(collection(db, COL_FONO), where('mes', '==', mes)))).docs.map(d => d.data()); }
-  catch (e){ console.error(e); $('cuerpoInforme').innerHTML = '<div class="vacio">No se pudo leer el informe.</div>'; return; }
-  const { por, tot } = resumenInforme(lista);
+  let lista = [], listaConteo = [];
+  try {
+    lista = await llamadasEntre(p.desde, p.hasta);
+    listaConteo = p.conteoDesde === p.desde ? lista : await llamadasEntre(p.conteoDesde, p.hasta);
+  } catch (e){ console.error(e); $('cuerpoInforme').innerHTML = '<div class="vacio">No se pudo leer el informe.</div>'; return; }
+  if (yo !== pidiendoInforme) return;
   const n = v => v || 0;
-  $('cuerpoInforme').innerHTML = `<div class="informe">
-    <h3>Informe Fono Alegra (línea 1884) · ${esc(nombreMes(mes))}</h3>
-    <p class="sub">Defensa Pública Lima Centro · casos nuevos asignados por Fono Alegra</p>
-    <div class="tabla-wrap" style="max-height:none"><table>
-      <thead><tr><th>Área</th><th>Hombres</th><th>Mujeres</th><th>Total población</th><th>LGTB</th></tr></thead>
-      <tbody>${Object.entries(por).map(([a, x]) => `<tr><td>${esc(a)}</td><td class="num">${n(x.h)}</td><td class="num">${n(x.m)}</td><td class="num"><b>${x.h + x.m}</b></td><td class="num">${n(x.lgtb)}</td></tr>`).join('')}
-      <tr class="total"><td>TOTAL</td><td class="num">${tot.h}</td><td class="num">${tot.m}</td><td class="num">${tot.h + tot.m}</td><td class="num">${tot.lgtb}</td></tr></tbody>
-    </table></div>
-    ${tot.sin ? `<p class="ayuda">${tot.sin} caso${tot.sin === 1 ? '' : 's'} sin dato de sexo (registrado${tot.sin === 1 ? '' : 's'} antes de pedir el sexo): no entra${tot.sin === 1 ? '' : 'n'} en Total población.<span class="no-imprimir"> Puedes completarlo con ✎ Editar en la pestaña Llamadas.</span></p>` : ''}
-  </div>`;
+  const filaRes = (et, x, cls = '') => `<tr class="${cls}"><td>${esc(et)}</td><td class="num">${n(x.h)}</td><td class="num">${n(x.m)}</td><td class="num"><b>${x.h + x.m}</b></td><td class="num">${n(x.lgtb)}</td></tr>`;
+  const encRes = '<thead><tr><th></th><th>Hombres</th><th>Mujeres</th><th>Total población</th><th>LGTB</th></tr></thead>';
+  const { por, tot } = resumenInforme(lista);
+  let html = `<div class="informe">
+    <h3>Informe Fono Alegra (línea 1884) · ${esc(p.titulo)}</h3>
+    <p class="sub">Defensa Pública Lima Centro · casos nuevos asignados por Fono Alegra (según la fecha de ingreso)</p>
+    <h4>Por área</h4>
+    <div class="tabla-wrap" style="max-height:none"><table>${encRes}<tbody>${Object.entries(por).map(([a, x]) => filaRes(a, x)).join('')}${filaRes('TOTAL', tot, 'total')}</tbody></table></div>`;
+  if (p.tipo !== 'mes'){
+    const porMes = p.meses.map(k => [k, resumenInforme(lista.filter(f => f.fecha.slice(0, 7) === k)).tot]);
+    html += `<h4>Por mes</h4><div class="tabla-wrap" style="max-height:none"><table>${encRes}<tbody>${porMes.map(([k, x]) => filaRes(MESES_MAY[Number(k.slice(5, 7)) - 1] + ' ' + k.slice(0, 4), x, k === p.resaltado ? 'resaltado-fila' : '')).join('')}${filaRes('TOTAL DEL PERÍODO', tot, 'total')}</tbody></table></div>`;
+  }
+  if (tot.sin) html += `<p class="nota-res">${tot.sin} caso${tot.sin === 1 ? '' : 's'} sin dato de sexo (registrado${tot.sin === 1 ? '' : 's'} antes de pedir el sexo): no entra${tot.sin === 1 ? '' : 'n'} en Total población.<span class="no-imprimir"> Puedes completarlo con ✎ Editar en la pestaña Llamadas.</span></p>`;
+  // Por defensor/servidor: en "mes", solo el mes; en lo demás, mes por mes con el mes elegido resaltado
+  const soloMes = p.tipo === 'mes';
+  const meses = soloMes ? [p.resaltado] : p.meses;
+  const c = conteoPorGrupo(soloMes ? lista : listaConteo, meses);
+  const th = k => `<th class="${k === p.resaltado && !soloMes ? 'resaltado' : ''}">${soloMes ? 'Casos' : MESES[Number(k.slice(5, 7)) - 1]}</th>`;
+  const td = (v, k) => `<td class="num ${k === p.resaltado && !soloMes ? 'resaltado' : ''}">${v || '·'}</td>`;
+  html += `<h4>Por ${soloMes ? 'defensor/a o servidor/a' : 'defensor/a o servidor/a y por mes'}${p.resaltado && !soloMes ? ' (resaltado: ' + MESES_MAY[Number(p.resaltado.slice(5, 7)) - 1] + ')' : ''}</h4>` + (c.grupos.length ? c.grupos.map(g => `<p style="font-weight:700;font-size:12.5px;margin:10px 0 4px">${esc(g.titulo)}</p>
+    <div class="tabla-wrap" style="max-height:none"><table><thead><tr><th>#</th><th>${g.persona}</th>${meses.map(th).join('')}${soloMes ? '' : '<th>Total</th>'}</tr></thead><tbody>
+    ${g.filas.map((f, i) => `<tr><td class="num">${i + 1}</td><td>${esc(f.nombre)}</td>${f.v.map((v, j) => td(v, meses[j])).join('')}${soloMes ? '' : `<td class="num"><b>${f.total}</b></td>`}</tr>`).join('')}
+    <tr class="total"><td></td><td>TOTAL</td>${g.tot.map((v, j) => td(v, meses[j])).join('')}${soloMes ? '' : `<td class="num">${g.total}</td>`}</tr></tbody></table></div>`).join('')
+    : '<p class="nota-res">No hay casos en este período.</p>');
+  $('cuerpoInforme').innerHTML = html + '</div>';
 }
+['tipoInforme', 'informeDesde', 'informeHasta', 'informeAnio'].forEach(i => $(i).addEventListener('change', pintarInforme));
+$('btnExcelInforme').onclick = () => { const t = $('tipoInforme').value;
+  descargarConsolidado(t === 'mes' || t === 'acumulado' ? { tipo: t, mes: $('selMesInforme').value } : t === 'rango' ? { tipo: t, desde: $('informeDesde').value, hasta: $('informeHasta').value } : { tipo: t, anio: $('informeAnio').value }); };
+
+// ---------- Excel consolidado: hoja de casos, "Conteo" y "Resumen" ----------
+// Casos: las 19 columnas de siempre + Sexo y LGTB. Conteo: por defensor/servidor y mes, por sede y área, con totales (sin fórmulas).
+const COLUMNAS_EXCEL = ['Fecha de ingreso', 'Nombre del usuario/a', 'Documento Nacional', 'Teléfono de contacto', 'Correo electrónico', 'Dirección domiciliaria',
+  'Dir. Distrital', 'Sub Sede derivada', 'Área', 'Día Turno', 'Defensor/a Público/a asignado/a', 'Materia / Delito', 'Gestiones realizadas', 'Gestiones por realizar',
+  'Dificultades presentadas', 'Usuario acepta el patrocinio Sí/No', 'Carpeta defensorial creada Sí/No', 'Se verificó trato al usuario con llamada', 'Nivel de satisfacción', 'Sexo', 'LGTB'];
+function valoresExcel(f){ const v = valoresFila(f); return [v[0], v[1], ...v.slice(4), v[2], v[3]]; } // en pantalla Sexo y LGTB van junto al nombre; en el Excel, al final
+const E = {
+  titulo: { font: { bold: true, sz: 13 } },
+  enc: { font: { bold: true }, fill: { fgColor: { rgb: 'EFE9DD' } }, alignment: { horizontal: 'center', vertical: 'center', wrapText: true }, border: { top: { style: 'thin', color: { rgb: 'BBBBBB' } }, bottom: { style: 'thin', color: { rgb: 'BBBBBB' } }, left: { style: 'thin', color: { rgb: 'BBBBBB' } }, right: { style: 'thin', color: { rgb: 'BBBBBB' } } } },
+  grupo: { font: { bold: true, color: { rgb: 'FFFFFF' } }, fill: { fgColor: { rgb: 'A10C1A' } } },
+  total: { font: { bold: true }, fill: { fgColor: { rgb: 'F6F1E8' } } },
+  resaltado: { font: { bold: true }, fill: { fgColor: { rgb: 'FFF2CC' } }, alignment: { horizontal: 'center' } },
+  num: { alignment: { horizontal: 'center' } }
+};
+function hojaConEstilos(filas, estilos, anchos){
+  const h = XLSX.utils.aoa_to_sheet(filas);
+  Object.entries(estilos).forEach(([ref, s]) => { if (h[ref]) h[ref].s = { ...(h[ref].s || {}), ...s }; else h[ref] = { t: 's', v: '', s }; });
+  if (anchos) h['!cols'] = anchos.map(w => ({ wch: w }));
+  return h;
+}
+const celda = (f, c) => XLSX.utils.encode_cell({ r: f, c });
+async function descargarConsolidado(sel){
+  const p = periodoElegido(sel);
+  if (!p.desde || !p.hasta || p.hasta < p.desde){ avisar('Elige las fechas del período.'); return; }
+  let lista, listaConteo;
+  try {
+    lista = await llamadasEntre(p.desde, p.hasta);
+    listaConteo = p.conteoDesde === p.desde ? lista : await llamadasEntre(p.conteoDesde, p.hasta);
+  } catch (e){ console.error(e); avisar('No se pudo leer las llamadas.'); return; }
+  if (!lista.length && !listaConteo.length){ avisar('No hay casos de Fono Alegra en ' + p.titulo.toLowerCase() + '.'); return; }
+  const libro = XLSX.utils.book_new();
+  // 1) Casos (solo el período elegido; en el mes, solo ese mes), en orden de llegada
+  const casos = lista.slice().sort((a, b) => ordenFila(b, a));
+  const hCasos = hojaConEstilos([COLUMNAS_EXCEL, ...casos.map(valoresExcel)],
+    Object.fromEntries(COLUMNAS_EXCEL.map((_, i) => [celda(0, i), E.enc])), COLUMNAS_EXCEL.map((c, i) => [12, 30, 4, 5, 6, 7].includes(i) ? 28 : 16));
+  XLSX.utils.book_append_sheet(libro, hCasos, p.tipo === 'mes' ? (MESES_MAY[Number(p.resaltado.slice(5, 7)) - 1].slice(0, 3) + '-' + p.resaltado.slice(0, 4)) : 'CASOS');
+  // 2) Conteo: de enero al mes elegido (mes resaltado) o los meses del período
+  const c = conteoPorGrupo(listaConteo, p.meses);
+  const filas = [['CONTEO FONO ALEGRA · ' + p.titulo + (p.tipo === 'mes' ? ' (enero a ' + MESES_MAY[Number(p.resaltado.slice(5, 7)) - 1].toLowerCase() + '; resaltado el mes que se reporta)' : '')], []];
+  const est = { [celda(0, 0)]: E.titulo };
+  const ancho = p.meses.length + 3;
+  const encMeses = p.meses.map(k => MESES[Number(k.slice(5, 7)) - 1] + (p.meses.some(x => x.slice(0, 4) !== k.slice(0, 4)) ? ' ' + k.slice(0, 4) : ''));
+  const iRes = p.meses.indexOf(p.resaltado);
+  c.grupos.forEach(g => {
+    const fg = filas.length; filas.push([g.titulo]); for (let j = 0; j < ancho; j++) est[celda(fg, j)] = E.grupo;
+    const fe = filas.length; filas.push(['#', g.persona, ...encMeses, 'Total']); for (let j = 0; j < ancho; j++) est[celda(fe, j)] = E.enc;
+    g.filas.forEach((f, i) => { const r = filas.length; filas.push([i + 1, f.nombre, ...f.v, f.total]); for (let j = 2; j < ancho; j++) est[celda(r, j)] = E.num; });
+    const ft = filas.length; filas.push(['', 'TOTAL', ...g.tot, g.total]); for (let j = 0; j < ancho; j++) est[celda(ft, j)] = E.total;
+    if (iRes >= 0) for (let r = fe; r <= ft; r++) est[celda(r, 2 + iRes)] = { ...(est[celda(r, 2 + iRes)] || {}), ...E.resaltado };
+    filas.push([]);
+  });
+  const fte = filas.length; filas.push(['', 'CONTEO TOTAL DE LOS CUADROS', ...encMeses, 'Total']); for (let j = 0; j < ancho; j++) est[celda(fte, j)] = E.enc;
+  const ftt = filas.length; filas.push(['', 'TOTAL', ...c.general, c.totalGeneral]); for (let j = 0; j < ancho; j++) est[celda(ftt, j)] = E.total;
+  if (iRes >= 0){ est[celda(fte, 2 + iRes)] = { ...E.enc, ...E.resaltado }; est[celda(ftt, 2 + iRes)] = { ...E.total, ...E.resaltado }; }
+  XLSX.utils.book_append_sheet(libro, hojaConEstilos(filas, est, [5, 38, ...p.meses.map(() => 7), 8]), 'Conteo');
+  // 3) Resumen: Hombres, Mujeres, Total población, LGTB (por área; en períodos, también por mes)
+  const { por, tot } = resumenInforme(lista);
+  const rf = [['Informe Fono Alegra (línea 1884) — ' + p.titulo + ' — Defensa Pública Lima Centro'], [], ['Área', 'Hombres', 'Mujeres', 'Total población', 'LGTB']];
+  const re = { [celda(0, 0)]: E.titulo }; for (let j = 0; j < 5; j++) re[celda(2, j)] = E.enc;
+  Object.entries(por).forEach(([a, x]) => rf.push([a, x.h, x.m, x.h + x.m, x.lgtb]));
+  const rt = rf.length; rf.push([p.tipo === 'mes' ? 'TOTAL' : 'TOTAL DEL PERÍODO', tot.h, tot.m, tot.h + tot.m, tot.lgtb]); for (let j = 0; j < 5; j++) re[celda(rt, j)] = E.total;
+  if (p.tipo !== 'mes'){
+    rf.push([]); const fe = rf.length; rf.push(['Mes', 'Hombres', 'Mujeres', 'Total población', 'LGTB']); for (let j = 0; j < 5; j++) re[celda(fe, j)] = E.enc;
+    p.meses.forEach(k => { const x = resumenInforme(lista.filter(f => f.fecha.slice(0, 7) === k)).tot; const r = rf.length; rf.push([MESES_MAY[Number(k.slice(5, 7)) - 1] + ' ' + k.slice(0, 4), x.h, x.m, x.h + x.m, x.lgtb]); if (k === p.resaltado) for (let j = 0; j < 5; j++) re[celda(r, j)] = E.resaltado; });
+    const ft = rf.length; rf.push(['TOTAL DEL PERÍODO', tot.h, tot.m, tot.h + tot.m, tot.lgtb]); for (let j = 0; j < 5; j++) re[celda(ft, j)] = E.total;
+  }
+  if (tot.sin) rf.push([], ['Casos sin dato de sexo (registrados antes de pedir el sexo): ' + tot.sin + ' (no entran en Total población)']);
+  XLSX.utils.book_append_sheet(libro, hojaConEstilos(rf, re, [30, 10, 10, 16, 8]), 'Resumen');
+  XLSX.writeFile(libro, 'Excel consolidado FONO ALEGRA Línea 1884 – ' + p.titulo.replace(/\//g, '-') + '.xlsx');
+}
+
 $('selMesInforme').addEventListener('change', pintarInforme);
 $('btnImprimirInforme').onclick = () => window.print();
 
@@ -704,6 +851,8 @@ onAuthStateChanged(auth, async user => {
     const hoy = hoyIso(), anioActual = Number(hoy.slice(0, 4));
     $('selMes').value = hoy.slice(0, 7);
     $('selMesInforme').value = hoy.slice(0, 7);
+    $('informeAnio').innerHTML = Array.from({ length: anioActual - 2024 }, (_, i) => anioActual - i).map(a => `<option>${a}</option>`).join('');
+    $('informeDesde').value = hoy.slice(0, 7) + '-01'; $('informeHasta').value = hoy;
     $('selAnio').innerHTML = Array.from({ length: anioActual - 2024 }, (_, i) => anioActual - i).map(a => `<option>${a}</option>`).join('');
     const [sd, sl] = await Promise.all([getDocs(collection(db, 'defensores')), getDocs(collection(db, 'licencias')).catch(() => ({ docs: [] }))]);
     DEFS = sd.docs.map(d => ({ id: d.id, ...d.data() }))
