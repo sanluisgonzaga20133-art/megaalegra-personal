@@ -151,6 +151,12 @@
       </div>
       <p class="ayuda">El saldo de compensación de reasignaciones y el turno de opiniones solo cuentan desde estas fechas. Lo anterior no se borra: solo deja de contar.</p>
     </div>
+    <div class="caja solo-admin">
+      <h3>Revisar restos sin caso</h3>
+      <div class="fila-form"><button class="btn sec" id="btnRevisarRestos">Revisar</button></div>
+      <p class="ayuda">Busca datos que quedaron sueltos cuando se borró un caso: llamadas del Drive 3, asignaciones y reasignaciones de la Agenda, opiniones, antecedentes y registros públicos cuyo caso ya no está en el Drive 1. Solo muestra fecha y usuario (nunca DNI, teléfonos, direcciones ni correos). <b>No borra nada hasta que toques "Borrar" en cada grupo.</b></p>
+      <div id="resultadoRestos"></div>
+    </div>
     <p class="ayuda" id="ayudaPersonal"></p>
     <div class="tabla-wrap"><table>
       <thead><tr id="encPersonal"></tr></thead>
@@ -480,6 +486,66 @@ $('btnGuardarConteos').onclick = async () => {
     avisar('Guardado. La Agenda y el Drive 1 lo toman al recargar.');
   } catch (e){ error(e); }
 };
+
+// ---------- Restos sin caso (solo el administrador) ----------
+// Asignaciones anteriores al 26/09/2026 (cuando la Agenda empezó a crear su fila en el Drive 1) sin fila en el Drive 1 son legítimas: se cuentan aparte y no se tocan.
+const INICIO_SINCRONIA = '2026-09-26';
+let RESTOS = {};
+async function revisarRestos(){
+  const caja = $('resultadoRestos');
+  caja.innerHTML = '<p class="ayuda">Revisando… (puede tardar unos segundos)</p>';
+  try {
+    const leer = async c => (await getDocs(collection(db, c))).docs.map(d => ({ id: d.id, ...d.data() }));
+    const [casos, asig, reas, opin, fono, publ, defs] = await Promise.all(['casos', 'asignaciones', 'reasignaciones', 'opiniones', 'fonoAlegra', 'casosPublicos', 'defensores'].map(leer));
+    const idsCasos = new Set(casos.map(c => c.id)), idsAsig = new Set(asig.map(a => a.id));
+    const conAsignacion = new Set(casos.map(c => c.asignacionId).filter(Boolean));
+    const nombreDef = id => (defs.find(d => d.id === id) || {}).nombre || id || '';
+    const sinCasoAsig = asig.filter(a => !idsCasos.has(a.id) && !conAsignacion.has(a.id));
+    const recientes = sinCasoAsig.filter(a => a.desdeDrive1 || (a.fecha || '') >= INICIO_SINCRONIA);
+    RESTOS = {
+      fono: { titulo: 'Llamadas del Drive 3 (Fono Alegra) sin registro en el Drive 1', col: 'fonoAlegra',
+        lista: fono.filter(f => !idsCasos.has(f.registroId || f.id)).map(f => ({ id: f.id, fecha: f.fecha, usuario: f.usuario, extra: f.defensorNombre })) },
+      asig: { titulo: 'Asignaciones de la Agenda sin caso en el Drive 1 (desde el 26/09/2026)', col: 'asignaciones',
+        lista: recientes.map(a => ({ id: a.id, fecha: a.fecha, usuario: a.derivadoUsuario || '—', extra: nombreDef(a.defensorId) + ' · ' + (a.categoria || '') })) },
+      reas: { titulo: 'Reasignaciones de casos que ya no existen', col: 'reasignaciones',
+        lista: reas.filter(r => r.casoId && !idsAsig.has(r.casoId) && !idsCasos.has(r.casoId)).map(r => ({ id: r.id, fecha: r.fecha, usuario: r.usuario || '—', extra: nombreDef(r.deId) + ' → ' + nombreDef(r.aId) })) },
+      opin: { titulo: 'Opiniones sin su documento en el Drive 1', col: 'opiniones',
+        lista: opin.filter(o => !idsCasos.has(o.id)).map(o => ({ id: o.id, fecha: o.fecha, usuario: o.usuario || '—', extra: o.abogadoNombre })) },
+      ante: { titulo: 'Antecedentes sueltos (su caso ya no existe)', col: 'casos',
+        lista: casos.filter(c => c.padreId && !idsCasos.has(c.padreId)).map(c => ({ id: c.id, fecha: c.fecha, usuario: c.padreUsuario || c.usuario || '—', extra: c.tipoDoc })) },
+      publ: { titulo: 'Registros de la app pública sin caso', col: 'casosPublicos',
+        lista: publ.filter(p => !idsCasos.has(p.id)).map(p => ({ id: p.id, fecha: p.fecha || '', usuario: '—', extra: '' })) }
+    };
+    const antiguas = sinCasoAsig.length - recientes.length;
+    const grupos = Object.entries(RESTOS);
+    const totalRestos = grupos.reduce((n, [, g]) => n + g.lista.length, 0);
+    caja.innerHTML = `<p class="ayuda"><b>${totalRestos ? totalRestos + ' resto' + (totalRestos === 1 ? '' : 's') + ' en total.' : 'No hay restos sueltos.'}</b>${antiguas ? ' Además hay ' + antiguas + (antiguas === 1 ? ' asignación' : ' asignaciones') + ' de la Agenda anteriores al 26/09/2026 sin fila en el Drive 1: son registros antiguos y se dejan.' : ''}</p>` +
+      grupos.filter(([, g]) => g.lista.length).map(([k, g]) => `<div style="margin-top:10px">
+        <h3 style="font-size:14px">${esc(g.titulo)}: ${g.lista.length}</h3>
+        <div class="tabla-wrap" style="max-height:260px"><table><thead><tr><th>Fecha</th><th>Usuario</th><th>Detalle</th></tr></thead><tbody>
+        ${g.lista.sort((a, b) => (a.fecha || '').localeCompare(b.fecha || '')).map(x => `<tr><td style="white-space:nowrap">${fechaCorta(x.fecha || '')}</td><td>${esc(x.usuario || '—')}</td><td>${esc(x.extra || '')}</td></tr>`).join('')}
+        </tbody></table></div>
+        <button class="btn chico" style="margin-top:6px" data-borrar-restos="${k}">Borrar estos ${g.lista.length}</button></div>`).join('');
+  } catch (e){ console.error(e); caja.innerHTML = '<p class="ayuda">No se pudo revisar (' + esc(e.code || e.message) + ').</p>'; }
+}
+$('btnRevisarRestos').onclick = revisarRestos;
+$('resultadoRestos').addEventListener('click', async e => {
+  const b = e.target.closest('[data-borrar-restos]'); if (!b) return;
+  const g = RESTOS[b.dataset.borrarRestos]; if (!g || !g.lista.length) return;
+  if (!confirm('¿Borrar ' + g.lista.length + ' resto' + (g.lista.length === 1 ? '' : 's') + ': ' + g.titulo + '?\n\nNo se puede deshacer.')) return;
+  b.disabled = true;
+  try {
+    for (let i = 0; i < g.lista.length; i += 400){
+      const lote = writeBatch(db);
+      g.lista.slice(i, i + 400).forEach(x => lote.delete(doc(db, g.col, x.id)));
+      await lote.commit();
+    }
+    // En el registro: cuántos y de qué colección, sin datos personales
+    await registrarCambio('Borró ' + g.lista.length + ' restos sin caso: ' + g.titulo, g.col, 'restos', {}, { cantidad: g.lista.length });
+    avisar('Listo: ' + g.lista.length + ' borrado' + (g.lista.length === 1 ? '' : 's') + '.');
+  } catch (err){ error(err); }
+  await revisarRestos();
+});
 
 // ---------- Defensores ----------
 // El celular personal NO va en "defensores" (que es de lectura pública): va en "defensoresPrivado", que solo lee el administrador

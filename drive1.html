@@ -1159,19 +1159,69 @@ $('cuerpo').addEventListener('change', e => {
 });
 $('cuerpo').addEventListener('keydown', e => { if (e.key === 'Enter' && e.target.dataset.campo) e.target.blur(); });
 
+// ---------- Borrar: el caso y TODO lo relacionado ----------
+// Caso nuevo: sus antecedentes y opiniones (avisa antes), su llamada del Drive 3, su asignación y reasignaciones de la Agenda,
+// su registro público y lo que usa la búsqueda de nombres. Queda solo en el Registro de cambios, sin datos personales.
+let avisoDrive3 = false;
+async function borrarSiExiste(col, id){
+  try { const s = await getDoc(doc(db, col, id)); if (s.exists()){ await deleteDoc(s.ref); return 1; } }
+  catch (e){ if (col === COL_FONO) avisoDrive3 = true; console.warn('No se pudo borrar ' + col + '/' + id, e); }
+  return 0;
+}
+async function borrarAntecedenteDatos(h){
+  await deleteDoc(doc(db, COL, h.id));
+  cache.delete(h.id);
+  await borrarSiExiste('reasignaciones', h.id);
+  await borrarSiExiste('opiniones', h.id);
+  return borrarSiExiste(COL_FONO, h.id);
+}
+async function borrarCasoCompleto(r, preguntar = true){
+  const hijos = (await getDocs(query(collection(db, COL), where('padreId', '==', r.id)))).docs.map(d => ({ id: d.id, ...d.data() }));
+  if (hijos.length && preguntar){
+    const nOp = hijos.filter(h => h.tipoDoc === TIPO_OPINION).length;
+    if (!confirm('Este caso tiene ' + hijos.length + ' antecedente' + (hijos.length === 1 ? '' : 's') + (nOp ? ' (' + nOp + ' opinión' + (nOp === 1 ? '' : 'es') + ')' : '') +
+      '.\n\nAl borrar el caso se borran también sus antecedentes, su llamada del Drive 3 y su registro en la Agenda.\n\n¿Borrar todo?')) return false;
+  }
+  avisoDrive3 = false;
+  let llamadas = 0;
+  for (const h of hijos) llamadas += await borrarAntecedenteDatos(h);
+  const idA = idAsignacion(r);
+  try {
+    const ligadas = await getDocs(query(collection(db, 'reasignaciones'), where('casoId', '==', idA)));
+    await Promise.all(ligadas.docs.map(d => deleteDoc(d.ref)));
+  } catch (e){ console.warn('No se pudieron borrar las reasignaciones', e); }
+  await borrarSiExiste('asignaciones', idA);
+  try { const op = await getDocs(query(collection(db, 'opiniones'), where('casoId', '==', r.id))); await Promise.all(op.docs.map(d => deleteDoc(d.ref))); } catch (e){ /* sin acceso */ }
+  llamadas += await borrarSiExiste(COL_FONO, r.id);
+  try { const f = await getDocs(query(collection(db, COL_FONO), where('casoId', '==', r.id))); await Promise.all(f.docs.map(d => deleteDoc(d.ref))); llamadas += f.size; } catch (e){ avisoDrive3 = true; }
+  // Solo se avisa si de verdad había una llamada de Fono Alegra
+  avisoDrive3 = avisoDrive3 && [r, ...hijos].some(x => x.origen === ORIGEN_FONO);
+  await borrarSiExiste('casosPublicos', r.id);
+  await deleteDoc(doc(db, COL, r.id));
+  cache.delete(r.id);
+  await registrarCambio('Borró caso con todo lo relacionado', 'casos', r.id,
+    { codigo: r.codigo || '', fecha: r.fecha || '', area: r.area || '', materia: r.materia || '', abogado: r.abogadoActualNombre || r.abogadoNombre || '', antecedentes: hijos.length, llamadasDrive3: llamadas }, {});
+  if (avisoDrive3) avisar('Su llamada del Drive 3 no se pudo borrar (hace falta Editar en el Drive 3). Saldrá en la revisión de restos de Personal y permisos.', 9000);
+  return true;
+}
 async function borrar(id){
   idPorBorrar = null;
-  const r = cache.get(id);
+  let r = cache.get(id);
   try {
-    const hijos = await getDocs(query(collection(db, COL), where('padreId', '==', id)));
-    if (!hijos.empty){ avisar('Este caso tiene ' + hijos.size + ' antecedente(s). Bórralos primero.', 5000); pintar(); return; }
-    await deleteDoc(doc(db, COL, id));
-    // Fono Alegra: su fila del Drive 3 (datos personales) se borra solo si se confirma
-    if (r && r.origen === ORIGEN_FONO && puedeFono()){
-      try {
-        if (await existe(COL_FONO, id) && confirm('Este registro tiene su fila en el Drive 3 (Fono Alegra). ¿Borrarla también?')) await deleteDoc(doc(db, COL_FONO, id));
-      } catch (err){ console.error(err); avisar('No se pudo revisar la fila del Drive 3 de este registro.', 6000); }
+    if (!r){ const s = await getDoc(doc(db, COL, id)); if (s.exists()) r = { id: s.id, ...s.data() }; }
+    if (!r){ pintar(); return; }
+    if (!r.padreId){
+      if (await borrarCasoCompleto(r)) avisar('Caso borrado con todo lo relacionado (Agenda, Drive 3 y antecedentes)', 5000);
+      pintar();
+      return;
     }
+    avisoDrive3 = false;
+    await deleteDoc(doc(db, COL, id));
+    cache.delete(id);
+    await borrarSiExiste(COL_FONO, id);
+    avisoDrive3 = avisoDrive3 && r.origen === ORIGEN_FONO;
+    await registrarCambio('Borró antecedente', 'casos', id, { tipo: r.tipoDoc || '', fecha: r.fecha || '', caso: r.padreCodigo || '', abogado: r.abogadoNombre || '' }, {});
+    if (avisoDrive3) avisar('Su llamada del Drive 3 no se pudo borrar (hace falta Editar en el Drive 3).', 8000);
     if (r && r.padreId){
       // Si era una devolución o un cambio de abogado, también sale su movimiento de la Agenda
       if (await existe('reasignaciones', id)) await deleteDoc(doc(db, 'reasignaciones', id));
@@ -1644,6 +1694,7 @@ function elegirPadre(r){
 // Lo más reciente primero, con el año destacado. "Pasar al mismo abogado" lo registra como antecedente (no cuenta en la Agenda);
 // "Es un caso nuevo" sigue el registro normal (sí cuenta).
 let tCoincidencias = null, coincidenciasDescartadas = '';
+const verificadoEn = new Map(); // id → cuándo se comprobó que el caso sigue existiendo
 function ocultarCoincidencias(){ $('coincidencias').hidden = true; $('coincidencias').innerHTML = ''; }
 function marcasDelCaso(r, hijos){
   const marcas = [];
@@ -1661,8 +1712,13 @@ async function buscarCoincidencias(){
   if (norm($('fUsuario').value.trim().replace(/[,.]/g, ' ')) !== texto || modo !== 'nuevo') return; // ya cambió mientras cargaba
   const palabras = texto.split(/\s+/).filter(Boolean);
   const todos = [...cache.values()];
-  const res = todos.filter(r => !r.padreId && r.usuario && palabras.every(p => norm(r.usuario).includes(p)))
+  let res = todos.filter(r => !r.padreId && r.usuario && palabras.every(p => norm(r.usuario).includes(p)))
     .sort((a, b) => ordenRegistro(b, a));
+  // Lo que se borró después de cargar (en otra pestaña o desde la Agenda) no debe aparecer
+  const sinRevisar = res.slice(0, 40).filter(r => Date.now() - (verificadoEn.get(r.id) || 0) > 5000);
+  await Promise.all(sinRevisar.map(async r => { try { const s = await getDoc(doc(db, COL, r.id)); if (s.exists()) verificadoEn.set(r.id, Date.now()); else cache.delete(r.id); } catch (e){ /* se muestra igual */ } }));
+  if (norm($('fUsuario').value.trim().replace(/[,.]/g, ' ')) !== texto || modo !== 'nuevo') return;
+  res = res.filter(r => cache.has(r.id));
   if (!res.length){ ocultarCoincidencias(); return; }
   const hijosDe = {};
   todos.forEach(h => { if (h.padreId) (hijosDe[h.padreId] = hijosDe[h.padreId] || []).push(h); });
@@ -2305,7 +2361,28 @@ window.addEventListener('message', e => {
   if (e.data.tipo === 'abrir') recibirDesdeAgenda(e.data.datos || {});
   if (e.data.tipo === 'restaurar') restaurarForm();
   if (e.data.tipo === 'editar') editarDesdeAgenda(e.data.id);
+  if (e.data.tipo === 'borrar') borrarDesdeAgenda(e.data.id);
 });
+async function borrarDesdeAgenda(id){
+  let ok = false;
+  try {
+    const s = await getDoc(doc(db, COL, id));
+    if (s.exists()){
+      const r = { id: s.id, ...s.data() };
+      ok = r.padreId ? false : await borrarCasoCompleto(r);
+    } else {
+      // Caso antiguo de la Agenda sin fila en el Drive 1: su asignación, reasignaciones y llamada
+      avisoDrive3 = false;
+      const ligadas = await getDocs(query(collection(db, 'reasignaciones'), where('casoId', '==', id)));
+      await Promise.all(ligadas.docs.map(d => deleteDoc(d.ref)));
+      await borrarSiExiste(COL_FONO, id);
+      await deleteDoc(doc(db, 'asignaciones', id));
+      await registrarCambio('Borró caso (Agenda, sin fila en el Drive 1)', 'asignaciones', id, {}, {});
+      ok = true;
+    }
+  } catch (err){ console.error(err); }
+  avisarAgenda({ tipo: 'borrado', id, ok, avisoDrive3 });
+}
 async function editarDesdeAgenda(id){
   try {
     const s = await getDoc(doc(db, COL, id));

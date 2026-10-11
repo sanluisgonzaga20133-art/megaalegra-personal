@@ -1048,13 +1048,20 @@ function escucharMes(mes){
 function buscarRegistro(id){ return asignaciones.find(a => a.id === id) || ultimaBusqueda.find(a => a.id === id); }
 
 // Borra un caso y sus reasignaciones ligadas (sin conteo fantasma)
+// Borrar desde la Agenda: lo hace la ventana del Drive 1 (misma lógica: caso, antecedentes, Drive 3, Agenda y Registro de cambios)
+const esperandoBorrado = new Map();
 async function borrarCaso(id){
+  if (!MODO_ELEGIR && puedeRegistrar()){
+    crearMarcoRegistro();
+    for (let i = 0; i < 150 && !marcoListo; i++) await new Promise(res => setTimeout(res, 100));
+    if (marcoListo){
+      const r = await new Promise(res => { esperandoBorrado.set(id, res); enviarAlMarco({ tipo: 'borrar', id }); });
+      if (r.ok) avisar(r.avisoDrive3 ? 'Caso borrado, pero su llamada del Drive 3 no se pudo borrar (hace falta Editar en el Drive 3).' : 'Caso borrado con todo lo relacionado (Drive 1, Drive 3 y antecedentes)', 7000);
+      return;
+    }
+  }
   try {
     const a = buscarRegistro(id) || {};
-    try {
-      const f = await getDoc(doc(db, 'fonoAlegra', id));
-      if (f.exists() && confirm('Este caso tiene su fila en el Drive 3 (Fono Alegra). ¿Borrarla también?')) await deleteDoc(f.ref);
-    } catch (e){ /* sin acceso al Drive 3 */ }
     registrarCambio('Borró caso (Agenda)', 'asignaciones', id, { abogado: nombreDe(a.defensorId), fecha: a.fecha || '', categoria: a.categoria || '' }, {});
     const ligadas = await getDocs(query(collection(db, 'reasignaciones'), where('casoId', '==', id)));
     await Promise.all(ligadas.docs.map(d => deleteDoc(d.ref)));
@@ -1447,6 +1454,7 @@ window.addEventListener('message', e => {
   if (m.tipo === 'minimizado'){ marcoRegistro.hidden = true; barra.textContent = m.texto; barra.hidden = false; }
   if (m.tipo === 'nombre') nombreEnCurso = m.nombre || '';
   if (m.tipo === 'guardado') avisar(m.texto || 'Registrado');
+  if (m.tipo === 'borrado' && esperandoBorrado.has(m.id)){ esperandoBorrado.get(m.id)(m); esperandoBorrado.delete(m.id); }
 });
 document.getElementById('barraRegistroAgenda').addEventListener('click', () => {
   document.getElementById('barraRegistroAgenda').hidden = true;
