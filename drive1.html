@@ -492,6 +492,11 @@
       <div id="fonoCampos">
         <div class="rejilla">
           <div class="solo-nuevo">
+            <label class="campo" for="fSexo">Sexo <span class="obl">*</span></label>
+            <select id="fSexo"><option value="">— Elegir —</option><option>Mujer</option><option>Hombre</option></select>
+            <div class="ayuda" id="ayudaLgtbFono">LGTB: marca la casilla LGTBI de arriba (se cuenta aparte en el informe).</div>
+          </div>
+          <div class="solo-nuevo">
             <label class="campo" for="fSubSede">Sub sede derivada <span class="obl">*</span></label>
             <select id="fSubSede"><option value="">— Elegir —</option><option>LIMA CENTRO</option><option>MIRAFLORES</option></select>
           </div>
@@ -2057,13 +2062,13 @@ $('fSubSede').addEventListener('change', () => { abogadoFonoManual = false; actu
 $('fFecha').addEventListener('change', () => { abogadoFonoManual = false; actualizarBloqueFono(); });
 $('fArea').addEventListener('change', () => { abogadoFonoManual = false; delete $('ayudaAbogado').dataset.fono; actualizarBloqueFono(); });
 function limpiarFono(){
-  ['fSubSede', 'fDni', 'fTelefono', 'fCorreoUsuario', 'fDireccion', 'fGestHechas', 'fGestPorHacer', 'fDificultades'].forEach(i => $(i).value = '');
+  ['fSexo', 'fSubSede', 'fDni', 'fTelefono', 'fCorreoUsuario', 'fDireccion', 'fGestHechas', 'fGestPorHacer', 'fDificultades'].forEach(i => $(i).value = '');
   $('fAcepta').value = 'Sí'; $('fCarpetaCreada').value = 'No'; $('fTrato').value = 'Sí'; $('fSatisfaccion').value = 'Buena';
   abogadoFonoManual = false; turnoFono++; delete $('ayudaAbogado').dataset.fono;
   filaOriginal = null; filaOriginalDe = '';
 }
 function llenarFono(f){
-  $('fSubSede').value = f.subSede || ''; $('fDni').value = f.dni || ''; $('fTelefono').value = f.telefono || '';
+  $('fSubSede').value = f.subSede || ''; $('fSexo').value = f.sexo || ''; $('fDni').value = f.dni || ''; $('fTelefono').value = f.telefono || '';
   $('fCorreoUsuario').value = f.correo || ''; $('fDireccion').value = f.direccion || '';
   $('fGestHechas').value = f.gestionesRealizadas || ''; $('fGestPorHacer').value = f.gestionesPorRealizar || ''; $('fDificultades').value = f.dificultades || '';
   $('fAcepta').value = f.aceptaPatrocinio || 'Sí'; $('fCarpetaCreada').value = f.carpetaCreada || 'No';
@@ -2074,7 +2079,10 @@ function datosFono(idFila, datos){
   const dia = diaDeTurno(datos.fecha);
   return {
     fecha: datos.fecha, mes: datos.mes, anio: datos.anio,
-    usuario: datos.usuario, dni: $('fDni').value.trim(), telefono: $('fTelefono').value.trim(),
+    usuario: datos.usuario, sexo: $('fSexo').value,
+    // LGTB: la misma casilla LGTBI del registro (en el Equipo, el grupo LGTBI)
+    lgtbi: datos.area === 'Equipo multidisciplinario' ? datos.grupoEquipo === 'lgtbi' : !!(datos.casillas || {}).lgtbi,
+    dni: $('fDni').value.trim(), telefono: $('fTelefono').value.trim(),
     correo: $('fCorreoUsuario').value.trim().toLowerCase(), direccion: may($('fDireccion').value),
     dirDistrital: 'LIMA CENTRO', subSede: $('fSubSede').value, area: datos.area, diaTurno: dia === null ? '' : DIAS_SEMANA[dia],
     defensorId: datos.abogadoId, defensorNombre: datos.abogadoNombre, apoyoNombre: datos.apoyoNombre || '', materia: datos.materia,
@@ -2612,6 +2620,7 @@ $('btnGuardarForm').onclick = async () => {
   falta($('fPlazo').value === 'otro' && !$('fPlazoFecha').value, $('fPlazoFecha'), 'Falta la fecha del plazo.');
   const conFono = fonoAplica() && puedeFono();
   falta(!$('bloqueApoyo').hidden && !$('fApoyo').value, $('fApoyo'), 'Falta elegir quién le apoya.');
+  falta(conFono && !$('fSexo').value, $('fSexo'), 'Falta el sexo del usuario (Mujer u Hombre).');
   falta(conFono && !$('fSubSede').value, $('fSubSede'), 'Falta la sub sede derivada (Fono Alegra).');
 
   const previoForm = editandoId ? { ...(cache.get(editandoId) || {}) } : null;

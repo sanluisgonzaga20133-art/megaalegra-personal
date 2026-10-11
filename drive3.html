@@ -93,6 +93,21 @@
   .acciones a, .acciones button{font-size:11.5px;font-weight:700;color:var(--azul);background:none;border:none;padding:0;cursor:pointer;text-align:left;text-decoration:underline;text-underline-offset:2px}
   .vacio{padding:18px;text-align:center;color:var(--gris)}
 
+  /* Informe del mes (Fono Alegra): listo para imprimir */
+  .informe h3{font-family:'Source Serif 4',Georgia,serif;font-size:17px;margin:0 0 2px}
+  .informe .sub{font-size:12.5px;color:var(--gris);margin:0 0 8px}
+  .informe table{width:100%;min-width:0;max-width:640px}
+  .informe td, .informe th{padding:6px 10px;font-size:13px}
+  .informe tr.total td{font-weight:800;background:#F6F1E8}
+  @media (max-width:600px){ .informe td, .informe th{padding:5px 5px;font-size:11.5px} .informe th{white-space:normal} }
+  @media print{
+    body{background:#fff;padding:0}
+    body *{visibility:hidden}
+    #informeMes, #informeMes *{visibility:visible}
+    #informeMes{position:absolute;left:0;top:0;width:100%;border:none}
+    .no-imprimir{display:none !important}
+    .informe th{position:static}
+  }
   /* Conteo */
   .conteos{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,560px),1fr));gap:10px}
   .conteo h4{margin:0 0 6px;font-size:13.5px}
@@ -164,8 +179,9 @@
       <!-- Editar lo que es solo del Drive 3 (lo demás se cambia en el Drive 1) -->
       <section class="caja" id="cajaEditar" hidden style="border-color:var(--celeste-linea)">
         <h3 id="tituloEditar">Editar llamada</h3>
-        <p class="ayuda">Fecha, usuario, defensor y materia se cambian en el Drive 1 (así no se escriben dos veces).</p>
+        <p class="ayuda">Fecha, usuario, defensor, materia y LGTB (casilla LGTBI) se cambian en el Drive 1 (así no se escriben dos veces).</p>
         <div class="fila-form">
+          <label>Sexo<select id="eSexo"><option value="">— Elegir —</option><option>Mujer</option><option>Hombre</option></select></label>
           <label>Sub sede derivada<select id="eSubSede"><option value="">— Elegir —</option><option>LIMA CENTRO</option><option>MIRAFLORES</option></select></label>
           <label>Documento Nacional<input type="text" id="eDni" inputmode="numeric" autocomplete="off"></label>
           <label>Teléfono de contacto<input type="text" id="eTelefono" inputmode="tel" autocomplete="off"></label>
@@ -202,6 +218,13 @@
 
     <!-- ===== Conteo ===== -->
     <section id="secConteo" hidden>
+      <section class="caja" id="informeMes">
+        <div class="barra no-imprimir">
+          <label>Informe del mes <input type="month" id="selMesInforme"></label>
+          <button class="btn" id="btnImprimirInforme">🖨 Imprimir informe</button>
+        </div>
+        <div id="cuerpoInforme"></div>
+      </section>
       <div class="barra">
         <label>Año <select id="selAnio"></select></label>
         <span class="ayuda">Casos nuevos por Fono Alegra, por defensor y mes (las llamadas de quien vuelve a llamar quedan como antecedente en el Drive 1 y no se cuentan aquí).</span>
@@ -301,13 +324,14 @@ function licenciaHoy(defId){
 let LLAMADAS = [];          // las del mes elegido
 let TODAS = null;           // todas (solo se cargan al buscar)
 let editandoId = null;
-const COLUMNAS = ['Fecha de ingreso', 'Nombre del usuario/a', 'Documento Nacional', 'Teléfono de contacto', 'Correo electrónico', 'Dirección domiciliaria',
+const COLUMNAS = ['Fecha de ingreso', 'Nombre del usuario/a', 'Sexo', 'LGTB', 'Documento Nacional', 'Teléfono de contacto', 'Correo electrónico', 'Dirección domiciliaria',
   'Dir. Distrital', 'Sub Sede derivada', 'Área', 'Día Turno', 'Defensor/a Público/a asignado/a', 'Materia / Delito', 'Gestiones realizadas',
   'Gestiones por realizar', 'Dificultades presentada (DESCRIBIR)', 'Usuario acepta el patrocinio Sí / No', 'Carpeta defensorial creada (SI / NO)',
   'Se verificó trato al usuario con llamada', 'Nivel de satisfacción'];
-// Las 19 columnas de la hoja, en el mismo orden
+// Las columnas de la hoja, en el mismo orden (más Sexo y LGTB junto al nombre, para el informe mensual)
+const textoLgtb = f => f.lgtbi === true ? 'Sí' : f.lgtbi === false ? 'No' : '';
 function valoresFila(f){
-  return [fechaCorta(f.fecha), f.usuario, f.dni, f.telefono, f.correo, f.direccion, f.dirDistrital || 'LIMA CENTRO', f.subSede, AREA_CORTA[f.area] || f.area || '',
+  return [fechaCorta(f.fecha), f.usuario, f.sexo || '', textoLgtb(f), f.dni, f.telefono, f.correo, f.direccion, f.dirDistrital || 'LIMA CENTRO', f.subSede, AREA_CORTA[f.area] || f.area || '',
     f.diaTurno, (f.defensorNombre || '') + (f.apoyoNombre ? ' (Le apoya: ' + f.apoyoNombre + ')' : ''), f.materia, f.gestionesRealizadas, f.gestionesPorRealizar,
     f.dificultades, f.aceptaPatrocinio, f.carpetaCreada, f.tratoVerificado, f.satisfaccion];
 }
@@ -348,13 +372,14 @@ function pintarLlamadas(){
       <td><div class="acciones">${puedeEditar() ? `<button data-editar="${esc(f.id)}">✎ Editar</button>` : ''}${puedeDrive1 && f.registroId ? `<a href="drive1.html?caso=${encodeURIComponent(f.registroId)}">Ir al caso ↗</a>` : ''}</div></td>
       <td style="white-space:nowrap">${esc(v[0])}</td>
       <td class="nombre">${esc(v[1])}${tipo}</td>
-      ${[2, 3, 4].map(i => `<td>${esc(v[i])}</td>`).join('')}
-      ${largo(5)}
-      ${[6, 7, 8, 9].map(i => `<td>${esc(v[i])}</td>`).join('')}
+      <td>${esc(v[2]) || '<span class="chico">sin dato</span>'}</td><td class="num">${esc(v[3])}</td>
+      ${[4, 5, 6].map(i => `<td>${esc(v[i])}</td>`).join('')}
+      ${largo(7)}
+      ${[8, 9, 10, 11].map(i => `<td>${esc(v[i])}</td>`).join('')}
       <td class="nombre">${defensor}</td>
-      <td>${esc(v[11])}</td>
-      ${largo(12)}${largo(13)}${largo(14)}
-      ${[15, 16, 17, 18].map(i => `<td class="num">${esc(v[i])}</td>`).join('')}
+      <td>${esc(v[13])}</td>
+      ${largo(14)}${largo(15)}${largo(16)}
+      ${[17, 18, 19, 20].map(i => `<td class="num">${esc(v[i])}</td>`).join('')}
     </tr>`;
   }).join('') || `<tr><td colspan="${COLUMNAS.length + 1}" class="vacio">${q ? 'Nada coincide con la búsqueda.' : 'No hay llamadas registradas en ' + nombreMes($('selMes').value) + '.'}</td></tr>`;
   aplicarMarca();
@@ -412,7 +437,7 @@ async function revisarFaltantes(mes){
 }
 
 // ---------- Editar lo que es solo del Drive 3 ----------
-const CAMPOS_EDITABLES = [['eSubSede', 'subSede'], ['eDni', 'dni'], ['eTelefono', 'telefono'], ['eCorreo', 'correo'], ['eDireccion', 'direccion'],
+const CAMPOS_EDITABLES = [['eSexo', 'sexo'], ['eSubSede', 'subSede'], ['eDni', 'dni'], ['eTelefono', 'telefono'], ['eCorreo', 'correo'], ['eDireccion', 'direccion'],
   ['eGestHechas', 'gestionesRealizadas'], ['eGestPorHacer', 'gestionesPorRealizar'], ['eDificultades', 'dificultades'],
   ['eAcepta', 'aceptaPatrocinio'], ['eCarpeta', 'carpetaCreada'], ['eTrato', 'tratoVerificado'], ['eSatisfaccion', 'satisfaccion']];
 const POR_DEFECTO = { aceptaPatrocinio: 'Sí', carpetaCreada: 'No', tratoVerificado: 'Sí', satisfaccion: 'Buena' };
@@ -462,8 +487,52 @@ $('btnExcel').onclick = () => {
   const hoja = XLSX.utils.json_to_sheet(filas, { header: COLUMNAS });
   const libro = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(libro, hoja, (MESES[Number(mes.slice(5, 7)) - 1] + '-' + mes.slice(0, 4)).toUpperCase());
+  XLSX.utils.book_append_sheet(libro, XLSX.utils.aoa_to_sheet(filasInforme(LLAMADAS, mes)), 'Resumen');
   XLSX.writeFile(libro, 'Fono_Alegra_' + mes + '.xlsx');
 };
+
+// ================= Informe del mes: Hombres, Mujeres, Total población y LGTB (por área) =================
+// Cada usuario es Mujer u Hombre (Total población = Hombres + Mujeres). LGTB se cuenta aparte, dentro de ese total.
+const AREAS_INFORME = ['Asistencia Legal', 'Defensa de Víctimas', 'Equipo multidisciplinario'];
+function resumenInforme(lista){
+  const fila = () => ({ h: 0, m: 0, lgtb: 0, sin: 0 });
+  const por = Object.fromEntries(AREAS_INFORME.map(a => [a, fila()])), tot = fila();
+  lista.filter(f => f.casoNuevo !== false).forEach(f => {
+    const a = por[f.area] || (por[f.area] = fila());
+    [a, tot].forEach(x => { if (f.sexo === 'Hombre') x.h++; else if (f.sexo === 'Mujer') x.m++; else x.sin++; if (f.lgtbi === true) x.lgtb++; });
+  });
+  return { por, tot };
+}
+function filasInforme(lista, mes){
+  const { por, tot } = resumenInforme(lista);
+  const filas = [['Informe Fono Alegra (línea 1884) — ' + nombreMes(mes) + ' — Defensa Pública Lima Centro'], [],
+    ['Área', 'Hombres', 'Mujeres', 'Total población', 'LGTB']];
+  Object.entries(por).forEach(([a, x]) => filas.push([a, x.h, x.m, x.h + x.m, x.lgtb]));
+  filas.push(['TOTAL', tot.h, tot.m, tot.h + tot.m, tot.lgtb]);
+  if (tot.sin) filas.push([], ['Casos sin dato de sexo (registrados antes de pedir el sexo): ' + tot.sin]);
+  return filas;
+}
+async function pintarInforme(){
+  const mes = $('selMesInforme').value;
+  $('cuerpoInforme').innerHTML = '<div class="vacio">Cargando…</div>';
+  let lista = [];
+  try { lista = (await getDocs(query(collection(db, COL_FONO), where('mes', '==', mes)))).docs.map(d => d.data()); }
+  catch (e){ console.error(e); $('cuerpoInforme').innerHTML = '<div class="vacio">No se pudo leer el informe.</div>'; return; }
+  const { por, tot } = resumenInforme(lista);
+  const n = v => v || 0;
+  $('cuerpoInforme').innerHTML = `<div class="informe">
+    <h3>Informe Fono Alegra (línea 1884) · ${esc(nombreMes(mes))}</h3>
+    <p class="sub">Defensa Pública Lima Centro · casos nuevos asignados por Fono Alegra</p>
+    <div class="tabla-wrap" style="max-height:none"><table>
+      <thead><tr><th>Área</th><th>Hombres</th><th>Mujeres</th><th>Total población</th><th>LGTB</th></tr></thead>
+      <tbody>${Object.entries(por).map(([a, x]) => `<tr><td>${esc(a)}</td><td class="num">${n(x.h)}</td><td class="num">${n(x.m)}</td><td class="num"><b>${x.h + x.m}</b></td><td class="num">${n(x.lgtb)}</td></tr>`).join('')}
+      <tr class="total"><td>TOTAL</td><td class="num">${tot.h}</td><td class="num">${tot.m}</td><td class="num">${tot.h + tot.m}</td><td class="num">${tot.lgtb}</td></tr></tbody>
+    </table></div>
+    ${tot.sin ? `<p class="ayuda">${tot.sin} caso${tot.sin === 1 ? '' : 's'} sin dato de sexo (registrado${tot.sin === 1 ? '' : 's'} antes de pedir el sexo): no entra${tot.sin === 1 ? '' : 'n'} en Total población.<span class="no-imprimir"> Puedes completarlo con ✎ Editar en la pestaña Llamadas.</span></p>` : ''}
+  </div>`;
+}
+$('selMesInforme').addEventListener('change', pintarInforme);
+$('btnImprimirInforme').onclick = () => window.print();
 
 // ================= Conteo (como la pestaña "Conteo" de la hoja) =================
 async function pintarConteo(){
@@ -603,7 +672,7 @@ document.querySelector('.pestanas').addEventListener('click', e => {
   $('secLlamadas').hidden = p !== 'llamadas';
   $('secConteo').hidden = p !== 'conteo';
   $('secTurnos').hidden = p !== 'turnos';
-  if (p === 'conteo') pintarConteo();
+  if (p === 'conteo'){ pintarInforme(); pintarConteo(); }
   if (p === 'turnos' && !TURNOS) cargarTurnos();
 });
 
@@ -634,6 +703,7 @@ onAuthStateChanged(auth, async user => {
     $('btnRegistrar').hidden = !(puedeEditar() && nivelSeccion(f, 'drive1') === 'editar');
     const hoy = hoyIso(), anioActual = Number(hoy.slice(0, 4));
     $('selMes').value = hoy.slice(0, 7);
+    $('selMesInforme').value = hoy.slice(0, 7);
     $('selAnio').innerHTML = Array.from({ length: anioActual - 2024 }, (_, i) => anioActual - i).map(a => `<option>${a}</option>`).join('');
     const [sd, sl] = await Promise.all([getDocs(collection(db, 'defensores')), getDocs(collection(db, 'licencias')).catch(() => ({ docs: [] }))]);
     DEFS = sd.docs.map(d => ({ id: d.id, ...d.data() }))
