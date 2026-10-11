@@ -152,6 +152,8 @@
   /* Bloque Fono Alegra (columnas de la hoja del Drive 3) */
   .bloque-fono{border:1.5px solid var(--celeste-linea);background:#F4FAFD;border-radius:10px;padding:10px 12px}
   .titulo-fono{font-size:12.5px;font-weight:700;color:var(--azul);margin-bottom:4px}
+  /* "Pasar al mismo abogado": solo los datos de contacto (actualizan la fila del caso original) */
+  #bloqueFono.contacto .solo-nuevo{display:none !important}
   .dato-fijo{padding:9px 10px;border:1px dashed var(--linea);border-radius:8px;font-size:13px;font-weight:600;background:#fff}
   /* Titular de licencia: quién le apoya */
   .bloque-apoyo{border:1.5px solid var(--dorado);background:#FFF8E8;border-radius:10px;padding:10px 12px}
@@ -484,15 +486,16 @@
 
     <!-- Origen Fono Alegra: las columnas de la hoja de Fono Alegra que el Drive 1 no tiene. Se guardan SOLO en el Drive 3 (fonoAlegra) -->
     <div class="bloque bloque-fono" id="bloqueFono" hidden>
-      <div class="titulo-fono">Fono Alegra · se guarda en el Drive 3 (datos personales, solo lo ve quien tiene acceso al Drive 3)</div>
+      <div class="titulo-fono" id="tituloFono">Fono Alegra · se guarda en el Drive 3 (datos personales, solo lo ve quien tiene acceso al Drive 3)</div>
       <div id="fonoSinPermiso" class="ayuda" hidden>No tienes permiso de Editar en el Drive 3: la llamada se registra en el Drive 1, pero su fila del Drive 3 la completa quien tenga ese permiso (al editar este caso).</div>
+      <div class="ayuda" id="fonoNotaContacto" hidden></div>
       <div id="fonoCampos">
         <div class="rejilla">
-          <div>
+          <div class="solo-nuevo">
             <label class="campo" for="fSubSede">Sub sede derivada <span class="obl">*</span></label>
             <select id="fSubSede"><option value="">— Elegir —</option><option>LIMA CENTRO</option><option>MIRAFLORES</option></select>
           </div>
-          <div>
+          <div class="solo-nuevo">
             <label class="campo">Dir. Distrital · Día de turno</label>
             <div class="dato-fijo" id="fDiaTurno">LIMA CENTRO · —</div>
           </div>
@@ -512,31 +515,31 @@
             <label class="campo" for="fDireccion">Dirección domiciliaria</label>
             <input type="text" id="fDireccion" class="may" autocomplete="off">
           </div>
-          <div class="ancho">
+          <div class="ancho solo-nuevo">
             <label class="campo" for="fGestHechas">Gestiones realizadas</label>
             <textarea id="fGestHechas" class="may"></textarea>
           </div>
-          <div class="ancho">
+          <div class="ancho solo-nuevo">
             <label class="campo" for="fGestPorHacer">Gestiones por realizar</label>
             <textarea id="fGestPorHacer" class="may"></textarea>
           </div>
-          <div class="ancho">
+          <div class="ancho solo-nuevo">
             <label class="campo" for="fDificultades">Dificultades presentadas</label>
             <textarea id="fDificultades" class="may"></textarea>
           </div>
-          <div>
+          <div class="solo-nuevo">
             <label class="campo" for="fAcepta">Usuario acepta el patrocinio</label>
             <select id="fAcepta"><option>Sí</option><option>No</option></select>
           </div>
-          <div>
+          <div class="solo-nuevo">
             <label class="campo" for="fCarpetaCreada">Carpeta defensorial creada</label>
             <select id="fCarpetaCreada"><option>No</option><option>Sí</option></select>
           </div>
-          <div>
+          <div class="solo-nuevo">
             <label class="campo" for="fTrato">Se verificó trato al usuario con llamada</label>
             <select id="fTrato"><option>Sí</option><option>No</option></select>
           </div>
-          <div>
+          <div class="solo-nuevo">
             <label class="campo" for="fSatisfaccion">Nivel de satisfacción</label>
             <select id="fSatisfaccion"><option>Buena</option><option>Regular</option><option>Mala</option></select>
           </div>
@@ -1164,6 +1167,10 @@ $('cuerpo').addEventListener('keydown', e => { if (e.key === 'Enter' && e.target
 // su registro público y lo que usa la búsqueda de nombres. Queda solo en el Registro de cambios, sin datos personales.
 let avisoDrive3 = false;
 async function borrarSiExiste(col, id){
+  if (col === COL_FONO && !puedeFono()){
+    // Sin acceso al Drive 3 no se puede leer la llamada; se borra directamente (si no existe, no pasa nada)
+    try { await deleteDoc(doc(db, col, id)); return 0; } catch (e){ avisoDrive3 = true; return 0; }
+  }
   try { const s = await getDoc(doc(db, col, id)); if (s.exists()){ await deleteDoc(s.ref); return 1; } }
   catch (e){ if (col === COL_FONO) avisoDrive3 = true; console.warn('No se pudo borrar ' + col + '/' + id, e); }
   return 0;
@@ -1937,9 +1944,44 @@ function defensorDeTurno(clave){
   return hallados.length === 1 ? hallados[0] : null;
 }
 function diaDeTurno(fecha){ return fecha ? new Date(fecha + 'T12:00:00').getDay() : null; }
-function fonoAplica(){
-  if (origen !== ORIGEN_FONO) return false;
-  return modo === 'nuevo' || (modo === 'antecedente' && $('fTipoDoc').value === TIPO_MISMO_ABOGADO);
+// El Drive 3 (Fono Alegra) es solo para CASOS NUEVOS. Si el usuario vuelve a llamar ("Pasar al mismo abogado"):
+// se registra solo como antecedente en el Drive 1, sin fila nueva en el Drive 3; si el caso original tiene fila en el Drive 3,
+// se actualizan ahí los datos de contacto que cambiaron y se anota "Volvió a llamar el …" en Gestiones realizadas.
+function fonoAplica(){ return origen === ORIGEN_FONO && modo === 'nuevo'; }
+function fonoContacto(){ return origen === ORIGEN_FONO && modo === 'antecedente' && !editandoId && !!padre && $('fTipoDoc').value === TIPO_MISMO_ABOGADO; }
+let filaOriginal = null, filaOriginalDe = '';
+const CONTACTO = [['fDni', 'dni'], ['fTelefono', 'telefono'], ['fCorreoUsuario', 'correo'], ['fDireccion', 'direccion']];
+async function cargarFilaOriginal(){
+  const id = padre.id;
+  if (filaOriginalDe === id) return;
+  filaOriginalDe = id; filaOriginal = null;
+  $('fonoCampos').hidden = true;
+  if (!puedeFono()){ $('fonoNotaContacto').textContent = 'Volvió a llamar. Sin permiso de Editar en el Drive 3 no se actualizan sus datos de contacto.'; return; }
+  try {
+    const s = await getDoc(doc(db, COL_FONO, id));
+    if (filaOriginalDe !== id) return;
+    if (s.exists()){
+      filaOriginal = s.data();
+      CONTACTO.forEach(([el, k]) => $(el).value = filaOriginal[k] || '');
+      $('fonoNotaContacto').textContent = 'Volvió a llamar. Si cambió algún dato de contacto, corrígelo aquí: se actualiza la fila del caso original en el Drive 3 y se anota "Volvió a llamar el ' + fechaCorta($('fFecha').value || hoyIso()) + '" en Gestiones. No se crea otra fila.';
+      $('fonoCampos').hidden = false;
+      tomarFotoForm();
+    } else $('fonoNotaContacto').textContent = 'Volvió a llamar. El caso original no tiene fila en el Drive 3: los datos de contacto de esta llamada no se guardan.';
+  } catch (e){ console.warn(e); $('fonoNotaContacto').textContent = 'No se pudo leer la fila del Drive 3 del caso original.'; }
+}
+async function actualizarFilaOriginal(id, fecha){
+  try {
+    const cambios = {};
+    CONTACTO.forEach(([el, k]) => {
+      let v = $(el).value.trim();
+      if (k === 'correo') v = v.toLowerCase();
+      if (k === 'direccion') v = may(v);
+      if (v && v !== (filaOriginal[k] || '')) cambios[k] = v;
+    });
+    const nota = 'VOLVIÓ A LLAMAR EL ' + fechaCorta(fecha);
+    cambios.gestionesRealizadas = (filaOriginal.gestionesRealizadas ? filaOriginal.gestionesRealizadas + '\n' : '') + nota;
+    await updateDoc(doc(db, COL_FONO, id), { ...cambios, actualizadoPor: usuario.correo, actualizadoEnMs: Date.now() });
+  } catch (err){ console.error(err); avisar('Se guardó en el Drive 1, pero no se pudo actualizar la fila del Drive 3 del caso original.', 7000); }
 }
 const puedeFono = () => usuario && usuario.drive3 === 'editar';
 function areaFono(){ return modo === 'antecedente' && padre ? (padre.area || $('fArea').value) : $('fArea').value; }
@@ -1963,8 +2005,13 @@ function cargaDelMes(mes){
 }
 let abogadoFonoManual = false, turnoFono = 0;
 function actualizarBloqueFono(){
-  const aplica = fonoAplica();
+  const contacto = fonoContacto();
+  const aplica = fonoAplica() || contacto;
   $('bloqueFono').hidden = !aplica;
+  $('bloqueFono').classList.toggle('contacto', contacto);
+  $('tituloFono').textContent = contacto ? 'Fono Alegra · el usuario volvió a llamar (no se crea fila nueva en el Drive 3)' : 'Fono Alegra · se guarda en el Drive 3 (datos personales, solo lo ve quien tiene acceso al Drive 3)';
+  $('fonoNotaContacto').hidden = !contacto;
+  if (contacto){ $('fonoSinPermiso').hidden = true; cargarFilaOriginal(); return; }
   if (!aplica){
     if ($('ayudaAbogado').dataset.fono && !editandoId){ delete $('ayudaAbogado').dataset.fono; llenarAbogados($('fAbogado').value); $('ayudaAbogado').textContent = AYUDA_ABOGADO; }
     return;
@@ -2013,6 +2060,7 @@ function limpiarFono(){
   ['fSubSede', 'fDni', 'fTelefono', 'fCorreoUsuario', 'fDireccion', 'fGestHechas', 'fGestPorHacer', 'fDificultades'].forEach(i => $(i).value = '');
   $('fAcepta').value = 'Sí'; $('fCarpetaCreada').value = 'No'; $('fTrato').value = 'Sí'; $('fSatisfaccion').value = 'Buena';
   abogadoFonoManual = false; turnoFono++; delete $('ayudaAbogado').dataset.fono;
+  filaOriginal = null; filaOriginalDe = '';
 }
 function llenarFono(f){
   $('fSubSede').value = f.subSede || ''; $('fDni').value = f.dni || ''; $('fTelefono').value = f.telefono || '';
@@ -2649,6 +2697,7 @@ $('btnGuardarForm').onclick = async () => {
     if (esAnt) await recalcularEstado(padre.id);
     if (esAnt && !editandoId && tipoDoc === 'Informe del defensor') await cerrarPlazosDelCaso(padre.id, idFila);
     if (conFono) await guardarFono(idFila, datos, !editandoId);
+    if (!editandoId && esAnt && origen === ORIGEN_FONO && tipoDoc === TIPO_MISMO_ABOGADO && filaOriginal && filaOriginalDe === padre.id && puedeFono()) await actualizarFilaOriginal(padre.id, fecha);
     CARGA_MES.clear();
     cerrarForm(false);
     avisar(editandoId ? 'Cambios guardados' : 'Registrado');

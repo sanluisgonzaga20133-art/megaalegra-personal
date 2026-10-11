@@ -204,7 +204,7 @@
     <section id="secConteo" hidden>
       <div class="barra">
         <label>Año <select id="selAnio"></select></label>
-        <span class="ayuda">Llamadas atendidas por defensor y mes (todas: caso nuevo y mismo abogado). La columna Fono Alegra de la Agenda cuenta solo los casos nuevos.</span>
+        <span class="ayuda">Casos nuevos por Fono Alegra, por defensor y mes (las llamadas de quien vuelve a llamar quedan como antecedente en el Drive 1 y no se cuentan aquí).</span>
       </div>
       <div class="conteos" id="conteos"></div>
     </section>
@@ -317,7 +317,7 @@ async function cargarMes(){
   $('cuerpoLlamadas').innerHTML = `<tr><td colspan="${COLUMNAS.length + 1}" class="vacio">Cargando…</td></tr>`;
   try {
     const snap = await getDocs(query(collection(db, COL_FONO), where('mes', '==', mes)));
-    LLAMADAS = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    LLAMADAS = snap.docs.map(d => ({ id: d.id, ...d.data() })).filter(f => f.casoNuevo !== false); // solo casos nuevos
   } catch (e){ console.error(e); LLAMADAS = []; avisar('No se pudieron leer las llamadas (' + (e.code || e.message) + ').', 7000); }
   pintarLlamadas();
   revisarFaltantes(mes);
@@ -325,7 +325,7 @@ async function cargarMes(){
 async function cargarTodas(){
   if (TODAS) return TODAS;
   const snap = await getDocs(collection(db, COL_FONO));
-  TODAS = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+  TODAS = snap.docs.map(d => ({ id: d.id, ...d.data() })).filter(f => f.casoNuevo !== false);
   return TODAS;
 }
 function pintarLlamadas(){
@@ -404,7 +404,7 @@ async function revisarFaltantes(mes){
   try {
     const snap = await getDocs(query(collection(db, 'casos'), where('mes', '==', mes)));
     const ids = new Set(LLAMADAS.map(f => f.id));
-    const faltan = snap.docs.map(d => ({ id: d.id, ...d.data() })).filter(r => r.origen === ORIGEN_FONO && !ids.has(r.id));
+    const faltan = snap.docs.map(d => ({ id: d.id, ...d.data() })).filter(r => r.origen === ORIGEN_FONO && !r.padreId && !ids.has(r.id));
     if (!faltan.length) return;
     $('faltanFilas').innerHTML = `<div class="advertencia">⚠ ${faltan.length} registro${faltan.length === 1 ? '' : 's'} de Fono Alegra en el Drive 1 sin su fila aquí. Ábrelo en el Drive 1 con Editar para completar los datos del Drive 3: ` +
       faltan.sort((a, b) => a.fecha.localeCompare(b.fecha)).map(r => `<a href="drive1.html?editar=${encodeURIComponent(r.id)}">${esc(fechaCorta(r.fecha))} · ${esc(r.usuario || '(sin nombre)')}</a>`).join(' · ') + '</div>';
@@ -470,7 +470,7 @@ async function pintarConteo(){
   const anio = Number($('selAnio').value);
   $('conteos').innerHTML = '<div class="vacio">Cargando…</div>';
   let lista = [];
-  try { lista = (await getDocs(query(collection(db, COL_FONO), where('anio', '==', anio)))).docs.map(d => d.data()); }
+  try { lista = (await getDocs(query(collection(db, COL_FONO), where('anio', '==', anio)))).docs.map(d => d.data()).filter(f => f.casoNuevo !== false); }
   catch (e){ console.error(e); $('conteos').innerHTML = '<div class="vacio">No se pudo leer el conteo.</div>'; return; }
   const grupos = {};
   lista.forEach(f => {

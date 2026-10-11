@@ -504,7 +504,9 @@ async function revisarRestos(){
     const recientes = sinCasoAsig.filter(a => a.desdeDrive1 || (a.fecha || '') >= INICIO_SINCRONIA);
     RESTOS = {
       fono: { titulo: 'Llamadas del Drive 3 (Fono Alegra) sin registro en el Drive 1', col: 'fonoAlegra',
-        lista: fono.filter(f => !idsCasos.has(f.registroId || f.id)).map(f => ({ id: f.id, fecha: f.fecha, usuario: f.usuario, extra: f.defensorNombre })) },
+        lista: fono.filter(f => f.casoNuevo !== false && !idsCasos.has(f.registroId || f.id)).map(f => ({ id: f.id, fecha: f.fecha, usuario: f.usuario, extra: f.defensorNombre })) },
+      fonoAnte: { titulo: 'Filas del Drive 3 que son antecedentes ("mismo abogado"): el Drive 3 ahora es solo para casos nuevos', col: 'fonoAlegra',
+        lista: fono.filter(f => f.casoNuevo === false).map(f => { const o = casos.find(c => c.id === f.casoId); return { id: f.id, fecha: f.fecha, usuario: f.usuario, extra: 'Caso original: ' + (o ? (o.codigo || '(sin código)') + ' · ' + (o.abogadoNombre || '') : 'ya no existe') }; }) },
       asig: { titulo: 'Asignaciones de la Agenda sin caso en el Drive 1 (desde el 26/09/2026)', col: 'asignaciones',
         lista: recientes.map(a => ({ id: a.id, fecha: a.fecha, usuario: a.derivadoUsuario || '—', extra: nombreDef(a.defensorId) + ' · ' + (a.categoria || '') })) },
       reas: { titulo: 'Reasignaciones de casos que ya no existen', col: 'reasignaciones',
@@ -517,15 +519,31 @@ async function revisarRestos(){
         lista: publ.filter(p => !idsCasos.has(p.id)).map(p => ({ id: p.id, fecha: p.fecha || '', usuario: '—', extra: '' })) }
     };
     const antiguas = sinCasoAsig.length - recientes.length;
+    // Cada llamada del Drive 3 y a qué caso apunta (para revisar las que no salen como restos)
+    const estadoLlamada = f => {
+      const reg = casos.find(c => c.id === (f.registroId || f.id));
+      if (!reg) return { orden: 0, texto: 'NO EXISTE en el Drive 1' };
+      const raiz = reg.padreId ? casos.find(c => c.id === reg.padreId) : reg;
+      const enAgenda = raiz && (idsAsig.has(raiz.asignacionId || raiz.id));
+      const donde = (reg.padreId ? 'Antecedente (' + (reg.tipoDoc || '') + ') del caso ' + (raiz ? (raiz.codigo || '(sin código)') : 'que YA NO EXISTE') : 'Caso nuevo ' + (reg.codigo || '(sin código)')) +
+        ' · año ' + (reg.anio || '¿?') + ' · Drive 1: ' + (reg.usuario || '—') + ' · ' + (reg.abogadoActualNombre || reg.abogadoNombre || '');
+      const mismoNombre = !reg.usuario || !f.usuario || reg.usuario.trim().toUpperCase() === f.usuario.trim().toUpperCase();
+      return { orden: !raiz ? 1 : !enAgenda ? 2 : !mismoNombre ? 2.5 : 3, texto: donde + (raiz && !enAgenda ? ' · SIN asignación en la Agenda' : '') + (mismoNombre ? '' : ' · NOMBRE DISTINTO al de la llamada'), id: reg.id };
+    };
+    const llamadas = fono.map(f => ({ f, e: estadoLlamada(f) })).sort((a, b) => a.e.orden - b.e.orden || (a.f.fecha || '').localeCompare(b.f.fecha || ''));
+    const diagnostico = `<details style="margin-top:12px"><summary style="cursor:pointer;font-weight:700;font-size:13px">Ver todas las llamadas del Drive 3 y a qué caso apuntan (${llamadas.length})</summary>
+      <div class="tabla-wrap" style="max-height:340px;margin-top:6px"><table><thead><tr><th>Fecha</th><th>Usuario (Drive 3)</th><th>Tipo</th><th>Apunta a</th><th></th></tr></thead><tbody>
+      ${llamadas.map(({ f, e }) => `<tr><td style="white-space:nowrap">${fechaCorta(f.fecha || '')}</td><td>${esc(f.usuario || '—')}</td><td>${f.casoNuevo === false ? 'Mismo abogado' : 'Caso nuevo'}</td><td>${esc(e.texto)}</td><td>${e.id ? `<a href="drive1.html?caso=${encodeURIComponent(e.id)}" target="_blank" rel="noopener">Ir al caso ↗</a>` : ''}</td></tr>`).join('')}
+      </tbody></table></div></details>`;
     const grupos = Object.entries(RESTOS);
-    const totalRestos = grupos.reduce((n, [, g]) => n + g.lista.length, 0);
+    const totalRestos = grupos.filter(([k]) => k !== 'fonoAnte').reduce((n, [, g]) => n + g.lista.length, 0);
     caja.innerHTML = `<p class="ayuda"><b>${totalRestos ? totalRestos + ' resto' + (totalRestos === 1 ? '' : 's') + ' en total.' : 'No hay restos sueltos.'}</b>${antiguas ? ' Además hay ' + antiguas + (antiguas === 1 ? ' asignación' : ' asignaciones') + ' de la Agenda anteriores al 26/09/2026 sin fila en el Drive 1: son registros antiguos y se dejan.' : ''}</p>` +
       grupos.filter(([, g]) => g.lista.length).map(([k, g]) => `<div style="margin-top:10px">
         <h3 style="font-size:14px">${esc(g.titulo)}: ${g.lista.length}</h3>
         <div class="tabla-wrap" style="max-height:260px"><table><thead><tr><th>Fecha</th><th>Usuario</th><th>Detalle</th></tr></thead><tbody>
         ${g.lista.sort((a, b) => (a.fecha || '').localeCompare(b.fecha || '')).map(x => `<tr><td style="white-space:nowrap">${fechaCorta(x.fecha || '')}</td><td>${esc(x.usuario || '—')}</td><td>${esc(x.extra || '')}</td></tr>`).join('')}
         </tbody></table></div>
-        <button class="btn chico" style="margin-top:6px" data-borrar-restos="${k}">Borrar estos ${g.lista.length}</button></div>`).join('');
+        <button class="btn chico" style="margin-top:6px" data-borrar-restos="${k}">Borrar estos ${g.lista.length}</button></div>`).join('') + diagnostico;
   } catch (e){ console.error(e); caja.innerHTML = '<p class="ayuda">No se pudo revisar (' + esc(e.code || e.message) + ').</p>'; }
 }
 $('btnRevisarRestos').onclick = revisarRestos;
