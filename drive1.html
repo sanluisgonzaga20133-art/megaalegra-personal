@@ -708,7 +708,7 @@ import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/fireba
 import { getAuth, onAuthStateChanged, signInWithEmailAndPassword, signOut }
   from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
 import { initializeFirestore, collection, doc, getDoc, getDocs, setDoc, updateDoc, deleteDoc, deleteField,
-  query, where, onSnapshot, serverTimestamp }
+  query, where, onSnapshot, serverTimestamp, writeBatch, arrayUnion }
   from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 
 const fbApp = initializeApp({
@@ -1167,25 +1167,41 @@ $('cuerpo').addEventListener('change', e => {
 });
 $('cuerpo').addEventListener('keydown', e => { if (e.key === 'Enter' && e.target.dataset.campo) e.target.blur(); });
 
+// ---------- "Todo o nada": al guardar, borrar o corregir, todo va en UN solo paquete ----------
+// Primero se lee lo necesario; las escrituras se juntan y se guardan juntas al final. Si algo falla, no se guarda nada.
+// Las anotaciones del Registro de cambios se hacen después, solo si el paquete se guardó.
+let loteActual = null, notasDelLote = [];
+const W = {
+  set: (ref, data, opt) => { if (loteActual){ loteActual.set(ref, data, opt || {}); return Promise.resolve(); } return setDoc(ref, data, opt || {}); },
+  update: (ref, data) => { if (loteActual){ loteActual.update(ref, data); return Promise.resolve(); } return updateDoc(ref, data); },
+  del: ref => { if (loteActual){ loteActual.delete(ref); return Promise.resolve(); } return deleteDoc(ref); }
+};
+async function enUnSoloPaso(fn){
+  loteActual = writeBatch(db); notasDelLote = [];
+  try {
+    const r = await fn();
+    const lote = loteActual; loteActual = null;
+    await lote.commit();
+    const notas = notasDelLote; notasDelLote = [];
+    for (const n of notas) await n();
+    return r;
+  } finally { loteActual = null; notasDelLote = []; }
+}
+// Drive 3 = depósito de datos personales: quien edita el Drive 1 guarda, cambia y borra llamadas, pero solo las LEE quien tiene acceso al Drive 3
+const puedeLeerFono = () => !!usuario && ['ver', 'editar'].includes(usuario.drive3);
+const puedeEscribirFono = () => !!usuario && (usuario.drive3 === 'editar' || usuario.rol === 'abogado');
+
 // ---------- Borrar: el caso y TODO lo relacionado ----------
 // Caso nuevo: sus antecedentes y opiniones (avisa antes), su llamada del Drive 3, su asignación y reasignaciones de la Agenda,
 // su registro público y lo que usa la búsqueda de nombres. Queda solo en el Registro de cambios, sin datos personales.
 let avisoDrive3 = false;
-async function borrarSiExiste(col, id){
-  if (col === COL_FONO && !puedeFono()){
-    // Sin acceso al Drive 3 no se puede leer la llamada; se borra directamente (si no existe, no pasa nada)
-    try { await deleteDoc(doc(db, col, id)); return 0; } catch (e){ avisoDrive3 = true; return 0; }
-  }
-  try { const s = await getDoc(doc(db, col, id)); if (s.exists()){ await deleteDoc(s.ref); return 1; } }
-  catch (e){ if (col === COL_FONO) avisoDrive3 = true; console.warn('No se pudo borrar ' + col + '/' + id, e); }
-  return 0;
-}
+// En el paquete: borrar un documento que no existe no da error, así que no hace falta leerlo (el Drive 3 no se lee)
+async function borrarSiExiste(col, id){ await W.del(doc(db, col, id)); return 0; }
 async function borrarAntecedenteDatos(h){
-  await deleteDoc(doc(db, COL, h.id));
-  cache.delete(h.id);
+  await W.del(doc(db, COL, h.id));
   await borrarSiExiste('reasignaciones', h.id);
   await borrarSiExiste('opiniones', h.id);
-  return borrarSiExiste(COL_FONO, h.id);
+  await borrarSiExiste(COL_FONO, h.id);
 }
 async function borrarCasoCompleto(r, preguntar = true){
   const hijos = (await getDocs(query(collection(db, COL), where('padreId', '==', r.id)))).docs.map(d => ({ id: d.id, ...d.data() }));
@@ -1195,25 +1211,24 @@ async function borrarCasoCompleto(r, preguntar = true){
       '.\n\nAl borrar el caso se borran también sus antecedentes, su llamada del Drive 3 y su registro en la Agenda.\n\n¿Borrar todo?')) return false;
   }
   avisoDrive3 = false;
-  let llamadas = 0;
-  for (const h of hijos) llamadas += await borrarAntecedenteDatos(h);
   const idA = idAsignacion(r);
-  try {
-    const ligadas = await getDocs(query(collection(db, 'reasignaciones'), where('casoId', '==', idA)));
-    await Promise.all(ligadas.docs.map(d => deleteDoc(d.ref)));
-  } catch (e){ console.warn('No se pudieron borrar las reasignaciones', e); }
-  await borrarSiExiste('asignaciones', idA);
-  try { const op = await getDocs(query(collection(db, 'opiniones'), where('casoId', '==', r.id))); await Promise.all(op.docs.map(d => deleteDoc(d.ref))); } catch (e){ /* sin acceso */ }
-  llamadas += await borrarSiExiste(COL_FONO, r.id);
-  try { const f = await getDocs(query(collection(db, COL_FONO), where('casoId', '==', r.id))); await Promise.all(f.docs.map(d => deleteDoc(d.ref))); llamadas += f.size; } catch (e){ avisoDrive3 = true; }
-  // Solo se avisa si de verdad había una llamada de Fono Alegra
-  avisoDrive3 = avisoDrive3 && [r, ...hijos].some(x => x.origen === ORIGEN_FONO);
-  await borrarSiExiste('casosPublicos', r.id);
-  await deleteDoc(doc(db, COL, r.id));
-  cache.delete(r.id);
-  await registrarCambio('Borró caso con todo lo relacionado', 'casos', r.id,
-    { codigo: r.codigo || '', fecha: r.fecha || '', area: r.area || '', materia: r.materia || '', abogado: r.abogadoActualNombre || r.abogadoNombre || '', antecedentes: hijos.length, llamadasDrive3: llamadas }, {});
-  if (avisoDrive3) avisar('Su llamada del Drive 3 no se pudo borrar (hace falta Editar en el Drive 3). Saldrá en la revisión de restos de Personal y permisos.', 9000);
+  // Primero se lee lo que hay que borrar (la Agenda; el Drive 3 solo si se tiene acceso)
+  const ligadas = (await getDocs(query(collection(db, 'reasignaciones'), where('casoId', '==', idA)))).docs.map(d => d.ref);
+  const opiniones = (await getDocs(query(collection(db, 'opiniones'), where('casoId', '==', r.id)))).docs.map(d => d.ref);
+  const otrasLlamadas = puedeLeerFono() ? (await getDocs(query(collection(db, COL_FONO), where('casoId', '==', r.id)))).docs.map(d => d.ref) : [];
+  // Luego, todo de una vez
+  // Cada documento una sola vez
+  const porBorrar = new Map();
+  const agregar = ref => porBorrar.set(ref.path, ref);
+  hijos.forEach(h => [COL, 'reasignaciones', 'opiniones', COL_FONO].forEach(c => agregar(doc(db, c, h.id))));
+  [...ligadas, ...opiniones, ...otrasLlamadas].forEach(agregar);
+  [['asignaciones', idA], [COL_FONO, r.id], ['casosPublicos', r.id], [COL, r.id]].forEach(([c, i]) => agregar(doc(db, c, i)));
+  await enUnSoloPaso(async () => {
+    for (const ref of porBorrar.values()) await W.del(ref);
+    await registrarCambio('Borró caso con todo lo relacionado', 'casos', r.id,
+      { codigo: r.codigo || '', fecha: r.fecha || '', area: r.area || '', materia: r.materia || '', abogado: r.abogadoActualNombre || r.abogadoNombre || '', antecedentes: hijos.length }, {});
+  });
+  [r, ...hijos].forEach(x => cache.delete(x.id));
   return true;
 }
 async function borrar(id){
@@ -1227,27 +1242,14 @@ async function borrar(id){
       pintar();
       return;
     }
-    avisoDrive3 = false;
-    await deleteDoc(doc(db, COL, id));
-    cache.delete(id);
-    await borrarSiExiste(COL_FONO, id);
-    avisoDrive3 = avisoDrive3 && r.origen === ORIGEN_FONO;
-    await registrarCambio('Borró antecedente', 'casos', id, { tipo: r.tipoDoc || '', fecha: r.fecha || '', caso: r.padreCodigo || '', abogado: r.abogadoNombre || '' }, {});
-    if (avisoDrive3) avisar('Su llamada del Drive 3 no se pudo borrar (hace falta Editar en el Drive 3).', 8000);
-    if (r && r.padreId){
-      // Si era una devolución o un cambio de abogado, también sale su movimiento de la Agenda
-      if (await existe('reasignaciones', id)) await deleteDoc(doc(db, 'reasignaciones', id));
-      // Si era una devolución (derivación), el caso vuelve a contar en la Agenda
-      if (r.tipoDoc === TIPO_OPINION && await existe('opiniones', id)) await deleteDoc(doc(db, 'opiniones', id));
+    // Antecedente: su documento, su movimiento en la Agenda, su opinión y su llamada, todo de una vez
+    await enUnSoloPaso(async () => {
+      await borrarAntecedenteDatos(r);
       if (esDerivacion(r.tipoDoc)) await quitarDerivacion(idAsignacion(cache.get(r.padreId) || { id: r.padreId }), id);
-      await recalcularEstado(r.padreId);
-    } else if (r){
-      // Caso nuevo: sale también de la Agenda (con sus reasignaciones)
-      const idA = idAsignacion(r);
-      const ligadas = await getDocs(query(collection(db, 'reasignaciones'), where('casoId', '==', idA)));
-      await Promise.all(ligadas.docs.map(d => deleteDoc(d.ref)));
-      if (await existe('asignaciones', idA)) await deleteDoc(doc(db, 'asignaciones', idA));
-    }
+      await recalcularEstado(r.padreId, { id, borrar: true });
+      await registrarCambio('Borró antecedente', 'casos', id, { tipo: r.tipoDoc || '', fecha: r.fecha || '', caso: r.padreCodigo || '', abogado: r.abogadoNombre || '' }, {});
+    });
+    cache.delete(id);
     avisar('Registro borrado (también en la Agenda si correspondía)');
   } catch (err){ errorAlGuardar(err); }
   pintar();
@@ -1264,16 +1266,19 @@ function textoEstado(r){
     default: return '';
   }
 }
-async function recalcularEstado(padreId){
+async function recalcularEstado(padreId, ajuste = null){
   const snap = await getDocs(query(collection(db, COL), where('padreId', '==', padreId)));
-  const hijos = snap.docs.map(d => d.data()).filter(h => h.estadoTexto).sort(ordenRegistro);
+  // ajuste: { id, data } (se está guardando) o { id, borrar: true } (se está borrando)
+  let todos = snap.docs.map(d => ({ id: d.id, ...d.data() })).filter(h => !ajuste || h.id !== ajuste.id);
+  if (ajuste && !ajuste.borrar) todos.push({ id: ajuste.id, ...ajuste.data });
+  const hijos = todos.filter(h => h.estadoTexto).sort(ordenRegistro);
   const ultimo = hijos[hijos.length - 1];
   const cambios = { estado: ultimo ? ultimo.estadoTexto : '' };
-  const cambio = snap.docs.map(d => d.data()).filter(h => h.tipoDoc === 'Solicitud de cambio de abogado' && h.resultadoCambio === 'Procede (reasignado)').sort(ordenRegistro).pop();
+  const cambio = todos.filter(h => h.tipoDoc === 'Solicitud de cambio de abogado' && h.resultadoCambio === 'Procede (reasignado)').sort(ordenRegistro).pop();
   const padreDoc = cache.get(padreId);
   const idA = padreDoc ? idAsignacion(padreDoc) : padreId;
   // Si el caso se reasignó desde la Agenda (no por un cambio de abogado del Drive 1), su abogado actual se conserva
-  const idsHijos = new Set(snap.docs.map(d => d.id));
+  const idsHijos = new Set([...snap.docs.map(d => d.id), ...(ajuste ? [ajuste.id] : [])]);
   let reasignadoEnAgenda = false;
   if (!cambio){
     try {
@@ -1283,9 +1288,9 @@ async function recalcularEstado(padreId){
   }
   if (cambio){ Object.assign(cambios, { abogadoActualId: cambio.abogadoId, abogadoActualNombre: cambio.abogadoNombre, abogadoActualCelular: cambio.abogadoCelular || '', abogadoActualCorreo: cambio.abogadoCorreo || '' }); }
   else if (!reasignadoEnAgenda) Object.assign(cambios, { abogadoActualId: deleteField(), abogadoActualNombre: deleteField(), abogadoActualCelular: deleteField(), abogadoActualCorreo: deleteField() });
-  await updateDoc(doc(db, COL, padreId), cambios);
+  await W.update(doc(db, COL, padreId), cambios);
   if (!cambio && reasignadoEnAgenda) return;
-  if (await existe('asignaciones', idA)) await updateDoc(doc(db, 'asignaciones', idA), { abogadoActualId: cambio ? cambio.abogadoId : deleteField() });
+  if (await existe('asignaciones', idA)) await W.update(doc(db, 'asignaciones', idA), { abogadoActualId: cambio ? cambio.abogadoId : deleteField() });
 }
 
 // ---------------- Historial del caso ----------------
@@ -1451,12 +1456,12 @@ async function sincronizarOpinion(id, datos, previo){
   try {
     const ref = doc(db, 'opiniones', id);
     if (datos.tipoDoc === TIPO_OPINION){
-      await setDoc(ref, { fecha: datos.fecha, mes: datos.fecha.slice(0, 7), area: padre.area || datos.area || '',
+      await W.set(ref, { fecha: datos.fecha, mes: datos.fecha.slice(0, 7), area: padre.area || datos.area || '',
         abogadoId: datos.abogadoId, abogadoNombre: datos.abogadoNombre, opinionNum: datos.opinionNum || 2,
         casoId: padre.id, asignacionId: idAsignacion(padre), usuario: padre.usuario || '',
         creadoPor: usuario.correo, creadoEnMs: (previo && previo.creadoEnMs) || Date.now() });
-    } else if (previo && previo.tipoDoc === TIPO_OPINION && await existe('opiniones', id)) await deleteDoc(ref);
-  } catch (err){ console.error(err); avisar('Se guardó en el Drive 1, pero no se pudo anotar la opinión para la Agenda.', 6000); }
+    } else if (previo && previo.tipoDoc === TIPO_OPINION && await existe('opiniones', id)) await W.del(ref);
+  } catch (err){ if (loteActual) throw err; console.error(err); avisar('Se guardó en el Drive 1, pero no se pudo anotar la opinión para la Agenda.', 6000); }
 }
 // Opiniones registradas antes de este cambio: el administrador las copia al abrir el Drive 1
 let opinionesCopiadas = false;
@@ -1961,7 +1966,13 @@ async function cargarFilaOriginal(){
   if (filaOriginalDe === id) return;
   filaOriginalDe = id; filaOriginal = null;
   $('fonoCampos').hidden = true;
-  if (!puedeFono()){ $('fonoNotaContacto').textContent = 'Volvió a llamar. Sin permiso de Editar en el Drive 3 no se actualizan sus datos de contacto.'; return; }
+  if (!puedeLeerFono()){
+    // No puede ver la fila del caso original: escribe solo lo que cambió (si el caso no tiene fila en el Drive 3, no se guarda nada)
+    CONTACTO.forEach(([el]) => $(el).value = '');
+    if (puedeEscribirFono()){ $('fonoCampos').hidden = false; filaOriginal = null; }
+    $('fonoNotaContacto').textContent = 'Volvió a llamar. No puedes ver los datos del Drive 3: escribe solo los datos de contacto que hayan cambiado. Si el caso original tiene fila en el Drive 3, se actualizan ahí y se anota "Volvió a llamar"; si no tiene, no se guarda nada.';
+    return;
+  }
   try {
     const s = await getDoc(doc(db, COL_FONO, id));
     if (filaOriginalDe !== id) return;
@@ -1974,21 +1985,26 @@ async function cargarFilaOriginal(){
     } else $('fonoNotaContacto').textContent = 'Volvió a llamar. El caso original no tiene fila en el Drive 3: los datos de contacto de esta llamada no se guardan.';
   } catch (e){ console.warn(e); $('fonoNotaContacto').textContent = 'No se pudo leer la fila del Drive 3 del caso original.'; }
 }
-async function actualizarFilaOriginal(id, fecha){
+async function actualizarFilaOriginal(id, fecha, aCiegas = false){
   try {
     const cambios = {};
     CONTACTO.forEach(([el, k]) => {
       let v = $(el).value.trim();
       if (k === 'correo') v = v.toLowerCase();
       if (k === 'direccion') v = may(v);
-      if (v && v !== (filaOriginal[k] || '')) cambios[k] = v;
+      if (v && v !== ((filaOriginal || {})[k] || '')) cambios[k] = v;
     });
-    const nota = 'VOLVIÓ A LLAMAR EL ' + fechaCorta(fecha);
-    cambios.gestionesRealizadas = (filaOriginal.gestionesRealizadas ? filaOriginal.gestionesRealizadas + '\n' : '') + nota;
-    await updateDoc(doc(db, COL_FONO, id), { ...cambios, actualizadoPor: usuario.correo, actualizadoEnMs: Date.now() });
-  } catch (err){ console.error(err); avisar('Se guardó en el Drive 1, pero no se pudo actualizar la fila del Drive 3 del caso original.', 7000); }
+    // La nota se agrega a una lista, sin leer la fila (el Drive 3 la muestra dentro de "Gestiones realizadas")
+    cambios.rellamadas = arrayUnion('VOLVIÓ A LLAMAR EL ' + fechaCorta(fecha));
+    await W.update(doc(db, COL_FONO, id), { ...cambios, actualizadoPor: usuario.correo, actualizadoEnMs: Date.now() });
+  } catch (err){
+    if (loteActual) throw err;
+    // Sin acceso al Drive 3: si el caso original no tiene fila, no se guarda nada (es lo que corresponde)
+    if (aCiegas && err && err.code === 'not-found') return;
+    console.error(err); avisar('Se guardó en el Drive 1, pero no se pudo actualizar la fila del Drive 3 del caso original.', 7000);
+  }
 }
-const puedeFono = () => usuario && usuario.drive3 === 'editar';
+const puedeFono = () => puedeEscribirFono(); // (nombre antiguo)
 function areaFono(){ return modo === 'antecedente' && padre ? (padre.area || $('fArea').value) : $('fArea').value; }
 function posiblesDeTurno(){
   const dia = diaDeTurno($('fFecha').value), sede = $('fSubSede').value;
@@ -2021,8 +2037,11 @@ function actualizarBloqueFono(){
     if ($('ayudaAbogado').dataset.fono && !editandoId){ delete $('ayudaAbogado').dataset.fono; llenarAbogados($('fAbogado').value); $('ayudaAbogado').textContent = AYUDA_ABOGADO; }
     return;
   }
-  $('fonoSinPermiso').hidden = puedeFono();
-  $('fonoCampos').hidden = !puedeFono();
+  $('fonoSinPermiso').hidden = puedeLeerFono() || !puedeEscribirFono();
+  $('fonoCampos').hidden = !puedeEscribirFono();
+  if (!puedeLeerFono()) $('fonoSinPermiso').textContent = editandoId
+    ? 'No tienes acceso al Drive 3: no puedes ver lo guardado de esta llamada. Lo que escribas aquí reemplaza ese dato; lo que dejes vacío no cambia.'
+    : 'Lo que escribas aquí se guarda en el Drive 3 (datos personales). Después no podrás verlo: solo lo ve quien tiene acceso al Drive 3.';
   const dia = diaDeTurno($('fFecha').value);
   $('fDiaTurno').textContent = 'LIMA CENTRO · ' + (dia === null ? '—' : DIAS_SEMANA[dia] + (dia === 0 || dia === 6 ? ' (sin turno)' : ''));
   sugerirAbogadoFono();
@@ -2095,8 +2114,14 @@ function datosFono(idFila, datos){
 async function guardarFono(idFila, datos, esNuevoRegistro){
   try {
     const extra = esNuevoRegistro ? { creadoPor: usuario.correo, creadoEnMs: Date.now() } : {};
-    await setDoc(doc(db, COL_FONO, idFila), { ...datosFono(idFila, datos), ...extra }, { merge: true });
-  } catch (err){ console.error(err); avisar('Se guardó en el Drive 1, pero no se pudo guardar su fila del Drive 3 (Fono Alegra).', 7000); }
+    let d = datosFono(idFila, datos);
+    // Al editar sin poder ver el Drive 3: solo se guarda lo que se escribió (lo vacío no borra lo guardado)
+    if (!esNuevoRegistro && !puedeLeerFono()){
+      const propios = ['sexo', 'dni', 'telefono', 'correo', 'direccion', 'subSede', 'gestionesRealizadas', 'gestionesPorRealizar', 'dificultades'];
+      d = Object.fromEntries(Object.entries(d).filter(([k, v]) => !propios.includes(k) || (v !== '' && v != null)));
+    }
+    await W.set(doc(db, COL_FONO, idFila), { ...d, ...extra }, { merge: true });
+  } catch (err){ if (loteActual) throw err; console.error(err); avisar('Se guardó en el Drive 1, pero no se pudo guardar su fila del Drive 3 (Fono Alegra).', 7000); }
 }
 
 function limpiarForm(){
@@ -2185,7 +2210,7 @@ function abrirForm({ editarId = null, padreId = null } = {}){
     actualizarObligatorios(); actualizarBloquesTipo();
     if (r.apoyoId && [...$('fApoyo').options].some(o => o.value === r.apoyoId)) $('fApoyo').value = r.apoyoId;
     dirigidoAuto = r.apoyoNombre && r.dirigidoA === r.apoyoNombre ? r.dirigidoA : '';
-    if (fonoAplica() && puedeFono()) getDoc(doc(db, COL_FONO, editarId)).then(s => { if (s.exists() && editandoId === editarId){ llenarFono(s.data()); tomarFotoForm(); } })
+    if (fonoAplica() && puedeLeerFono()) getDoc(doc(db, COL_FONO, editarId)).then(s => { if (s.exists() && editandoId === editarId){ llenarFono(s.data()); tomarFotoForm(); } })
       .catch(err => console.error('No se pudo leer la fila del Drive 3', err));
   } else {
     ponerModo('nuevo');
@@ -2264,6 +2289,7 @@ window.addEventListener('resize', () => { if (!$('fondoForm').hidden) limitarPos
 // con reasignación: la última reasignación pasa al nuevo y el anterior no entra a la compensación. Todo al Registro de cambios.
 let cambioCaso = null, tipoCambio = '';
 async function registrarCambio(accion, coleccion, docId, antes, despues){
+  if (loteActual){ notasDelLote.push(() => registrarCambio(accion, coleccion, docId, antes, despues)); return; }
   const claves = [...new Set([...Object.keys(antes || {}), ...Object.keys(despues || {})])];
   try {
     await setDoc(doc(collection(db, 'cambios')), { cuandoMs: Date.now(), quien: usuario.correo, quienNombre: usuario.nombre || usuario.correo, accion, coleccion, docId,
@@ -2318,13 +2344,14 @@ async function corregirAbogadoDrive1(r, nuevoId){
   const idA = idAsignacion(r);
   const sello = { corregidoPor: usuario.correo, corregidoEn: new Date().toISOString() };
   try {
+    return await enUnSoloPaso(async () => {
     if (!reasignado){
       const antes = r.abogadoId;
-      await updateDoc(doc(db, COL, r.id), datosAbogado(nuevoId, 'abogado'));
-      if (await existe('asignaciones', idA)) await updateDoc(doc(db, 'asignaciones', idA), { defensorId: nuevoId, corregidoDe: antes, ...sello });
-      try { if (await existe(COL_FONO, r.id)) await updateDoc(doc(db, COL_FONO, r.id), { defensorId: nuevoId, defensorNombre: nombreAbogado(nuevoId) }); } catch (e){ /* sin acceso al Drive 3 */ }
+      await W.update(doc(db, COL, r.id), datosAbogado(nuevoId, 'abogado'));
+      if (await existe('asignaciones', idA)) await W.update(doc(db, 'asignaciones', idA), { defensorId: nuevoId, corregidoDe: antes, ...sello });
+      if (r.origen === ORIGEN_FONO && puedeEscribirFono()) await W.set(doc(db, COL_FONO, r.id), { defensorId: nuevoId, defensorNombre: nombreAbogado(nuevoId) }, { merge: true });
       await registrarCambio('Corrigió asignación (nunca lo asumió)', 'casos', r.id, { abogado: nombreAbogado(antes) }, { abogado: nombreAbogado(nuevoId) });
-      avisar('Asignación corregida: ahora es de ' + nombreAbogado(nuevoId) + ' desde el inicio');
+      notasDelLote.push(async () => avisar('Asignación corregida: ahora es de ' + nombreAbogado(nuevoId) + ' desde el inicio'));
       return true;
     }
     const lista = (await getDocs(query(collection(db, 'reasignaciones'), where('casoId', '==', idA)))).docs
@@ -2334,16 +2361,17 @@ async function corregirAbogadoDrive1(r, nuevoId){
     if (!re){ $('ayudaCambio').textContent = 'No se encontró la reasignación de este caso para corregirla.'; return false; }
     if (nuevoId === re.deId){ $('ayudaCambio').textContent = 'Ese abogado es quien lo tenía antes de la reasignación. Si nunca debió reasignarse, borra la reasignación.'; return false; }
     const antes = re.aId;
-    await updateDoc(re.ref, { aId: nuevoId, corregidoDe: antes, ...sello });
-    if (await existe('asignaciones', idA)) await updateDoc(doc(db, 'asignaciones', idA), { abogadoActualId: nuevoId });
+    await W.update(re.ref, { aId: nuevoId, corregidoDe: antes, ...sello });
+    if (await existe('asignaciones', idA)) await W.update(doc(db, 'asignaciones', idA), { abogadoActualId: nuevoId });
     // Si vino de una "Solicitud de cambio de abogado", ese documento pasa al nuevo (si no, al recalcular volvería el anterior)
     const hijo = cache.get(re.id) || (await getDoc(doc(db, COL, re.id)).then(s => s.exists() ? s.data() : null).catch(() => null));
-    if (hijo && hijo.tipoDoc === 'Solicitud de cambio de abogado') await updateDoc(doc(db, COL, re.id), datosAbogado(nuevoId, 'abogado'));
+    if (hijo && hijo.tipoDoc === 'Solicitud de cambio de abogado') await W.update(doc(db, COL, re.id), datosAbogado(nuevoId, 'abogado'));
     const n = datosAbogado(nuevoId, 'abogadoActual');
-    await updateDoc(doc(db, COL, r.id), n);
+    await W.update(doc(db, COL, r.id), n);
     await registrarCambio('Corrigió reasignación (nunca lo asumió)', 'reasignaciones', re.id, { pasaA: nombreAbogado(antes) }, { pasaA: nombreAbogado(nuevoId) });
-    avisar('Reasignación corregida: ' + nombreAbogado(antes) + ' nunca lo tuvo; ahora es de ' + nombreAbogado(nuevoId));
+    notasDelLote.push(async () => avisar('Reasignación corregida: ' + nombreAbogado(antes) + ' nunca lo tuvo; ahora es de ' + nombreAbogado(nuevoId)));
     return true;
+    });
   } catch (err){ errorAlGuardar(err); return false; }
 }
 
@@ -2430,10 +2458,12 @@ async function borrarDesdeAgenda(id){
       // Caso antiguo de la Agenda sin fila en el Drive 1: su asignación, reasignaciones y llamada
       avisoDrive3 = false;
       const ligadas = await getDocs(query(collection(db, 'reasignaciones'), where('casoId', '==', id)));
-      await Promise.all(ligadas.docs.map(d => deleteDoc(d.ref)));
-      await borrarSiExiste(COL_FONO, id);
-      await deleteDoc(doc(db, 'asignaciones', id));
-      await registrarCambio('Borró caso (Agenda, sin fila en el Drive 1)', 'asignaciones', id, {}, {});
+      await enUnSoloPaso(async () => {
+        for (const d of ligadas.docs) await W.del(d.ref);
+        await borrarSiExiste(COL_FONO, id);
+        await W.del(doc(db, 'asignaciones', id));
+        await registrarCambio('Borró caso (Agenda, sin fila en el Drive 1)', 'asignaciones', id, {}, {});
+      });
       ok = true;
     }
   } catch (err){ console.error(err); }
@@ -2482,7 +2512,7 @@ async function sincronizarAgenda(id, previo, datos){
     const idA = previo ? idAsignacion(previo) : id;
     const yaExiste = await existe('asignaciones', idA);
     if (!previo){
-      await setDoc(doc(db, 'asignaciones', idA), {
+      await W.set(doc(db, 'asignaciones', idA), {
         defensorId: datos.abogadoId, area: datos.area, fecha: datos.fecha, mes: datos.mes,
         especifica: datos.materia, ...camposAgenda(datos),
         origen: origenAgenda(datos.origen, datos.area, datos.turno || ''), desdeDrive1: true,
@@ -2501,22 +2531,22 @@ async function sincronizarAgenda(id, previo, datos){
       Object.entries(camposAgenda(datos)).forEach(([k, v]) => { if ((a[k] ?? '') !== (v ?? '')) cambios[k] = v; });
     }
     if ((previo.origen || '') !== datos.origen || (previo.turno || '') !== (datos.turno || '')) cambios.origen = origenAgenda(datos.origen, datos.area, datos.turno || '');
-    if (Object.keys(cambios).length) await updateDoc(doc(db, 'asignaciones', idA), { ...cambios, editadoPor: usuario.correo, editadoEn: serverTimestamp() });
-  } catch (err){ console.error(err); avisar('Se guardó en el Drive 1, pero no se pudo actualizar la Agenda.', 6000); }
+    if (Object.keys(cambios).length) await W.update(doc(db, 'asignaciones', idA), { ...cambios, editadoPor: usuario.correo, editadoEn: serverTimestamp() });
+  } catch (err){ if (loteActual) throw err; console.error(err); avisar('Se guardó en el Drive 1, pero no se pudo actualizar la Agenda.', 6000); }
 }
 // Devolución a otra distrital o institución = DERIVACIÓN: no es reasignación (no va en Reasig. ni da −1);
 // el caso queda marcado "Derivado a …" en la Agenda y deja de contar como caso nuevo del defensor.
 // info: { distrital, derivaTipo, derivaMotivo, fecha, usuario } (los datos de la derivación en el Drive 1)
 async function marcarDerivacion(idA, idDev, info){
   if (!(await existe('asignaciones', idA))) return;
-  await updateDoc(doc(db, 'asignaciones', idA), { derivadoA: destinoDerivacion(info), derivadoId: idDev, derivadoFecha: info.fecha || '',
+  await W.update(doc(db, 'asignaciones', idA), { derivadoA: destinoDerivacion(info), derivadoId: idDev, derivadoFecha: info.fecha || '',
     derivadoTipo: info.derivaTipo || 'Otra Dirección Distrital', derivadoMotivo: info.derivaMotivo || '', derivadoUsuario: info.usuario || '' });
 }
 // Quita la marca solo si la puso esta misma devolución (el caso vuelve a contar)
 async function quitarDerivacion(idA, idDev){
   const snap = await getDoc(doc(db, 'asignaciones', idA));
   if (snap.exists() && snap.data().derivadoId === idDev)
-    await updateDoc(snap.ref, { derivadoA: deleteField(), derivadoId: deleteField(), derivadoFecha: deleteField(),
+    await W.update(snap.ref, { derivadoA: deleteField(), derivadoId: deleteField(), derivadoFecha: deleteField(),
       derivadoTipo: deleteField(), derivadoMotivo: deleteField(), derivadoUsuario: deleteField() });
 }
 // Cambio de abogado que procede (−1 / +1) → movimiento en la Agenda; devolución → derivación
@@ -2529,16 +2559,16 @@ async function sincronizarMovimiento(id, datos, previo){
     if (previo && esDerivacion(previo.tipoDoc) && !esDerivacion(datos.tipoDoc)) await quitarDerivacion(idAsignacion(padre), id);
     if (esDerivacion(datos.tipoDoc)){
       await marcarDerivacion(idAsignacion(padre), id, { ...datos, usuario: padre.usuario || datos.usuario || '' });
-      if (await existe('reasignaciones', id)) await deleteDoc(ref); // −1 viejo de antes de este cambio
+      if (await existe('reasignaciones', id)) await W.del(ref); // −1 viejo de antes de este cambio
     } else if (datos.tipoDoc === 'Solicitud de cambio de abogado' && datos.resultadoCambio === 'Procede (reasignado)'){
       const yaEstaba = await existe('reasignaciones', id);
-      await setDoc(ref, { ...base, deId: anterior, aId: datos.abogadoId,
+      await W.set(ref, { ...base, deId: anterior, aId: datos.abogadoId,
         referencia: 'CAMBIO DE ABOGADO · ' + (padre.usuario || '') });
       if (!yaEstaba) await registrarCambio('Nueva reasignación (Drive 1, Solicitud de cambio de abogado)', 'reasignaciones', id, { abogado: nombreAbogado(anterior) }, { abogado: nombreAbogado(datos.abogadoId) });
     } else if (await existe('reasignaciones', id)){
-      await deleteDoc(ref);
+      await W.del(ref);
     }
-  } catch (err){ console.error(err); avisar('Se guardó en el Drive 1, pero no se pudo registrar el movimiento en la Agenda.', 6000); }
+  } catch (err){ if (loteActual) throw err; console.error(err); avisar('Se guardó en el Drive 1, pero no se pudo registrar el movimiento en la Agenda.', 6000); }
 }
 
 // Al registrar el informe del defensor, los plazos abiertos de ese caso quedan cumplidos
@@ -2549,7 +2579,7 @@ async function cerrarPlazosDelCaso(raizId, informeId){
     const familia = [...(raiz.exists() ? [raiz] : []), ...hijos.docs].filter(d => d.id !== informeId);
     await Promise.all(familia.filter(d => d.data().plazoVence && !d.data().plazoCumplido).map(d =>
       updateDoc(d.ref, { plazoCumplido: true, plazoAbierto: false, plazoCumplidoPor: 'INFORME DEL DEFENSOR', plazoCumplidoFecha: hoyIso() })));
-  } catch (err){ console.error(err); avisar('Se registró el informe, pero no se pudo cerrar el plazo del caso. Márcalo con “✓ Cumplido”.', 7000); }
+  } catch (err){ if (loteActual) throw err; console.error(err); avisar('Se registró el informe, pero no se pudo cerrar el plazo del caso. Márcalo con “✓ Cumplido”.', 7000); }
 }
 
 // ---------- Datos obligatorios que faltan: se marcan en su propio casillero ----------
@@ -2618,10 +2648,12 @@ $('btnGuardarForm').onclick = async () => {
   }
   falta(tipoDoc === 'Solicitud de cambio de abogado' && !resultadoCambio, $('optResultado'), 'Falta el resultado de la solicitud de cambio.');
   falta($('fPlazo').value === 'otro' && !$('fPlazoFecha').value, $('fPlazoFecha'), 'Falta la fecha del plazo.');
-  const conFono = fonoAplica() && puedeFono();
+  const conFono = fonoAplica() && puedeEscribirFono();
   falta(!$('bloqueApoyo').hidden && !$('fApoyo').value, $('fApoyo'), 'Falta elegir quién le apoya.');
-  falta(conFono && !$('fSexo').value, $('fSexo'), 'Falta el sexo del usuario (Mujer u Hombre).');
-  falta(conFono && !$('fSubSede').value, $('fSubSede'), 'Falta la sub sede derivada (Fono Alegra).');
+  // Al editar sin acceso al Drive 3 no se ve lo guardado: lo vacío no cambia, así que no se exige
+  const exigeFono = conFono && (!editandoId || puedeLeerFono());
+  falta(exigeFono && !$('fSexo').value, $('fSexo'), 'Falta el sexo del usuario (Mujer u Hombre).');
+  falta(exigeFono && !$('fSubSede').value, $('fSubSede'), 'Falta la sub sede derivada (Fono Alegra).');
 
   const previoForm = editandoId ? { ...(cache.get(editandoId) || {}) } : null;
   const hacer = { memo: $('fHacerMemo').checked, oficio: $('fHacerOficio').checked, carta: $('fHacerCarta').checked, noHacer: $('fNoHacer').checked };
@@ -2685,28 +2717,32 @@ $('btnGuardarForm').onclick = async () => {
   $('btnGuardarForm').disabled = true;
   try {
     const previo = editandoId ? { ...(cache.get(editandoId) || {}) } : null;
-    if (editandoId){
-      if (editandoId && !esAnt){ /* si cambian datos del caso, sus antecedentes guardan la referencia al código */ }
-      await updateDoc(doc(db, COL, editandoId), { ...datos, editadoPor: usuario.correo, editadoEn: serverTimestamp() });
-      if (!esAnt && (datos.codigo !== (cache.get(editandoId) || {}).codigo || datos.usuario !== (cache.get(editandoId) || {}).usuario)){
-        const hijos = await getDocs(query(collection(db, COL), where('padreId', '==', editandoId)));
-        await Promise.all(hijos.docs.map(h => updateDoc(h.ref, { padreCodigo: datos.codigo, padreUsuario: datos.usuario, usuario: datos.usuario })));
-      }
-    } else {
-      const ref = doc(collection(db, COL));
-      if (!esAnt) datos.asignacionId = ref.id;
-      await setDoc(ref, { ...datos, creadoPor: usuario.correo, creadoEn: serverTimestamp(), creadoEnMs: Date.now() });
-      cache.set(ref.id, { id: ref.id, ...datos, creadoEnMs: Date.now() });
-      editandoIdNuevo = ref.id;
-    }
-    const idFila = editandoId || editandoIdNuevo;
-    if (!esAnt) await sincronizarAgenda(idFila, previo, datos);
-    else await sincronizarMovimiento(idFila, datos, previo);
-    if (esAnt) await sincronizarOpinion(idFila, datos, previo);
-    if (esAnt) await recalcularEstado(padre.id);
-    if (esAnt && !editandoId && tipoDoc === 'Informe del defensor') await cerrarPlazosDelCaso(padre.id, idFila);
-    if (conFono) await guardarFono(idFila, datos, !editandoId);
-    if (!editandoId && esAnt && origen === ORIGEN_FONO && tipoDoc === TIPO_MISMO_ABOGADO && filaOriginal && filaOriginalDe === padre.id && puedeFono()) await actualizarFilaOriginal(padre.id, fecha);
+    // Todo o nada: Drive 1, Agenda (asignación, reasignación, derivación, opinión) y Drive 3 en un solo paquete
+    const ref = editandoId ? doc(db, COL, editandoId) : doc(collection(db, COL));
+    const idFila = ref.id;
+    if (!editandoId && !esAnt) datos.asignacionId = ref.id;
+    const volvioALlamar = !editandoId && esAnt && origen === ORIGEN_FONO && tipoDoc === TIPO_MISMO_ABOGADO && filaOriginalDe === padre.id;
+    await enUnSoloPaso(async () => {
+      if (editandoId){
+        await W.update(ref, { ...datos, editadoPor: usuario.correo, editadoEn: serverTimestamp() });
+        if (!esAnt && (datos.codigo !== (previo || {}).codigo || datos.usuario !== (previo || {}).usuario)){
+          const hijos = await getDocs(query(collection(db, COL), where('padreId', '==', editandoId)));
+          for (const h of hijos.docs) await W.update(h.ref, { padreCodigo: datos.codigo, padreUsuario: datos.usuario, usuario: datos.usuario });
+        }
+      } else await W.set(ref, { ...datos, creadoPor: usuario.correo, creadoEn: serverTimestamp(), creadoEnMs: Date.now() });
+      if (!esAnt) await sincronizarAgenda(idFila, previo, datos);
+      else await sincronizarMovimiento(idFila, datos, previo);
+      if (esAnt) await sincronizarOpinion(idFila, datos, previo);
+      if (esAnt) await recalcularEstado(padre.id, { id: idFila, data: datos });
+      if (esAnt && !editandoId && tipoDoc === 'Informe del defensor') await cerrarPlazosDelCaso(padre.id, idFila);
+      if (conFono) await guardarFono(idFila, datos, !editandoId);
+      // Quien puede leer el Drive 3 sabe si el caso original tiene fila: va en el paquete
+      if (volvioALlamar && filaOriginal && puedeLeerFono()) await actualizarFilaOriginal(padre.id, fecha);
+    });
+    if (!editandoId) editandoIdNuevo = idFila;
+    if (!cache.has(idFila) || editandoId) cache.set(idFila, { ...(previo || {}), id: idFila, ...datos, creadoEnMs: (previo && previo.creadoEnMs) || Date.now() });
+    // Sin acceso al Drive 3 no se sabe si el caso original tiene fila: se intenta aparte (si no tiene, no se guarda nada)
+    if (volvioALlamar && !puedeLeerFono() && puedeEscribirFono()) await actualizarFilaOriginal(padre.id, fecha, true);
     CARGA_MES.clear();
     cerrarForm(false);
     avisar(editandoId ? 'Cambios guardados' : 'Registrado');

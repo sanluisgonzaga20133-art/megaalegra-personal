@@ -541,7 +541,7 @@ import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/fireba
 import { getAuth, onAuthStateChanged, signInWithEmailAndPassword, signOut, sendPasswordResetEmail }
   from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
 import { initializeFirestore, collection, doc, getDoc, getDocs,
-  setDoc, updateDoc, deleteDoc, deleteField, query, where, onSnapshot, serverTimestamp }
+  setDoc, updateDoc, deleteDoc, deleteField, query, where, onSnapshot, serverTimestamp, writeBatch }
   from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 
 const firebaseConfig = {
@@ -760,17 +760,19 @@ async function actualizarFilaDrive1(id, antes, despues){
     if (Object.keys(cambios).length) await updateDoc(ref, cambios);
   } catch (err){ console.error(err); }
 }
-async function ponerAbogadoActualDrive1(casoId, defId){
+// lote (opcional): si viene, el cambio va en ese paquete (todo o nada)
+async function ponerAbogadoActualDrive1(casoId, defId, lote = null){
   try {
     const ref = doc(db, 'casos', casoId);
     const snap = await getDoc(ref);
     if (!snap.exists()) return;
     const d = DEFENSORES.find(x => x.id === defId) || {};
     const esElOriginal = !defId || defId === snap.data().abogadoId;
-    await updateDoc(ref, esElOriginal
+    const cambios = esElOriginal
       ? { abogadoActualId: deleteField(), abogadoActualNombre: deleteField(), abogadoActualCelular: deleteField(), abogadoActualCorreo: deleteField() }
-      : { abogadoActualId: defId, abogadoActualNombre: d.nombre || '', abogadoActualCelular: d.celular || '', abogadoActualCorreo: d.correo || '' });
-  } catch (err){ console.error(err); }
+      : { abogadoActualId: defId, abogadoActualNombre: d.nombre || '', abogadoActualCelular: d.celular || '', abogadoActualCorreo: d.correo || '' };
+    if (lote) lote.update(ref, cambios); else await updateDoc(ref, cambios);
+  } catch (err){ if (lote) throw err; console.error(err); }
 }
 async function borrarFilaDrive1(id){
   const ref = doc(db, 'casos', id);
@@ -781,16 +783,21 @@ async function borrarFilaDrive1(id){
   await deleteDoc(ref);
 }
 
-function reasignarRegistro(registro, nuevoId){
-  const fecha = hoyIso();
-  setDoc(doc(collection(db, 'reasignaciones')), { fecha, mes: fecha.slice(0, 7), deId: titularActual(registro), aId: nuevoId,
-    casoId: registro.id, referencia: 'Caso asignado el ' + registro.fecha + ' (' + registro.categoria + ')', nota: '', ...marcaCreacion() })
-    .catch(errorAlGuardar);
-  updateDoc(doc(db, 'asignaciones', registro.id), { abogadoActualId: nuevoId }).catch(errorAlGuardar);
-  ponerAbogadoActualDrive1(registro.id, nuevoId);
-  registrarCambio('Nueva reasignación (Agenda)', 'asignaciones', registro.id, { abogado: nombreDe(titularActual(registro)) }, { abogado: nombreDe(nuevoId) });
-  registro.abogadoActualId = nuevoId;
-  avisar('Reasignación registrada');
+// Nueva reasignación: la reasignación, la Agenda y el abogado actual del Drive 1 se guardan juntos (todo o nada)
+async function reasignarRegistro(registro, nuevoId){
+  const fecha = hoyIso(), antes = titularActual(registro);
+  try {
+    const lote = writeBatch(db);
+    lote.set(doc(collection(db, 'reasignaciones')), { fecha, mes: fecha.slice(0, 7), deId: antes, aId: nuevoId,
+      casoId: registro.id, referencia: 'Caso asignado el ' + registro.fecha + ' (' + registro.categoria + ')', nota: '', ...marcaCreacion() });
+    lote.update(doc(db, 'asignaciones', registro.id), { abogadoActualId: nuevoId });
+    if (usuario.drive1 === 'editar') await ponerAbogadoActualDrive1(registro.id, nuevoId, lote);
+    await lote.commit();
+    registro.abogadoActualId = nuevoId;
+    registrarCambio('Nueva reasignación (Agenda)', 'asignaciones', registro.id, { abogado: nombreDe(antes) }, { abogado: nombreDe(nuevoId) });
+    avisar('Reasignación registrada');
+  } catch (err){ errorAlGuardar(err); }
+  pintarTabla();
 }
 // ---------- Cambiar de abogado: "Nueva reasignación" o "Corregir" (el anterior nunca lo asumió) ----------
 function filaCambioAbogado(a, clase){
@@ -826,10 +833,17 @@ async function corregirAbogado(a, nuevoId){
     if (!reasignado){
       if (nuevoId === a.defensorId) return;
       const antes = a.defensorId;
-      await updateDoc(doc(db, 'asignaciones', a.id), { defensorId: nuevoId, corregidoDe: antes, ...sello });
-      const caso = await getDoc(doc(db, 'casos', a.id)).catch(() => null);
-      if (caso && caso.exists()) await updateDoc(caso.ref, datosAbogadoDrive1(nuevoId, 'abogado'));
-      try { const f = await getDoc(doc(db, 'fonoAlegra', a.id)); if (f.exists()) await updateDoc(f.ref, { defensorId: nuevoId, defensorNombre: nombreDe(nuevoId) }); } catch (e){ /* sin acceso al Drive 3 */ }
+      const lote = writeBatch(db);
+      lote.update(doc(db, 'asignaciones', a.id), { defensorId: nuevoId, corregidoDe: antes, ...sello });
+      if (usuario.drive1 === 'editar'){
+        const caso = await getDoc(doc(db, 'casos', a.id));
+        if (caso.exists()){
+          lote.update(caso.ref, datosAbogadoDrive1(nuevoId, 'abogado'));
+          // Drive 3: se escribe sin leerlo (depósito de datos personales)
+          if (caso.data().origen === 'Correo Fono Alegra') lote.set(doc(db, 'fonoAlegra', a.id), { defensorId: nuevoId, defensorNombre: nombreDe(nuevoId) }, { merge: true });
+        }
+      }
+      await lote.commit();
       await registrarCambio('Corrigió asignación (nunca lo asumió)', 'asignaciones', a.id, { abogado: nombreDe(antes) }, { abogado: nombreDe(nuevoId) });
       avisar('Asignación corregida: ahora es de ' + nombreDe(nuevoId) + ' desde el inicio');
       return;
@@ -841,12 +855,16 @@ async function corregirAbogado(a, nuevoId){
     if (!r){ avisar('No se encontró la reasignación de este caso para corregirla.', 6000); return; }
     if (nuevoId === r.deId){ avisar('Ese abogado es quien lo tenía antes de la reasignación. Si nunca debió reasignarse, borra la reasignación.', 7000); return; }
     const antes = r.aId;
-    await updateDoc(r.ref, { aId: nuevoId, corregidoDe: antes, ...sello });
-    await updateDoc(doc(db, 'asignaciones', a.id), { abogadoActualId: nuevoId });
-    await ponerAbogadoActualDrive1(a.id, nuevoId);
-    // Si la reasignación vino de una "Solicitud de cambio de abogado" del Drive 1, ese documento también pasa al nuevo
-    const cambio = await getDoc(doc(db, 'casos', r.id)).catch(() => null);
-    if (cambio && cambio.exists() && cambio.data().tipoDoc === 'Solicitud de cambio de abogado') await updateDoc(cambio.ref, datosAbogadoDrive1(nuevoId, 'abogado'));
+    const lote = writeBatch(db);
+    lote.update(r.ref, { aId: nuevoId, corregidoDe: antes, ...sello });
+    lote.update(doc(db, 'asignaciones', a.id), { abogadoActualId: nuevoId });
+    if (usuario.drive1 === 'editar'){
+      await ponerAbogadoActualDrive1(a.id, nuevoId, lote);
+      // Si la reasignación vino de una "Solicitud de cambio de abogado" del Drive 1, ese documento también pasa al nuevo
+      const cambio = await getDoc(doc(db, 'casos', r.id));
+      if (cambio.exists() && cambio.data().tipoDoc === 'Solicitud de cambio de abogado') lote.update(cambio.ref, datosAbogadoDrive1(nuevoId, 'abogado'));
+    }
+    await lote.commit();
     a.abogadoActualId = nuevoId;
     await registrarCambio('Corrigió reasignación (nunca lo asumió)', 'reasignaciones', r.id, { pasaA: nombreDe(antes) }, { pasaA: nombreDe(nuevoId) });
     avisar('Reasignación corregida: ' + nombreDe(antes) + ' nunca lo tuvo; ahora es de ' + nombreDe(nuevoId));
@@ -1478,14 +1496,15 @@ document.getElementById('cuerpoTabla').addEventListener('click', function(e){
     idReasigPorBorrar = null;
     (async () => {
       try {
+        // Todo o nada: la Agenda, el abogado actual del Drive 1 y la reasignación
+        const lote = writeBatch(db);
         if (r && r.casoId){
           const caso = await getDoc(doc(db, 'asignaciones', r.casoId));
-          if (caso.exists()){
-            await updateDoc(caso.ref, { abogadoActualId: r.deId === caso.data().defensorId ? deleteField() : r.deId });
-          }
-          if (r.aId) await ponerAbogadoActualDrive1(r.casoId, r.deId);
+          if (caso.exists()) lote.update(caso.ref, { abogadoActualId: r.deId === caso.data().defensorId ? deleteField() : r.deId });
+          if (r.aId && usuario.drive1 === 'editar') await ponerAbogadoActualDrive1(r.casoId, r.deId, lote);
         }
-        await deleteDoc(doc(db, 'reasignaciones', rid));
+        lote.delete(doc(db, 'reasignaciones', rid));
+        await lote.commit();
         avisar('Reasignación borrada');
       } catch (err){ errorAlGuardar(err); }
     })();

@@ -332,7 +332,7 @@ const COLUMNAS = ['Fecha de ingreso', 'Nombre del usuario/a', 'Sexo', 'LGTB', 'D
 const textoLgtb = f => f.lgtbi === true ? 'Sí' : f.lgtbi === false ? 'No' : '';
 function valoresFila(f){
   return [fechaCorta(f.fecha), f.usuario, f.sexo || '', textoLgtb(f), f.dni, f.telefono, f.correo, f.direccion, f.dirDistrital || 'LIMA CENTRO', f.subSede, AREA_CORTA[f.area] || f.area || '',
-    f.diaTurno, (f.defensorNombre || '') + (f.apoyoNombre ? ' (Le apoya: ' + f.apoyoNombre + ')' : ''), f.materia, f.gestionesRealizadas, f.gestionesPorRealizar,
+    f.diaTurno, (f.defensorNombre || '') + (f.apoyoNombre ? ' (Le apoya: ' + f.apoyoNombre + ')' : ''), f.materia, [f.gestionesRealizadas, ...(f.rellamadas || [])].filter(Boolean).join('\n'), f.gestionesPorRealizar,
     f.dificultades, f.aceptaPatrocinio, f.carpetaCreada, f.tratoVerificado, f.satisfaccion];
 }
 const ordenFila = (a, b) => (b.fecha || '').localeCompare(a.fecha || '') || (b.creadoEnMs || 0) - (a.creadoEnMs || 0);
