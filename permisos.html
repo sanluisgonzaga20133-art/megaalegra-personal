@@ -48,6 +48,8 @@
   .fila-form label{font-size:12px;font-weight:700;display:flex;flex-direction:column;gap:3px}
   .docs-config{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:10px}
   .docs-config input,.docs-config textarea{width:100%;box-sizing:border-box;font:inherit;font-weight:400}
+  .vista-numeros{margin:10px 0;padding:8px 10px;border:1.5px dashed #ccc;border-radius:8px;font-weight:700;font-size:13px;overflow-wrap:anywhere}
+  .vista-numeros div{margin:3px 0}
   .fila-form input, .fila-form select{padding:8px 10px;border:1.5px solid var(--linea);border-radius:8px;background:var(--papel);min-width:160px}
   .btn{padding:8px 14px;border-radius:8px;border:none;background:var(--rojo);color:#fff;font-weight:700;cursor:pointer}
   .btn:disabled{background:#D8CFC3;cursor:default}
@@ -155,12 +157,14 @@
     </div>
     <div class="caja solo-admin">
       <h3>Documentos de Fono Alegra (memo e informe en Word)</h3>
-      <p class="ayuda">Lo que se escribe aquí se usa al descargar el memo y el informe del Drive 3. No queda en el código de la página. Para varias líneas (cargo), escribe una por renglón.</p>
+      <p class="ayuda">Lo que se escribe aquí se usa al descargar el memo y el informe del Drive 3. No queda en el código de la página. En "Dependencia" escribe una línea por renglón. El nombre sale siempre en MAYÚSCULAS en el Word.</p>
       <div class="fila-form docs-config">
-        <label>Destinatario del informe<input type="text" id="cfgInfNombre" placeholder="DR. …"></label>
-        <label>Cargo del destinatario del informe<textarea id="cfgInfCargo" rows="4"></textarea></label>
-        <label>Destinatario del memo<input type="text" id="cfgMemoNombre" placeholder="ABEL …"></label>
-        <label>Cargo del destinatario del memo<textarea id="cfgMemoCargo" rows="4"></textarea></label>
+        <label>Destinatario del informe · Nombre<input type="text" id="cfgInfNombre" placeholder="DR. …"></label>
+        <label>Destinatario del informe · Cargo<input type="text" id="cfgInfCargo" placeholder="Director Distrital"></label>
+        <label>Destinatario del informe · Dependencia (una o más líneas)<textarea id="cfgInfDep" rows="3" placeholder="Defensa Pública y Acceso a la Justicia de Lima&#10;Ministerio de Justicia y Derechos Humanos"></textarea></label>
+        <label>Destinatario del memo · Nombre<input type="text" id="cfgMemoNombre" placeholder="ABEL …"></label>
+        <label>Destinatario del memo · Cargo<input type="text" id="cfgMemoCargo" placeholder="Director General"></label>
+        <label>Destinatario del memo · Dependencia (una o más líneas)<textarea id="cfgMemoDep" rows="3" placeholder="Defensa Pública y Acceso a la Justicia&#10;Ministerio de Justicia y Derechos Humanos"></textarea></label>
         <label>Tu correo institucional<input type="email" id="cfgCorreo"></label>
         <label>Memorándum múltiple de referencia<input type="text" id="cfgReferencia" placeholder="memorando múltiple N° …"></label>
         <label>Parte fija del N° de informe (después del año)<input type="text" id="cfgSufInf" placeholder="JUS/ DGDP-DDPAJLIMA"></label>
@@ -170,6 +174,11 @@
         <label>Frase del decenio (cursiva)<input type="text" id="cfgFraseDecenio"></label>
         <label>Recuadros del membrete del informe (uno por renglón)<textarea id="cfgRecInf" rows="3"></textarea></label>
         <label>Recuadros del membrete del memo (uno por renglón)<textarea id="cfgRecMemo" rows="3"></textarea></label>
+      </div>
+      <div class="vista-numeros" aria-live="polite">
+        <div class="chico">Así quedarán los números (ejemplo con 123 y 45; el N° real se escribe en el Drive 3 antes de descargar):</div>
+        <div id="vistaNumMemo"></div>
+        <div id="vistaNumInforme"></div>
       </div>
       <div class="fila-form"><button class="btn" id="btnGuardarDocs">Guardar</button></div>
     </div>
@@ -511,7 +520,7 @@ $('btnGuardarConteos').onclick = async () => {
 
 // ---------- Documentos de Fono Alegra: datos del memo y del informe (solo el administrador) ----------
 // Nombres, cargos, correo y números no van en el código (el repositorio es público): se guardan en configuracion/documentosFono.
-const DOCS_CAMPOS = [['cfgInfNombre', 'informeDestNombre'], ['cfgInfCargo', 'informeDestCargo'], ['cfgMemoNombre', 'memoDestNombre'], ['cfgMemoCargo', 'memoDestCargo'], ['cfgCorreo', 'correo'], ['cfgReferencia', 'referencia'], ['cfgSufInf', 'sufijoInforme'], ['cfgSufProp', 'sufijoInformePropio'], ['cfgSufMemo', 'sufijoMemo'], ['cfgFraseAnio', 'fraseAnio'], ['cfgFraseDecenio', 'fraseDecenio']];
+const DOCS_CAMPOS = [['cfgInfNombre', 'informeDestNombre'], ['cfgInfCargo', 'informeDestCargo'], ['cfgInfDep', 'informeDestDependencia'], ['cfgMemoNombre', 'memoDestNombre'], ['cfgMemoCargo', 'memoDestCargo'], ['cfgMemoDep', 'memoDestDependencia'], ['cfgCorreo', 'correo'], ['cfgReferencia', 'referencia'], ['cfgSufInf', 'sufijoInforme'], ['cfgSufProp', 'sufijoInformePropio'], ['cfgSufMemo', 'sufijoMemo'], ['cfgFraseAnio', 'fraseAnio'], ['cfgFraseDecenio', 'fraseDecenio']];
 const DOCS_INICIALES = {
   fraseAnio: 'Año de la Esperanza y el Fortalecimiento de la Democracia',
   fraseDecenio: 'Decenio de la igualdad de oportunidades para mujeres y hombres',
@@ -523,13 +532,22 @@ async function cargarDocsFono(){
   try { const s = await getDoc(doc(db, 'configuracion', 'documentosFono')); docsFono = s.exists() ? s.data() : {}; }
   catch (e){ console.error(e); docsFono = {}; }
   const v = { ...DOCS_INICIALES, ...docsFono };
+  // Datos guardados antes (cargo con varias líneas): la 1.ª línea es el cargo y el resto la dependencia
+  ['informe', 'memo'].forEach(q => {
+    if (v[q + 'DestDependencia'] === undefined && /\n/.test(v[q + 'DestCargo'] || '')){
+      const l = v[q + 'DestCargo'].split('\n').map(x => x.trim()).filter(Boolean);
+      v[q + 'DestCargo'] = l[0] || ''; v[q + 'DestDependencia'] = l.slice(1).join('\n');
+    }
+  });
   DOCS_CAMPOS.forEach(([id, k]) => $(id).value = v[k] || '');
+  vistaNumeros();
   $('cfgRecInf').value = (v.recuadrosInforme || []).join('\n');
   $('cfgRecMemo').value = (v.recuadrosMemo || []).join('\n');
 }
 $('btnGuardarDocs').onclick = async () => {
   const nuevo = {};
   DOCS_CAMPOS.forEach(([id, k]) => nuevo[k] = $(id).value.trim());
+  nuevo.correo = nuevo.correo.replace(/[.,;\s]+$/, ''); $('cfgCorreo').value = nuevo.correo;
   const lineas = t => t.split('\n').map(x => x.trim()).filter(Boolean);
   nuevo.recuadrosInforme = lineas($('cfgRecInf').value); nuevo.recuadrosMemo = lineas($('cfgRecMemo').value);
   const antes = {}; Object.keys(nuevo).forEach(k => antes[k] = docsFono[k] ?? '');
@@ -540,6 +558,14 @@ $('btnGuardarDocs').onclick = async () => {
     avisar('Guardado. El Drive 3 lo usa en la próxima descarga.');
   } catch (e){ error(e); }
 };
+
+// Vista previa del número completo (mismo armado que el Drive 3)
+function vistaNumeros(){
+  const anio = new Date().getFullYear(), suf = id => $(id).value.trim();
+  $('vistaNumMemo').textContent = 'MEMORANDUM N° 123-' + anio + (suf('cfgSufMemo') ? '-' + suf('cfgSufMemo') : '');
+  $('vistaNumInforme').textContent = 'INFORME Nro. 123-' + anio + (suf('cfgSufInf') ? '-' + suf('cfgSufInf') : '') + '//INFORME NRO. N° 45-' + anio + (suf('cfgSufProp') ? '-' + suf('cfgSufProp') : '');
+}
+['cfgSufMemo', 'cfgSufInf', 'cfgSufProp'].forEach(id => $(id).addEventListener('input', vistaNumeros));
 
 // ---------- Restos sin caso (solo el administrador) ----------
 // Asignaciones anteriores al 26/09/2026 (cuando la Agenda empezó a crear su fila en el Drive 1) sin fila en el Drive 1 son legítimas: se cuentan aparte y no se tocan.

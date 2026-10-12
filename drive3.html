@@ -621,7 +621,7 @@ const DOCS_POR_DEFECTO = {
   fraseDecenio: 'Decenio de la igualdad de oportunidades para mujeres y hombres',
   recuadrosInforme: ['Viceministerio de Derechos Humanos y Acceso a la Justicia', 'Dirección General de Defensa Pública y Acceso a la Justicia'],
   recuadrosMemo: ['Despacho Viceministerial de Derechos Humanos y Acceso a la Justicia', 'Dirección General de Defensa Pública y Acceso a la Justicia', 'Direcciones Distritales de Defensa Pública y Acceso a la Justicia'],
-  informeDestNombre: '', informeDestCargo: '', memoDestNombre: '', memoDestCargo: '', correo: '',
+  informeDestNombre: '', informeDestCargo: '', informeDestDependencia: '', memoDestNombre: '', memoDestCargo: '', memoDestDependencia: '', correo: '',
   sufijoInforme: '', sufijoInformePropio: '', sufijoMemo: '', referencia: ''
 };
 async function leerConfigDocs(){
@@ -636,8 +636,9 @@ function wRun(t, o = {}){
 }
 const wTab = '<w:r><w:tab/></w:r>';
 function wPar(contenido, o = {}){
-  return '<w:p><w:pPr>' + (o.estilo ? '<w:pStyle w:val="' + o.estilo + '"/>' : '') + (o.tabs ? '<w:tabs>' + o.tabs.map(t => '<w:tab w:val="left" w:pos="' + t + '"/>').join('') + '</w:tabs>' : '') +
+  return '<w:p><w:pPr>' + (o.estilo ? '<w:pStyle w:val="' + o.estilo + '"/>' : '') + (o.juntos ? '<w:keepNext/><w:keepLines/>' : '') +
     (o.borde ? '<w:pBdr><w:bottom w:val="single" w:sz="6" w:space="1" w:color="000000"/></w:pBdr>' : '') +
+    (o.tabs ? '<w:tabs>' + o.tabs.map(t => '<w:tab w:val="left" w:pos="' + t + '"/>').join('') + '</w:tabs>' : '') +
     '<w:spacing w:before="' + (o.antes || 0) + '" w:after="' + (o.despues ?? 120) + '"/>' +
     (o.ind ? '<w:ind w:left="' + (o.ind.izq || 0) + '"' + (o.ind.colgante ? ' w:hanging="' + o.ind.colgante + '"' : '') + (o.ind.primera ? ' w:firstLine="' + o.ind.primera + '"' : '') + '/>' : '') +
     '<w:jc w:val="' + (o.jc || 'both') + '"/></w:pPr>' + contenido + '</w:p>';
@@ -735,7 +736,10 @@ async function descargarWord(cual){
   const vLC = cuenta('LIMA CENTRO', 'Defensa de Víctimas'), aLC = cuenta('LIMA CENTRO', 'Asistencia Legal'), vMI = cuenta('MIRAFLORES', 'Defensa de Víctimas'), aMI = cuenta('MIRAFLORES', 'Asistencia Legal');
   const eq = lista.filter(f => f.area === 'Equipo multidisciplinario').length;
   const { tot } = resumenInforme(lista);
-  const cargo = t => String(t || '').split('\n').map(x => x.trim()).filter(Boolean);
+  // Debajo del nombre: el cargo y cada línea de la dependencia (los datos antiguos traían todo en "cargo")
+  const cargo = q => [cfg[q + 'DestCargo'], cfg[q + 'DestDependencia']].map(t => String(t || '')).join('\n').split('\n').map(x => x.trim()).filter(Boolean);
+  const nombreDest = q => cfg[q + 'DestNombre'] ? cfg[q + 'DestNombre'].toLocaleUpperCase('es-PE') : '[DESTINATARIO]';
+  const correo = String(cfg.correo || '').trim().replace(/[.,;\s]+$/, '');
   const linea = '<w:p><w:pPr><w:pBdr><w:bottom w:val="single" w:sz="6" w:space="1" w:color="000000"/></w:pBdr><w:spacing w:after="160"/></w:pPr></w:p>';
   if (cual === 'informe'){
     const partes = [dos(vLC) + ' corresponden al área de Defensa de Víctimas de Lima Centro', dos(aLC) + ' al área de Asistencia Legal de Lima Centro', dos(vMI) + ' al área de Defensa de Víctimas de Miraflores'];
@@ -744,34 +748,35 @@ async function descargarWord(cual){
     const desglose = partes.join(', ') + ', ' + (finales.length === 1 ? 'y ' + finales[0] : finales[0] + ' y ' + finales[1]);
     const c = [
       wPar(wRun(d.tituloInforme, { b: true, u: true }), { jc: 'center', despues: 240 }),
-      lineaEnc('A', cfg.informeDestNombre || '[DESTINATARIO]', { b: true }), ...cargo(cfg.informeDestCargo).map(lineaCargo),
+      lineaEnc('A', nombreDest('informe'), { b: true }), ...cargo('informe').map(lineaCargo),
       wPar('', { despues: 0 }),
       lineaEnc('Asunto', 'SE REMITE REPORTE DERIVACIÓN DE CASOS DEL SERVICIO DEL FONO ALEGRA-LINEA 1884 (OPCIÓN 1) ' + fr.asunto + '.', { b: true, jc: 'both' }),
       wPar('', { despues: 0 }),
       lineaEnc('Fecha', textoFecha(d.fecha, false)), linea,
       wPar(wRun('Tengo el honor de dirigirme a usted, para saludarle muy cordialmente y a la vez remitir el informe respecto el Reporte Derivación de Casos del Servicio del Fono Alegra-línea 1884 (opción 1) ' + fr.cuerpo + '; en atención a ello, se expone:')),
       wPar(wRun('I.- ANTECEDENTES:', { b: true }), { antes: 120 }),
-      wPar(wRun('Que, en calidad de Coordinador Distrital del Mega Alegra de la Defensa Pública y Acceso a la Justicia de Lima del Ministerio de Justicia y Derechos Humanos, recibo en mi correo institucional ' + (cfg.correo || '[CORREO]') + ' los datos de ciudadanos que se comunicaron a la Línea de Orientación Legal Gratuita – Fono Alegra 1884 opción 1, y que requieren el servicio de la Defensa Pública.')),
+      wPar(wRun('Que, en calidad de Coordinador Distrital del Mega Alegra de la Defensa Pública y Acceso a la Justicia de Lima del Ministerio de Justicia y Derechos Humanos, recibo en mi correo institucional ' + (correo || '[CORREO]') + ' los datos de ciudadanos que se comunicaron a la Línea de Orientación Legal Gratuita – Fono Alegra 1884 opción 1, y que requieren el servicio de la Defensa Pública.')),
       wPar(wRun('Que, mediante ' + (cfg.referencia || '[MEMORANDO MÚLTIPLE DE REFERENCIA]') + ', se viene disponiendo las directrices para un mejor registro de las actividades mensuales de los/as operadores de la Línea de Orientación Legal Gratuita – Fono Alegra 1884 opción 1; por lo que se cumple con alcanzar la información.')),
       wPar(wRun('II.- ANALISIS:', { b: true }), { antes: 120 }),
       wPar(wRun('2.1. ' + fr.en + ', se remitieron las derivaciones con los datos de ciudadanos que se comunicaron a la Línea de Orientación Legal Gratuita – Fono Alegra 1884 opción 1, para recibir orientación legal y patrocinio de los Defensores Públicos La Dirección Distrital de Lima centro.')),
-      wPar(wRun('2.3 El correo con la solicitud de asignación de Defensor Público, se distribuye a los Defensores Públicos, indicándoles informar las gestiones realizadas, con copia al responsable de recepción de la comunicación y posterior a ello, se remita el memorándum de asignación del caso correspondiente.')),
-      wPar(wRun('2.4 Se ha consolidado las actividades del MEGA ALEGRA., respecto a las atenciones de la línea 1884 opción 1 ' + fr.durante + '. Se registraron un total de ' + dos(lista.length) + ' llamadas, de las cuales ' + desglose + '. Todas las llamadas fueron debidamente asignadas al personal respectivo y atendidas oportunamente. Del total de usuarios, ' + tot.h + (tot.h === 1 ? ' fue hombre' : ' fueron hombres') + ' y ' + tot.m + (tot.m === 1 ? ' mujer' : ' mujeres') + '; de ellos, ' + tot.lgtb + (tot.lgtb === 1 ? ' se identificó' : ' se identificaron') + ' como LGTB.')),
-      wPar(wRun('Se adjunta;'), { antes: 120 }),
-      wPar(wRun('- Excel consolidado FONO ALEGRA Línea 1884 – ' + p.titulo), { ind: { izq: 567 } }),
+      wPar(wRun('2.2. El correo con la solicitud de asignación de Defensor Público, se distribuye a los Defensores Públicos, indicándoles informar las gestiones realizadas, con copia al responsable de recepción de la comunicación y posterior a ello, se remita el memorándum de asignación del caso correspondiente.')),
+      wPar(wRun('2.3. Se ha consolidado las actividades del MEGA ALEGRA., respecto a las atenciones de la línea 1884 opción 1 ' + fr.durante + '. Se registraron un total de ' + dos(lista.length) + ' llamadas, de las cuales ' + desglose + '. Todas las llamadas fueron debidamente asignadas al personal respectivo y atendidas oportunamente. Del total de usuarios, ' + tot.h + (tot.h === 1 ? ' fue hombre' : ' fueron hombres') + ' y ' + tot.m + (tot.m === 1 ? ' mujer' : ' mujeres') + '; de ellos, ' + tot.lgtb + (tot.lgtb === 1 ? ' se identificó' : ' se identificaron') + ' como LGTB.'), { juntos: true }),
+      // El cierre va pegado al último párrafo: si no cabe, pasan juntos a la hoja siguiente
+      wPar(wRun('Se adjunta;'), { antes: 120, juntos: true }),
+      wPar(wRun('- Excel consolidado FONO ALEGRA Línea 1884 – ' + p.titulo), { ind: { izq: 567 }, juntos: true }),
       wPar(wRun('Es cuanto lo que tengo que informar.'), { antes: 240 })
     ].join('');
     await armarDocx(c, (cfg.recuadrosInforme || []).filter(Boolean), cfg, 'INFORME MENSUAL FONO ALEGRA – ' + p.titulo.replace(/\//g, '-') + '.docx');
   } else {
     const c = [
       wPar(wRun(d.tituloMemo, { b: true, u: true }), { jc: 'center', despues: 240 }),
-      lineaEnc('A', cfg.memoDestNombre || '[DESTINATARIO]', { b: true }), ...cargo(cfg.memoDestCargo).map(lineaCargo),
+      lineaEnc('A', nombreDest('memo'), { b: true }), ...cargo('memo').map(lineaCargo),
       wPar('', { despues: 0 }),
       lineaEnc('Asunto', 'SE REMITE CONSOLIDADO DE LOS CASOS DERIVADOS DEL SERVICIO FONO ALEGRA 1884 (OPCION 1) ' + fr.asuntoMemo, { b: true, jc: 'both' }),
       wPar('', { despues: 0 }),
       lineaEnc('Fecha', textoFecha(d.fecha, true)), linea,
       wPar(wRun('Tengo el honor de dirigirme a usted, por intermedio de la presente y en atención a los documentos de la referencia, se remite ' + d.tituloInforme + ', correspondiente al consolidado de los casos derivados del servicio de FONO ALEGRA – LINEA 1884 (opción 1), ' + fr.memo + '.'), { ind: { primera: 567 } }),
-      wPar(wRun('(Se adjunta ' + d.folios + ' folios incluido el presente memorándum)'), { antes: 120 }),
+      wPar(wRun('(Se adjunta ' + d.folios + ' folios incluido el presente memorándum)'), { antes: 120, juntos: true }),
       wPar(wRun('Atentamente,'), { antes: 240 })
     ].join('');
     await armarDocx(c, (cfg.recuadrosMemo || []).filter(Boolean), cfg, 'MEMO FONO ALEGRA – ' + p.titulo.replace(/\//g, '-') + '.docx');
