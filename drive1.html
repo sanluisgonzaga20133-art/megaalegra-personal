@@ -790,6 +790,44 @@ const coincide = (t, p) => t.includes(p) || (p.replace(/[^a-z0-9]/g, '').length 
 function hoyIso(){ const d = new Date(); return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'); }
 function fechaCorta(iso){ return iso ? iso.slice(8, 10) + '/' + iso.slice(5, 7) + '/' + iso.slice(0, 4) : ''; }
 function avisar(t, ms = 3500){ const a = $('aviso'); a.textContent = t; a.style.display = 'block'; clearTimeout(avisar.t); avisar.t = setTimeout(() => a.style.display = 'none', ms); }
+
+// ---------- Entregar un archivo (Excel o Word) ----------
+// En iPhone/iPad se abre la ventana "Compartir" (guardar en Archivos, abrir en Excel/Word o enviarlo).
+// Si el teléfono no lo permite, se descarga y se avisa dónde quedó.
+const esIOS = () => /iP(hone|ad|od)/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+function descargarDirecto(blob, nombre){
+  const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = nombre;
+  document.body.appendChild(a); a.click(); setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 5000);
+}
+function botonCompartir(archivo){
+  // Si pasó mucho tiempo desde el toque, el iPhone pide tocar otra vez: se muestra un botón para compartir
+  const caja = document.createElement('div');
+  caja.style.cssText = 'position:fixed;left:16px;right:16px;bottom:calc(16px + env(safe-area-inset-bottom,0px));z-index:500;background:#241E1B;color:#fff;border-radius:12px;padding:12px;display:flex;gap:8px;align-items:center;flex-wrap:wrap;box-shadow:0 6px 18px rgba(0,0,0,.3);font-weight:700;font-size:13.5px';
+  caja.innerHTML = '<span style="flex:1;min-width:160px">Archivo listo: ' + archivo.name.replace(/[<>&]/g, '') + '</span>';
+  const b = document.createElement('button'); b.textContent = '📤 Compartir / guardar';
+  b.style.cssText = 'background:#fff;color:#241E1B;border:none;border-radius:8px;padding:8px 12px;font:inherit;font-weight:800';
+  const x = document.createElement('button'); x.textContent = '✕'; x.setAttribute('aria-label', 'Cerrar');
+  x.style.cssText = 'background:none;color:#fff;border:1px solid #fff;border-radius:8px;padding:6px 10px;font:inherit';
+  b.onclick = async () => { try { await navigator.share({ files: [archivo], title: archivo.name }); } catch (e){ if (e.name !== 'AbortError'){ descargarDirecto(archivo, archivo.name); avisar('Descargado: búscalo en Archivos → Descargas', 8000); } } caja.remove(); };
+  x.onclick = () => caja.remove();
+  caja.append(b, x); document.body.appendChild(caja);
+}
+async function entregarArchivo(blob, nombre){
+  if (esIOS() && navigator.canShare){
+    const archivo = new File([blob], nombre, { type: blob.type });
+    if (navigator.canShare({ files: [archivo] })){
+      try { await navigator.share({ files: [archivo], title: nombre }); return; }
+      catch (e){ if (e.name === 'AbortError') return; if (e.name === 'NotAllowedError'){ botonCompartir(archivo); return; } }
+    }
+  }
+  descargarDirecto(blob, nombre);
+  if (esIOS()) avisar('Descargado: búscalo en Archivos → Descargas', 8000);
+}
+function descargarLibro(libro, nombre){
+  const datos = XLSX.write(libro, { bookType: 'xlsx', type: 'array' });
+  return entregarArchivo(new Blob([datos], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }), nombre);
+}
+
 function errorAlGuardar(err){
   console.error(err);
   avisar(err && err.code === 'permission-denied' ? 'Firebase no dio permiso para guardar. Revisa que tu correo esté en staff.' : 'No se pudo guardar. Revisa tu conexión e inténtalo de nuevo.', 6000);
@@ -2809,7 +2847,7 @@ $('btnDescargar').onclick = async () => {
     }));
     const libro = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(libro, XLSX.utils.json_to_sheet(filas), 'Registro');
-    XLSX.writeFile(libro, 'Drive1_' + desde + '_al_' + hasta + '.xlsx');
+    await descargarLibro(libro, 'Drive1_' + desde + '_al_' + hasta + '.xlsx');
   } catch (err){ console.error(err); avisar('No se pudo descargar (' + (err.code || err.message) + ').', 6000); }
 };
 

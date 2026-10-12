@@ -8,6 +8,7 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Source+Serif+4:opsz,wght@8..60,600&family=Public+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/xlsx-js-style@1.2.0/dist/xlsx.bundle.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
 <style>
   :root{
     --rojo:#D91023; --rojo-oscuro:#A10C1A; --dorado:#B8873A; --tinta:#241E1B; --gris:#6A635C; --gris-claro:#9A938A;
@@ -102,6 +103,8 @@
   .informe h4{font-size:13.5px;margin:14px 0 6px}
   .informe td.resaltado, .informe th.resaltado{background:#FFF2CC !important;font-weight:800}
   .informe tr.resaltado-fila td{background:#FFF2CC !important;font-weight:800}
+  .docs-word{border-top:1px dashed var(--linea);padding-top:8px}
+  .docs-word input{padding:6px 8px;border:1.5px solid var(--linea);border-radius:8px}
   .informe .nota-res{font-size:11.5px;color:var(--gris)}
   @media (max-width:600px){ .informe td, .informe th{padding:5px 5px;font-size:11.5px} .informe th{white-space:normal} }
   @media print{
@@ -240,6 +243,17 @@
           <button class="btn sec" id="btnExcelInforme">⬇ Excel consolidado</button>
           <span class="ayuda" id="ayudaInforme"></span>
         </div>
+        <div class="barra no-imprimir docs-word">
+          <strong style="font-size:13px">Memo e informe en Word:</strong>
+          <label>N° memorándum <input type="text" id="docNumMemo" placeholder="Ej. 1234" size="6"></label>
+          <label>N° informe <input type="text" id="docNumInforme" placeholder="Ej. 4152" size="6"></label>
+          <label>N° informe propio <input type="text" id="docNumPropio" placeholder="Ej. 104" size="6"></label>
+          <label>Fecha <input type="date" id="docFecha"></label>
+          <label>Folios <input type="text" id="docFolios" value="04" size="3"></label>
+          <button class="btn" id="btnWordInforme">⬇ Informe (Word)</button>
+          <button class="btn" id="btnWordMemo">⬇ Memo (Word)</button>
+        </div>
+        <div id="avisoDocs" class="advertencia no-imprimir" hidden></div>
         <div id="cuerpoInforme"></div>
       </section>
       <div class="barra">
@@ -562,6 +576,210 @@ function conteoPorGrupo(lista, meses){
 
 // ---------- En pantalla (y para imprimir) ----------
 let pidiendoInforme = 0;
+
+// ---------- Entregar un archivo (Excel o Word) ----------
+// En iPhone/iPad se abre la ventana "Compartir" (guardar en Archivos, abrir en Excel/Word o enviarlo).
+// Si el teléfono no lo permite, se descarga y se avisa dónde quedó.
+const esIOS = () => /iP(hone|ad|od)/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+function descargarDirecto(blob, nombre){
+  const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = nombre;
+  document.body.appendChild(a); a.click(); setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 5000);
+}
+function botonCompartir(archivo){
+  // Si pasó mucho tiempo desde el toque, el iPhone pide tocar otra vez: se muestra un botón para compartir
+  const caja = document.createElement('div');
+  caja.style.cssText = 'position:fixed;left:16px;right:16px;bottom:calc(16px + env(safe-area-inset-bottom,0px));z-index:500;background:#241E1B;color:#fff;border-radius:12px;padding:12px;display:flex;gap:8px;align-items:center;flex-wrap:wrap;box-shadow:0 6px 18px rgba(0,0,0,.3);font-weight:700;font-size:13.5px';
+  caja.innerHTML = '<span style="flex:1;min-width:160px">Archivo listo: ' + archivo.name.replace(/[<>&]/g, '') + '</span>';
+  const b = document.createElement('button'); b.textContent = '📤 Compartir / guardar';
+  b.style.cssText = 'background:#fff;color:#241E1B;border:none;border-radius:8px;padding:8px 12px;font:inherit;font-weight:800';
+  const x = document.createElement('button'); x.textContent = '✕'; x.setAttribute('aria-label', 'Cerrar');
+  x.style.cssText = 'background:none;color:#fff;border:1px solid #fff;border-radius:8px;padding:6px 10px;font:inherit';
+  b.onclick = async () => { try { await navigator.share({ files: [archivo], title: archivo.name }); } catch (e){ if (e.name !== 'AbortError'){ descargarDirecto(archivo, archivo.name); avisar('Descargado: búscalo en Archivos → Descargas', 8000); } } caja.remove(); };
+  x.onclick = () => caja.remove();
+  caja.append(b, x); document.body.appendChild(caja);
+}
+async function entregarArchivo(blob, nombre){
+  if (esIOS() && navigator.canShare){
+    const archivo = new File([blob], nombre, { type: blob.type });
+    if (navigator.canShare({ files: [archivo] })){
+      try { await navigator.share({ files: [archivo], title: nombre }); return; }
+      catch (e){ if (e.name === 'AbortError') return; if (e.name === 'NotAllowedError'){ botonCompartir(archivo); return; } }
+    }
+  }
+  descargarDirecto(blob, nombre);
+  if (esIOS()) avisar('Descargado: búscalo en Archivos → Descargas', 8000);
+}
+function descargarLibro(libro, nombre){
+  const datos = XLSX.write(libro, { bookType: 'xlsx', type: 'array' });
+  return entregarArchivo(new Blob([datos], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }), nombre);
+}
+
+// ================= Memo e informe mensual en Word (membrete 2026) =================
+// Los nombres, cargos, correo, sufijos y referencia vienen de "configuracion/documentosFono" (Personal y permisos), nunca del código.
+const DOCS_POR_DEFECTO = {
+  fraseAnio: 'Año de la Esperanza y el Fortalecimiento de la Democracia',
+  fraseDecenio: 'Decenio de la igualdad de oportunidades para mujeres y hombres',
+  recuadrosInforme: ['Viceministerio de Derechos Humanos y Acceso a la Justicia', 'Dirección General de Defensa Pública y Acceso a la Justicia'],
+  recuadrosMemo: ['Despacho Viceministerial de Derechos Humanos y Acceso a la Justicia', 'Dirección General de Defensa Pública y Acceso a la Justicia', 'Direcciones Distritales de Defensa Pública y Acceso a la Justicia'],
+  informeDestNombre: '', informeDestCargo: '', memoDestNombre: '', memoDestCargo: '', correo: '',
+  sufijoInforme: '', sufijoInformePropio: '', sufijoMemo: '', referencia: ''
+};
+async function leerConfigDocs(){
+  try { const s = await getDoc(doc(db, 'configuracion', 'documentosFono')); return { ...DOCS_POR_DEFECTO, ...(s.exists() ? s.data() : {}) }; }
+  catch (e){ console.warn(e); return { ...DOCS_POR_DEFECTO }; }
+}
+const xe = s => String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+const CM = 567, EMU_CM = 360000; // twips y EMU por centímetro
+function wRun(t, o = {}){
+  return '<w:r><w:rPr>' + (o.b ? '<w:b/>' : '') + (o.i ? '<w:i/>' : '') + (o.u ? '<w:u w:val="single"/>' : '') + (o.color ? '<w:color w:val="' + o.color + '"/>' : '') +
+    (o.sz ? '<w:sz w:val="' + o.sz + '"/><w:szCs w:val="' + o.sz + '"/>' : '') + '</w:rPr><w:t xml:space="preserve">' + xe(t) + '</w:t></w:r>';
+}
+const wTab = '<w:r><w:tab/></w:r>';
+function wPar(contenido, o = {}){
+  return '<w:p><w:pPr>' + (o.estilo ? '<w:pStyle w:val="' + o.estilo + '"/>' : '') + (o.tabs ? '<w:tabs>' + o.tabs.map(t => '<w:tab w:val="left" w:pos="' + t + '"/>').join('') + '</w:tabs>' : '') +
+    (o.borde ? '<w:pBdr><w:bottom w:val="single" w:sz="6" w:space="1" w:color="000000"/></w:pBdr>' : '') +
+    '<w:spacing w:before="' + (o.antes || 0) + '" w:after="' + (o.despues ?? 120) + '"/>' +
+    (o.ind ? '<w:ind w:left="' + (o.ind.izq || 0) + '"' + (o.ind.colgante ? ' w:hanging="' + o.ind.colgante + '"' : '') + (o.ind.primera ? ' w:firstLine="' + o.ind.primera + '"' : '') + '/>' : '') +
+    '<w:jc w:val="' + (o.jc || 'both') + '"/></w:pPr>' + contenido + '</w:p>';
+}
+function wImg(rid, ancho, alto, id, nombre){
+  const cx = Math.round(ancho * EMU_CM), cy = Math.round(alto * EMU_CM);
+  return '<w:r><w:drawing><wp:inline distT="0" distB="0" distL="0" distR="0"><wp:extent cx="' + cx + '" cy="' + cy + '"/><wp:docPr id="' + id + '" name="' + nombre + '"/>' +
+    '<a:graphic xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main"><a:graphicData uri="http://schemas.openxmlformats.org/drawingml/2006/picture">' +
+    '<pic:pic xmlns:pic="http://schemas.openxmlformats.org/drawingml/2006/picture"><pic:nvPicPr><pic:cNvPr id="' + id + '" name="' + nombre + '"/><pic:cNvPicPr/></pic:nvPicPr>' +
+    '<pic:blipFill><a:blip r:embed="' + rid + '"/><a:stretch><a:fillRect/></a:stretch></pic:blipFill><pic:spPr><a:xfrm><a:off x="0" y="0"/><a:ext cx="' + cx + '" cy="' + cy + '"/></a:xfrm><a:prstGeom prst="rect"><a:avLst/></a:prstGeom></pic:spPr></pic:pic>' +
+    '</a:graphicData></a:graphic></wp:inline></w:drawing></w:r>';
+}
+const NS = 'xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" xmlns:wp="http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing"';
+// Encabezado: logo del Ministerio + recuadros de la dependencia (grises oficiales) + "Perú Responde"; debajo, las dos frases en cursiva
+function encabezadoXml(recuadros, cfg){
+  const anchoTexto = 17, logo = 4.2, pr = 3.2;
+  const ancho = Math.min(3.3, (anchoTexto - logo - pr - 0.4) / recuadros.length);
+  const espacio = Math.max(0.2, anchoTexto - logo - pr - ancho * recuadros.length);
+  const borde = '<w:tcBorders><w:top w:val="nil"/><w:bottom w:val="nil"/><w:left w:val="single" w:sz="18" w:color="FFFFFF"/><w:right w:val="nil"/></w:tcBorders>';
+  const celda = (w, contenido, extra = '') => '<w:tc><w:tcPr><w:tcW w:w="' + Math.round(w * CM) + '" w:type="dxa"/>' + extra + '<w:vAlign w:val="center"/></w:tcPr>' + contenido + '</w:tc>';
+  const textoRec = (t, i) => wPar(wRun(t, { sz: 13, b: i === 1, color: i === 0 ? 'FFFFFF' : '333333' }), { despues: 0, jc: 'left' });
+  const filas = '<w:tr><w:trPr><w:trHeight w:val="' + Math.round(0.95 * CM) + '"/></w:trPr>' +
+    celda(logo, wPar(wImg('rIdLogo', logo, logo * 83 / 385, 1, 'Ministerio'), { despues: 0, jc: 'left' })) +
+    recuadros.map((t, i) => celda(ancho, textoRec(t, i), borde + '<w:shd w:val="clear" w:color="auto" w:fill="' + (i === 0 ? '95949C' : 'BDBCC2') + '"/><w:tcMar><w:left w:w="80" w:type="dxa"/><w:right w:w="60" w:type="dxa"/></w:tcMar>')).join('') +
+    celda(espacio, wPar('', { despues: 0 })) +
+    celda(pr, wPar(wImg('rIdPeru', pr, pr * 153 / 372, 2, 'Peru Responde'), { despues: 0, jc: 'right' })) + '</w:tr>';
+  const tabla = '<w:tbl><w:tblPr><w:tblW w:w="' + Math.round(anchoTexto * CM) + '" w:type="dxa"/><w:tblLayout w:type="fixed"/><w:tblBorders><w:top w:val="nil"/><w:left w:val="nil"/><w:bottom w:val="nil"/><w:right w:val="nil"/><w:insideH w:val="nil"/><w:insideV w:val="nil"/></w:tblBorders><w:tblCellMar><w:left w:w="0" w:type="dxa"/><w:right w:w="0" w:type="dxa"/></w:tblCellMar></w:tblPr><w:tblGrid>' +
+    [logo, ...recuadros.map(() => ancho), espacio, pr].map(w => '<w:gridCol w:w="' + Math.round(w * CM) + '"/>').join('') + '</w:tblGrid>' + filas + '</w:tbl>';
+  const frases = [cfg.fraseAnio, cfg.fraseDecenio].filter(Boolean).map((f, i) => wPar(wRun('“' + f + '”', { i: true, sz: 18 }), { jc: 'center', antes: i ? 0 : 120, despues: 0 })).join('');
+  return '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><w:hdr ' + NS + '>' + tabla + frases + wPar('', { despues: 0 }) + '</w:hdr>';
+}
+// Pie: el logo de los 200 años, a la derecha (sin "copia auténtica" ni enlaces de verificación)
+function pieXml(){
+  return '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><w:ftr ' + NS + '>' + wPar(wImg('rId200', 2.8, 2.8 * 133 / 272, 3, '200 anios'), { jc: 'right', despues: 0 }) + '</w:ftr>';
+}
+const ESTILOS = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><w:styles xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:docDefaults><w:rPrDefault><w:rPr><w:rFonts w:ascii="Arial" w:hAnsi="Arial" w:eastAsia="Arial" w:cs="Arial"/><w:sz w:val="22"/><w:szCs w:val="22"/><w:lang w:val="es-PE"/></w:rPr></w:rPrDefault><w:pPrDefault><w:pPr><w:spacing w:after="120" w:line="276" w:lineRule="auto"/></w:pPr></w:pPrDefault></w:docDefaults><w:style w:type="paragraph" w:default="1" w:styleId="Normal"><w:name w:val="Normal"/></w:style></w:styles>';
+async function armarDocx(cuerpo, recuadros, cfg, nombre){
+  const zip = new JSZip();
+  const imagenes = await Promise.all(['membrete/logo_ministerio.png', 'membrete/peru_responde.png', 'membrete/logo_200.png'].map(u => fetch(u).then(r => { if (!r.ok) throw new Error('No se pudo cargar ' + u); return r.arrayBuffer(); })));
+  zip.file('[Content_Types].xml', '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Default Extension="png" ContentType="image/png"/><Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/><Override PartName="/word/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.styles+xml"/><Override PartName="/word/header1.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.header+xml"/><Override PartName="/word/footer1.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.footer+xml"/></Types>');
+  zip.file('_rels/.rels', '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="word/document.xml"/></Relationships>');
+  zip.file('word/_rels/document.xml.rels', '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rIdEstilos" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/><Relationship Id="rIdEnc" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/header" Target="header1.xml"/><Relationship Id="rIdPie" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/footer" Target="footer1.xml"/></Relationships>');
+  const relsImg = ids => '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">' + ids.map(([id, f]) => '<Relationship Id="' + id + '" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/image" Target="media/' + f + '"/>').join('') + '</Relationships>';
+  zip.file('word/_rels/header1.xml.rels', relsImg([['rIdLogo', 'logo_ministerio.png'], ['rIdPeru', 'peru_responde.png']]));
+  zip.file('word/_rels/footer1.xml.rels', relsImg([['rId200', 'logo_200.png']]));
+  zip.file('word/media/logo_ministerio.png', imagenes[0]); zip.file('word/media/peru_responde.png', imagenes[1]); zip.file('word/media/logo_200.png', imagenes[2]);
+  zip.file('word/styles.xml', ESTILOS);
+  zip.file('word/header1.xml', encabezadoXml(recuadros, cfg));
+  zip.file('word/footer1.xml', pieXml());
+  // A4, márgenes de 2 cm a los lados
+  const sect = '<w:sectPr><w:headerReference w:type="default" r:id="rIdEnc"/><w:footerReference w:type="default" r:id="rIdPie"/><w:pgSz w:w="11906" w:h="16838"/><w:pgMar w:top="1985" w:right="1134" w:bottom="1418" w:left="1134" w:header="567" w:footer="454" w:gutter="0"/></w:sectPr>';
+  zip.file('word/document.xml', '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><w:document ' + NS + '><w:body>' + cuerpo + sect + '</w:body></w:document>');
+  const blob = await zip.generateAsync({ type: 'blob', mimeType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' });
+  await entregarArchivo(blob, nombre);
+}
+// Bloque "A / Asunto / Fecha" como en los modelos
+const TABS_ENC = [1134, 1418];
+const lineaEnc = (rotulo, texto, o = {}) => wPar(wRun(rotulo, { b: true }) + wTab + wRun(':', { b: true }) + wTab + wRun(texto, { b: !!o.b }), { tabs: TABS_ENC, ind: { izq: 1418, colgante: 1418 }, despues: o.despues ?? 0, jc: o.jc || 'left' });
+const lineaCargo = t => wPar(wRun(t), { ind: { izq: 1418 }, despues: 0, jc: 'left' });
+const dos = n => String(n).padStart(2, '0');
+function textoFecha(iso, conDel){ const [a, m, d] = iso.split('-'); return 'Lima, ' + d + ' de ' + MESES_MAY[Number(m) - 1] + (conDel ? ' del ' : ' de ') + a; }
+// Cómo se nombra el período en el texto (el mes siempre en mayúsculas)
+function frasesPeriodo(p){
+  const [a, m] = (p.resaltado || p.desde).split('-'), MES = MESES_MAY[Number(m) - 1];
+  if (p.tipo === 'mes') return { asunto: 'DEL MES DE ' + MES + ' DE ' + a, asuntoMemo: 'DEL MES DE ' + MES + ' ' + a, cuerpo: 'del mes de ' + MES + ' de ' + a, en: 'En el mes de ' + MES + ' del ' + a, durante: 'durante el periodo de ' + MES + ' de ' + a, memo: 'del mes de ' + MES + ' ' + a };
+  if (p.tipo === 'acumulado') return { asunto: 'DEL PERÍODO DE ENERO A ' + MES + ' DE ' + a, asuntoMemo: 'DEL PERÍODO DE ENERO A ' + MES + ' ' + a, cuerpo: 'del período de ENERO a ' + MES + ' de ' + a, en: 'En el período de ENERO a ' + MES + ' del ' + a, durante: 'durante el periodo de ENERO a ' + MES + ' de ' + a, memo: 'del período de ENERO a ' + MES + ' ' + a };
+  if (p.tipo === 'anio') return { asunto: 'DEL AÑO ' + p.desde.slice(0, 4), asuntoMemo: 'DEL AÑO ' + p.desde.slice(0, 4), cuerpo: 'del año ' + p.desde.slice(0, 4), en: 'En el año ' + p.desde.slice(0, 4), durante: 'durante el año ' + p.desde.slice(0, 4), memo: 'del año ' + p.desde.slice(0, 4) };
+  const r = 'del ' + fechaCorta(p.desde) + ' al ' + fechaCorta(p.hasta);
+  return { asunto: 'DEL PERÍODO ' + r.toUpperCase(), asuntoMemo: 'DEL PERÍODO ' + r.toUpperCase(), cuerpo: 'del período ' + r, en: 'En el período ' + r, durante: 'durante el periodo ' + r, memo: 'del período ' + r };
+}
+function datosDocs(cfg){
+  const anio = ($('docFecha').value || hoyIso()).slice(0, 4);
+  const nInf = $('docNumInforme').value.trim() || '____', nProp = $('docNumPropio').value.trim() || '____', nMemo = $('docNumMemo').value.trim() || '____';
+  const tituloInforme = 'INFORME Nro. ' + nInf + '-' + anio + (cfg.sufijoInforme ? '-' + cfg.sufijoInforme : '') + '//INFORME NRO. N° ' + nProp + '-' + anio + (cfg.sufijoInformePropio ? '-' + cfg.sufijoInformePropio : '');
+  const tituloMemo = 'MEMORANDUM N° ' + nMemo + '-' + anio + (cfg.sufijoMemo ? '-' + cfg.sufijoMemo : '');
+  return { anio, tituloInforme, tituloMemo, fecha: $('docFecha').value || hoyIso(), folios: $('docFolios').value.trim() || '04' };
+}
+function faltanEnConfig(cfg, cual){
+  const f = [];
+  if (cual === 'informe'){ if (!cfg.informeDestNombre) f.push('destinatario del informe'); if (!cfg.correo) f.push('tu correo institucional'); if (!cfg.referencia) f.push('memorándum múltiple de referencia'); if (!cfg.sufijoInforme) f.push('parte fija del N° de informe'); }
+  else { if (!cfg.memoDestNombre) f.push('destinatario del memo'); if (!cfg.sufijoMemo) f.push('parte fija del N° de memorándum'); }
+  return f;
+}
+async function descargarWord(cual){
+  const p = periodoElegido();
+  if (!p.desde || !p.hasta || p.hasta < p.desde){ avisar('Elige el período.'); return; }
+  const cfg = await leerConfigDocs();
+  const falta = faltanEnConfig(cfg, cual);
+  $('avisoDocs').hidden = !falta.length;
+  $('avisoDocs').innerHTML = falta.length ? '⚠ Falta en <b>Personal y permisos → Documentos de Fono Alegra</b>: ' + falta.join(', ') + '. El documento sale con esos espacios en blanco.' : '';
+  let lista;
+  try { lista = await llamadasEntre(p.desde, p.hasta); } catch (e){ console.error(e); avisar('No se pudo leer las llamadas.'); return; }
+  const d = datosDocs(cfg), fr = frasesPeriodo(p);
+  const cuenta = (sede, area) => lista.filter(f => (f.subSede || '') === sede && f.area === area).length;
+  const vLC = cuenta('LIMA CENTRO', 'Defensa de Víctimas'), aLC = cuenta('LIMA CENTRO', 'Asistencia Legal'), vMI = cuenta('MIRAFLORES', 'Defensa de Víctimas'), aMI = cuenta('MIRAFLORES', 'Asistencia Legal');
+  const eq = lista.filter(f => f.area === 'Equipo multidisciplinario').length;
+  const { tot } = resumenInforme(lista);
+  const cargo = t => String(t || '').split('\n').map(x => x.trim()).filter(Boolean);
+  const linea = '<w:p><w:pPr><w:pBdr><w:bottom w:val="single" w:sz="6" w:space="1" w:color="000000"/></w:pBdr><w:spacing w:after="160"/></w:pPr></w:p>';
+  if (cual === 'informe'){
+    const partes = [dos(vLC) + ' corresponden al área de Defensa de Víctimas de Lima Centro', dos(aLC) + ' al área de Asistencia Legal de Lima Centro', dos(vMI) + ' al área de Defensa de Víctimas de Miraflores'];
+    const finales = [dos(aMI) + ' al área de Asistencia Legal de Miraflores'];
+    if (eq) finales.push(dos(eq) + ' al Equipo Multidisciplinario');
+    const desglose = partes.join(', ') + ', ' + (finales.length === 1 ? 'y ' + finales[0] : finales[0] + ' y ' + finales[1]);
+    const c = [
+      wPar(wRun(d.tituloInforme, { b: true, u: true }), { jc: 'center', despues: 240 }),
+      lineaEnc('A', cfg.informeDestNombre || '[DESTINATARIO]', { b: true }), ...cargo(cfg.informeDestCargo).map(lineaCargo),
+      wPar('', { despues: 0 }),
+      lineaEnc('Asunto', 'SE REMITE REPORTE DERIVACIÓN DE CASOS DEL SERVICIO DEL FONO ALEGRA-LINEA 1884 (OPCIÓN 1) ' + fr.asunto + '.', { b: true, jc: 'both' }),
+      wPar('', { despues: 0 }),
+      lineaEnc('Fecha', textoFecha(d.fecha, false)), linea,
+      wPar(wRun('Tengo el honor de dirigirme a usted, para saludarle muy cordialmente y a la vez remitir el informe respecto el Reporte Derivación de Casos del Servicio del Fono Alegra-línea 1884 (opción 1) ' + fr.cuerpo + '; en atención a ello, se expone:')),
+      wPar(wRun('I.- ANTECEDENTES:', { b: true }), { antes: 120 }),
+      wPar(wRun('Que, en calidad de Coordinador Distrital del Mega Alegra de la Defensa Pública y Acceso a la Justicia de Lima del Ministerio de Justicia y Derechos Humanos, recibo en mi correo institucional ' + (cfg.correo || '[CORREO]') + ' los datos de ciudadanos que se comunicaron a la Línea de Orientación Legal Gratuita – Fono Alegra 1884 opción 1, y que requieren el servicio de la Defensa Pública.')),
+      wPar(wRun('Que, mediante ' + (cfg.referencia || '[MEMORANDO MÚLTIPLE DE REFERENCIA]') + ', se viene disponiendo las directrices para un mejor registro de las actividades mensuales de los/as operadores de la Línea de Orientación Legal Gratuita – Fono Alegra 1884 opción 1; por lo que se cumple con alcanzar la información.')),
+      wPar(wRun('II.- ANALISIS:', { b: true }), { antes: 120 }),
+      wPar(wRun('2.1. ' + fr.en + ', se remitieron las derivaciones con los datos de ciudadanos que se comunicaron a la Línea de Orientación Legal Gratuita – Fono Alegra 1884 opción 1, para recibir orientación legal y patrocinio de los Defensores Públicos La Dirección Distrital de Lima centro.')),
+      wPar(wRun('2.3 El correo con la solicitud de asignación de Defensor Público, se distribuye a los Defensores Públicos, indicándoles informar las gestiones realizadas, con copia al responsable de recepción de la comunicación y posterior a ello, se remita el memorándum de asignación del caso correspondiente.')),
+      wPar(wRun('2.4 Se ha consolidado las actividades del MEGA ALEGRA., respecto a las atenciones de la línea 1884 opción 1 ' + fr.durante + '. Se registraron un total de ' + dos(lista.length) + ' llamadas, de las cuales ' + desglose + '. Todas las llamadas fueron debidamente asignadas al personal respectivo y atendidas oportunamente. Del total de usuarios, ' + tot.h + (tot.h === 1 ? ' fue hombre' : ' fueron hombres') + ' y ' + tot.m + (tot.m === 1 ? ' mujer' : ' mujeres') + '; de ellos, ' + tot.lgtb + (tot.lgtb === 1 ? ' se identificó' : ' se identificaron') + ' como LGTB.')),
+      wPar(wRun('Se adjunta;'), { antes: 120 }),
+      wPar(wRun('- Excel consolidado FONO ALEGRA Línea 1884 – ' + p.titulo), { ind: { izq: 567 } }),
+      wPar(wRun('Es cuanto lo que tengo que informar.'), { antes: 240 })
+    ].join('');
+    await armarDocx(c, (cfg.recuadrosInforme || []).filter(Boolean), cfg, 'INFORME MENSUAL FONO ALEGRA – ' + p.titulo.replace(/\//g, '-') + '.docx');
+  } else {
+    const c = [
+      wPar(wRun(d.tituloMemo, { b: true, u: true }), { jc: 'center', despues: 240 }),
+      lineaEnc('A', cfg.memoDestNombre || '[DESTINATARIO]', { b: true }), ...cargo(cfg.memoDestCargo).map(lineaCargo),
+      wPar('', { despues: 0 }),
+      lineaEnc('Asunto', 'SE REMITE CONSOLIDADO DE LOS CASOS DERIVADOS DEL SERVICIO FONO ALEGRA 1884 (OPCION 1) ' + fr.asuntoMemo, { b: true, jc: 'both' }),
+      wPar('', { despues: 0 }),
+      lineaEnc('Fecha', textoFecha(d.fecha, true)), linea,
+      wPar(wRun('Tengo el honor de dirigirme a usted, por intermedio de la presente y en atención a los documentos de la referencia, se remite ' + d.tituloInforme + ', correspondiente al consolidado de los casos derivados del servicio de FONO ALEGRA – LINEA 1884 (opción 1), ' + fr.memo + '.'), { ind: { primera: 567 } }),
+      wPar(wRun('(Se adjunta ' + d.folios + ' folios incluido el presente memorándum)'), { antes: 120 }),
+      wPar(wRun('Atentamente,'), { antes: 240 })
+    ].join('');
+    await armarDocx(c, (cfg.recuadrosMemo || []).filter(Boolean), cfg, 'MEMO FONO ALEGRA – ' + p.titulo.replace(/\//g, '-') + '.docx');
+  }
+}
+$('btnWordInforme').onclick = () => descargarWord('informe').catch(e => { console.error(e); avisar('No se pudo armar el Word (' + (e.message || e) + ').', 7000); });
+$('btnWordMemo').onclick = () => descargarWord('memo').catch(e => { console.error(e); avisar('No se pudo armar el Word (' + (e.message || e) + ').', 7000); });
+
 async function pintarInforme(){
   const t = $('tipoInforme').value;
   document.querySelectorAll('#informeMes [data-para]').forEach(l => l.hidden = !l.dataset.para.split(' ').includes(t));
@@ -675,7 +893,7 @@ async function descargarConsolidado(sel){
   }
   if (tot.sin) rf.push([], ['Casos sin dato de sexo (registrados antes de pedir el sexo): ' + tot.sin + ' (no entran en Total población)']);
   XLSX.utils.book_append_sheet(libro, hojaConEstilos(rf, re, [30, 10, 10, 16, 8]), 'Resumen');
-  XLSX.writeFile(libro, 'Excel consolidado FONO ALEGRA Línea 1884 – ' + p.titulo.replace(/\//g, '-') + '.xlsx');
+  await descargarLibro(libro, 'Excel consolidado FONO ALEGRA Línea 1884 – ' + p.titulo.replace(/\//g, '-') + '.xlsx');
 }
 
 $('selMesInforme').addEventListener('change', pintarInforme);
@@ -853,6 +1071,7 @@ onAuthStateChanged(auth, async user => {
     $('selMesInforme').value = hoy.slice(0, 7);
     $('informeAnio').innerHTML = Array.from({ length: anioActual - 2024 }, (_, i) => anioActual - i).map(a => `<option>${a}</option>`).join('');
     $('informeDesde').value = hoy.slice(0, 7) + '-01'; $('informeHasta').value = hoy;
+    $('docFecha').value = hoy;
     $('selAnio').innerHTML = Array.from({ length: anioActual - 2024 }, (_, i) => anioActual - i).map(a => `<option>${a}</option>`).join('');
     const [sd, sl] = await Promise.all([getDocs(collection(db, 'defensores')), getDocs(collection(db, 'licencias')).catch(() => ({ docs: [] }))]);
     DEFS = sd.docs.map(d => ({ id: d.id, ...d.data() }))

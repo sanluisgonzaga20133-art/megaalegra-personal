@@ -46,6 +46,8 @@
   .ayuda{font-size:12.5px;color:var(--gris);line-height:1.5;margin:4px 0}
   .fila-form{display:flex;gap:8px;flex-wrap:wrap;align-items:end}
   .fila-form label{font-size:12px;font-weight:700;display:flex;flex-direction:column;gap:3px}
+  .docs-config{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:10px}
+  .docs-config input,.docs-config textarea{width:100%;box-sizing:border-box;font:inherit;font-weight:400}
   .fila-form input, .fila-form select{padding:8px 10px;border:1.5px solid var(--linea);border-radius:8px;background:var(--papel);min-width:160px}
   .btn{padding:8px 14px;border-radius:8px;border:none;background:var(--rojo);color:#fff;font-weight:700;cursor:pointer}
   .btn:disabled{background:#D8CFC3;cursor:default}
@@ -150,6 +152,26 @@
         <button class="btn" id="btnGuardarConteos">Guardar</button>
       </div>
       <p class="ayuda">El saldo de compensación de reasignaciones y el turno de opiniones solo cuentan desde estas fechas. Lo anterior no se borra: solo deja de contar.</p>
+    </div>
+    <div class="caja solo-admin">
+      <h3>Documentos de Fono Alegra (memo e informe en Word)</h3>
+      <p class="ayuda">Lo que se escribe aquí se usa al descargar el memo y el informe del Drive 3. No queda en el código de la página. Para varias líneas (cargo), escribe una por renglón.</p>
+      <div class="fila-form docs-config">
+        <label>Destinatario del informe<input type="text" id="cfgInfNombre" placeholder="DR. …"></label>
+        <label>Cargo del destinatario del informe<textarea id="cfgInfCargo" rows="4"></textarea></label>
+        <label>Destinatario del memo<input type="text" id="cfgMemoNombre" placeholder="ABEL …"></label>
+        <label>Cargo del destinatario del memo<textarea id="cfgMemoCargo" rows="4"></textarea></label>
+        <label>Tu correo institucional<input type="email" id="cfgCorreo"></label>
+        <label>Memorándum múltiple de referencia<input type="text" id="cfgReferencia" placeholder="memorando múltiple N° …"></label>
+        <label>Parte fija del N° de informe (después del año)<input type="text" id="cfgSufInf" placeholder="JUS/ DGDP-DDPAJLIMA"></label>
+        <label>Parte fija de tu N° de informe propio<input type="text" id="cfgSufProp" placeholder="DDLC-…"></label>
+        <label>Parte fija del N° de memorándum<input type="text" id="cfgSufMemo" placeholder="JUS/ DGDP-DDPAJLIMA"></label>
+        <label>Frase del año (cursiva)<input type="text" id="cfgFraseAnio"></label>
+        <label>Frase del decenio (cursiva)<input type="text" id="cfgFraseDecenio"></label>
+        <label>Recuadros del membrete del informe (uno por renglón)<textarea id="cfgRecInf" rows="3"></textarea></label>
+        <label>Recuadros del membrete del memo (uno por renglón)<textarea id="cfgRecMemo" rows="3"></textarea></label>
+      </div>
+      <div class="fila-form"><button class="btn" id="btnGuardarDocs">Guardar</button></div>
     </div>
     <div class="caja solo-admin">
       <h3>Revisar restos sin caso</h3>
@@ -484,6 +506,38 @@ $('btnGuardarConteos').onclick = async () => {
     await registrarCambio('Cambió la fecha de inicio de los conteos rotativos', 'configuracion', 'conteos', antes, nuevo);
     conteos = nuevo;
     avisar('Guardado. La Agenda y el Drive 1 lo toman al recargar.');
+  } catch (e){ error(e); }
+};
+
+// ---------- Documentos de Fono Alegra: datos del memo y del informe (solo el administrador) ----------
+// Nombres, cargos, correo y números no van en el código (el repositorio es público): se guardan en configuracion/documentosFono.
+const DOCS_CAMPOS = [['cfgInfNombre', 'informeDestNombre'], ['cfgInfCargo', 'informeDestCargo'], ['cfgMemoNombre', 'memoDestNombre'], ['cfgMemoCargo', 'memoDestCargo'], ['cfgCorreo', 'correo'], ['cfgReferencia', 'referencia'], ['cfgSufInf', 'sufijoInforme'], ['cfgSufProp', 'sufijoInformePropio'], ['cfgSufMemo', 'sufijoMemo'], ['cfgFraseAnio', 'fraseAnio'], ['cfgFraseDecenio', 'fraseDecenio']];
+const DOCS_INICIALES = {
+  fraseAnio: 'Año de la Esperanza y el Fortalecimiento de la Democracia',
+  fraseDecenio: 'Decenio de la igualdad de oportunidades para mujeres y hombres',
+  recuadrosInforme: ['Viceministerio de Derechos Humanos y Acceso a la Justicia', 'Dirección General de Defensa Pública y Acceso a la Justicia'],
+  recuadrosMemo: ['Despacho Viceministerial de Derechos Humanos y Acceso a la Justicia', 'Dirección General de Defensa Pública y Acceso a la Justicia', 'Direcciones Distritales de Defensa Pública y Acceso a la Justicia']
+};
+let docsFono = {};
+async function cargarDocsFono(){
+  try { const s = await getDoc(doc(db, 'configuracion', 'documentosFono')); docsFono = s.exists() ? s.data() : {}; }
+  catch (e){ console.error(e); docsFono = {}; }
+  const v = { ...DOCS_INICIALES, ...docsFono };
+  DOCS_CAMPOS.forEach(([id, k]) => $(id).value = v[k] || '');
+  $('cfgRecInf').value = (v.recuadrosInforme || []).join('\n');
+  $('cfgRecMemo').value = (v.recuadrosMemo || []).join('\n');
+}
+$('btnGuardarDocs').onclick = async () => {
+  const nuevo = {};
+  DOCS_CAMPOS.forEach(([id, k]) => nuevo[k] = $(id).value.trim());
+  const lineas = t => t.split('\n').map(x => x.trim()).filter(Boolean);
+  nuevo.recuadrosInforme = lineas($('cfgRecInf').value); nuevo.recuadrosMemo = lineas($('cfgRecMemo').value);
+  const antes = {}; Object.keys(nuevo).forEach(k => antes[k] = docsFono[k] ?? '');
+  try {
+    await setDoc(doc(db, 'configuracion', 'documentosFono'), { ...nuevo, actualizadoPor: yo.correo, actualizadoEn: new Date().toISOString() });
+    await registrarCambio('Cambió los datos del memo e informe de Fono Alegra', 'configuracion', 'documentosFono', antes, nuevo);
+    docsFono = nuevo;
+    avisar('Guardado. El Drive 3 lo usa en la próxima descarga.');
   } catch (e){ error(e); }
 };
 
@@ -852,7 +906,7 @@ onAuthStateChanged(auth, async user => {
     if (!esAdmin()) document.querySelectorAll('.solo-admin').forEach(x => x.hidden = true);
     $('subtitulo').textContent = esAdmin() ? 'Quién puede registrar, editar y ver cada sección' : 'Permiso temporal para asistentes';
     await cargarStaff();
-    if (esAdmin()) await cargarConteos();
+    if (esAdmin()){ await cargarConteos(); await cargarDocsFono(); }
   } catch (e){ console.error(e); $('msgLogin').textContent = 'No se pudo cargar tu acceso (' + (e.code || e.message) + ').'; $('cargandoSesion').hidden = true; $('cajaLogin').hidden = false; }
 });
 </script>
