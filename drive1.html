@@ -178,6 +178,31 @@
   .quitar-dil{position:absolute;top:6px;right:6px;width:30px;height:30px;border-radius:50%;border:1.5px solid var(--linea);background:#fff;color:var(--tinta);font-weight:700;cursor:pointer}
   .quitar-dil:hover{border-color:var(--rojo);color:var(--rojo-oscuro)}
   .btn-agregar-dil{margin-top:4px;padding:8px 12px;border-radius:8px;border:1.5px dashed var(--azul);background:#fff;color:var(--azul);font-weight:700;font-size:13px;cursor:pointer}
+  /* Reasignación en bloque */
+  .modal.ancha{max-width:1040px}
+  .fila-bq{display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap}
+  .mini-boton{padding:6px 11px;border-radius:7px;border:1.5px solid var(--linea);background:#fff;color:var(--tinta);font-weight:700;font-size:12.5px;cursor:pointer}
+  .mini-boton:hover{border-color:var(--azul)}
+  .tabla-bq-wrap{border:1px solid var(--linea);border-radius:8px;overflow:auto;max-height:46vh;margin-bottom:8px}
+  .tabla-bq{width:100%;min-width:760px}
+  .tabla-bq th{position:sticky;top:0;z-index:1;background:#EFE9DD;font-size:11.5px;padding:6px;border:1px solid var(--celda);text-align:left;white-space:nowrap}
+  .tabla-bq td{padding:5px 6px;border:1px solid var(--celda);font-size:12.5px;vertical-align:top;background:#fff}
+  .tabla-bq tr.marcado td{background:#FFF8E8}
+  .tabla-bq td .chico{display:block;font-size:11px;color:var(--gris)}
+  .modal .tabla-bq select{font-size:12.5px;padding:4px 6px;min-width:190px}
+  .lista-recibe{display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:4px 14px;max-height:34vh;overflow:auto;border:1px solid var(--linea);border-radius:8px;padding:8px 10px}
+  .lista-recibe .titulo-recibe{grid-column:1 / -1;font-size:12px;font-weight:800;color:var(--azul);margin-top:6px}
+  .lista-recibe label{display:flex;gap:6px;align-items:flex-start;font-size:12.5px;cursor:pointer;line-height:1.35}
+  .lista-recibe label.gris{color:var(--gris-claro);cursor:default}
+  .aviso-pronto{color:#9A5B00;font-weight:700}
+  .resumen-bq{margin-top:12px;font-size:13px}
+  .chip-rep{display:inline-block;margin:2px 4px 2px 0;padding:2px 9px;border-radius:10px;background:var(--verde-fondo);color:var(--verde);font-size:12px;border:1px solid var(--verde)}
+  .caja-manual, .caja-copiar{border:1px dashed var(--linea);border-radius:10px;padding:6px 12px 10px;margin-top:8px;background:#FCFAF6}
+  .caja-confirmar{background:#FFF3D6;border:1.5px solid #E8C872;border-radius:10px;padding:10px 12px;margin-top:12px;font-size:13.5px;line-height:1.45}
+  .caja-confirmar.ok{background:var(--verde-fondo);border-color:var(--verde);color:var(--verde)}
+  .caja-confirmar .acciones-coinc button.si{background:var(--rojo-oscuro);border-color:var(--rojo-oscuro);color:#fff}
+  .tarjeta-bq{border:1px solid var(--linea);border-radius:10px;padding:10px 12px;margin-top:10px;font-size:13px;line-height:1.45}
+  .tarjeta-bq .acciones-coinc{align-items:center}
   .dil-linea + .dil-linea{border-top:1px dashed var(--celda);margin-top:4px;padding-top:4px}
   .enlace-meet{display:inline-block;font-size:11px;font-weight:700;color:var(--azul)}
   tbody tr.urgente .enlace-meet, tbody tr.muy-urgente .enlace-meet{color:#fff}
@@ -344,6 +369,7 @@
     <p>Drive 1 · Defensa Pública Lima Centro</p>
     <div class="fila-controles">
       <button class="btn-registrar solo-abogado" id="btnRegistrar">+ Registrar caso</button>
+      <button class="btn-blanco solo-abogado" id="btnBloque">🔁 Reasignación en bloque</button>
       <button class="btn-blanco" id="btnAbrirDescarga">⬇ Descargar por fechas</button>
     </div>
     <div class="fila-controles" id="panelDescarga" hidden>
@@ -691,6 +717,86 @@
   </div>
 </div>
 
+<!-- Reasignación en bloque: un defensor deja varios casos a la vez y se reparten entre otros -->
+<div class="fondo-modal" id="fondoBloque" hidden>
+  <div class="modal ancha" role="dialog" aria-labelledby="tituloBloque">
+    <button type="button" class="btn-x" data-cerrar-modal aria-label="Cerrar">✕</button>
+    <h2 id="tituloBloque">Reasignación en bloque</h2>
+    <p class="sub">Un defensor deja de atender varios casos a la vez y se reparten entre otros. Cada caso cuenta en Reasig. de la Agenda (−/+), no como caso nuevo, y deja su antecedente en el Drive 1.</p>
+    <div class="opciones" id="optVistaBloque">
+      <div class="opcion activo" data-v="nuevo">Nueva reasignación en bloque</div>
+      <div class="opcion" data-v="guardados">Bloques guardados (copiar memo o deshacer)</div>
+    </div>
+
+    <div id="bqNuevo">
+      <div class="rejilla">
+        <div class="ancho">
+          <label class="campo" for="bqSale">Defensor que sale <span class="obl">*</span></label>
+          <select id="bqSale"></select>
+        </div>
+        <div>
+          <label class="campo" for="bqMotivo">Motivo <span class="obl">*</span></label>
+          <select id="bqMotivo"></select>
+          <input type="text" id="bqMotivoOtro" class="may" placeholder="Escribe el motivo" aria-label="Otro motivo" style="margin-top:6px" hidden>
+        </div>
+        <div>
+          <label class="campo" for="bqMemo">N° de memorándum <span class="obl">*</span></label>
+          <input type="text" id="bqMemo" class="may" placeholder="Ej. 045-2026" autocomplete="off">
+        </div>
+      </div>
+
+      <div class="resumen-bq" id="bqResumen" aria-live="polite"></div>
+
+      <div class="bloque">
+        <div class="fila-bq">
+          <label class="campo">Sus casos (todos los años)</label>
+          <button type="button" class="mini-boton" id="bqMarcarTodos">Marcar todos</button>
+        </div>
+        <div class="tabla-bq-wrap" id="bqCasos"></div>
+        <button type="button" class="btn-agregar-dil" id="bqAgregarManual">+ Agregar caso a mano</button>
+        <div class="caja-manual" id="bqManual" hidden>
+          <div class="ayuda">Para casos antiguos que nunca estuvieron en la app. Se crea su fila en el Drive 1 (no cuenta como caso nuevo en la Agenda).</div>
+          <div class="rejilla">
+            <div><label class="campo" for="bqmCarpeta">N° de caso / carpeta</label><input type="text" id="bqmCarpeta" class="may" autocomplete="off"></div>
+            <div><label class="campo" for="bqmUsuario">Patrocinado <span class="obl">*</span></label><input type="text" id="bqmUsuario" class="may" placeholder="APELLIDOS, Nombres" autocomplete="off"></div>
+            <div><label class="campo" for="bqmFecha">Fecha de asignación <span class="obl">*</span></label><input type="date" id="bqmFecha"></div>
+            <div><label class="campo" for="bqmAccion">Última acción</label><input type="text" id="bqmAccion" class="may" autocomplete="off"></div>
+          </div>
+          <div class="error-form" id="bqmError" hidden></div>
+          <div class="acciones-coinc"><button type="button" class="mismo" id="bqmAgregar">Agregar a la lista</button><button type="button" id="bqmCancelar">Cancelar</button></div>
+        </div>
+      </div>
+
+      <div class="bloque">
+        <label class="campo">Abogados que reciben <span class="obl">*</span> <span class="ayuda" style="display:inline" id="bqCuantosReciben"></span></label>
+        <div class="lista-recibe" id="bqRecibe"></div>
+      </div>
+
+      <div class="fila-bq" style="margin-top:12px">
+        <button type="button" class="btn-principal" id="bqRepartir" style="padding:10px 18px">Repartir</button>
+        <span class="ayuda" id="bqAyudaRepartir">Reparte los casos marcados de forma pareja entre los elegidos, con la regla de siempre (primero a quien se le debe un caso, luego por turno). Después puedes cambiar cada uno a mano.</span>
+      </div>
+
+      <div class="caja-copiar" id="bqCopiar" hidden>
+        <label class="campo" for="bqCopiarQuien">📋 Copiar para memo</label>
+        <div class="fila-bq">
+          <select id="bqCopiarQuien" style="flex:1;min-width:200px"></select>
+          <button type="button" class="mini-boton" id="bqCopiarBtn">📋 Copiar para memo</button>
+        </div>
+      </div>
+
+      <div class="error-form" id="bqError" hidden></div>
+      <div class="caja-confirmar" id="bqConfirmar" hidden></div>
+      <div class="acciones-modal">
+        <button class="btn-cancelar" data-cerrar-modal>Cerrar</button>
+        <button class="btn-principal" id="bqGuardar">Guardar</button>
+      </div>
+    </div>
+
+    <div id="bqGuardados" hidden></div>
+  </div>
+</div>
+
 <!-- Registro minimizado: al tocarla vuelve a abrirse con todo lo escrito -->
 <button type="button" id="barraRegistro" hidden></button>
 
@@ -735,6 +841,8 @@ function esDerivacion(t){ return t === TIPO_DERIVACION || t === TIPO_DEVOLUCION_
 function destinoDerivacion(r){ return (r.derivaTipo === 'Otra institución' ? '' : 'DIRECCIÓN DISTRITAL ') + may(r.distrital || 'sin nombre'); }
 // Mismo usuario que vuelve (botón "Pasar al mismo abogado"): antecedente con el abogado actual; no cuenta en la Agenda
 const TIPO_MISMO_ABOGADO = 'Nueva consulta del mismo usuario (pasa al mismo abogado)';
+// Reasignación en bloque: antecedente que deja cada caso del bloque (no se elige en el formulario; se deshace desde "Reasignación en bloque")
+const TIPO_BLOQUE = 'Reasignación en bloque';
 const TIPOS_DOC = ['Informe del defensor', TIPO_DERIVACION, 'Solicitud de cambio de abogado',
   'Solicitud de nueva opinión', TIPO_MISMO_ABOGADO, 'Otro documento'];
 const RESPUESTAS = ['Usuario no contesta', 'No desea patrocinio', 'Solicita oficiar a otra institución', 'Caso atendido',
@@ -1137,7 +1245,7 @@ function pintar(){
 
     const acciones = idPorBorrar === r.id
       ? `<div class="confirmar">¿Borrar? <button class="si" data-borrar-si="${r.id}">Sí</button><button class="no" data-borrar-no>No</button></div>`
-      : `<div class="acciones"><button data-editar="${r.id}">✎ Editar</button>${!r.padreId ? `<button data-antecedente="${r.id}">+ Antecedente</button><button data-cambiar-abogado="${r.id}">⇄ Cambiar abogado</button>` : ''}<button class="borrar" data-borrar="${r.id}">🗑 Borrar</button></div>`;
+      : `<div class="acciones">${r.tipoDoc === TIPO_BLOQUE ? '' : `<button data-editar="${r.id}">✎ Editar</button>`}${!r.padreId ? `<button data-antecedente="${r.id}">+ Antecedente</button><button data-cambiar-abogado="${r.id}">⇄ Cambiar abogado</button>` : ''}<button class="borrar" data-borrar="${r.id}">🗑 Borrar</button></div>`;
 
     return `<tr id="fila-${r.id}" class="${clases.join(' ')}">
       <td class="num">${num[r.id] || ''}</td>
@@ -1334,6 +1442,17 @@ async function borrar(id){
       pintar();
       return;
     }
+    // Caso de una reasignación en bloque: vuelve a quien lo tenía antes y se quita su conteo en Reasig.
+    if (r.tipoDoc === TIPO_BLOQUE){
+      await enUnSoloPaso(async () => {
+        await deshacerCasoBloque(r);
+        await registrarCambio('Quitó un caso de una reasignación en bloque', 'casos', id, { caso: r.padreCodigo || r.carpeta || '', pasaA: r.abogadoNombre || '', bloque: r.bloqueId || '' }, {});
+      });
+      cache.delete(id); await refrescarCache([r.padreId]);
+      avisar('Se quitó este caso de la reasignación en bloque: vuelve a quien lo tenía antes');
+      pintar();
+      return;
+    }
     // Antecedente: su documento, su movimiento en la Agenda, su opinión y su llamada, todo de una vez
     await enUnSoloPaso(async () => {
       await borrarAntecedenteDatos(r);
@@ -1355,6 +1474,7 @@ function textoEstado(r){
     case TIPO_DERIVACION: return 'DERIVADO A ' + destinoDerivacion(r);
     case 'Solicitud de cambio de abogado': return 'CAMBIO DE ABOGADO: ' + may(r.resultadoCambio);
     case 'Solicitud de nueva opinión': return 'EN ' + ordinal(r.opinionNum || 2) + ' OPINIÓN';
+    case TIPO_BLOQUE: return 'REASIGNADO A ' + may(r.abogadoNombre);
     default: return '';
   }
 }
@@ -1366,7 +1486,7 @@ async function recalcularEstado(padreId, ajuste = null){
   const hijos = todos.filter(h => h.estadoTexto).sort(ordenRegistro);
   const ultimo = hijos[hijos.length - 1];
   const cambios = { estado: ultimo ? ultimo.estadoTexto : '' };
-  const cambio = todos.filter(h => h.tipoDoc === 'Solicitud de cambio de abogado' && h.resultadoCambio === 'Procede (reasignado)').sort(ordenRegistro).pop();
+  const cambio = todos.filter(h => (h.tipoDoc === 'Solicitud de cambio de abogado' && h.resultadoCambio === 'Procede (reasignado)') || h.tipoDoc === TIPO_BLOQUE).sort(ordenRegistro).pop();
   const padreDoc = cache.get(padreId);
   const idA = padreDoc ? idAsignacion(padreDoc) : padreId;
   // Si el caso se reasignó desde la Agenda (no por un cambio de abogado del Drive 1), su abogado actual se conserva
@@ -1551,7 +1671,8 @@ function sugerenciaReasignacion(historial, lista, pierdeId, nota, deLicencia = (
   eventos.forEach(r => {
     if (deudas[r.aId] && deudas[r.aId].length) deudas[r.aId].shift();          // se le compensa
     else if (ids.has(r.aId) && !esCoord(r.aId)) ultimoTurno = r.aId;           // lo recibió por turno
-    if (ids.has(r.deId) && !esCoord(r.deId)) (deudas[r.deId] = deudas[r.deId] || []).push(r.fecha); // queda debiéndosele
+    // queda debiéndosele (en una reasignación en bloque, al que sale NO se le debe nada: sinDeuda)
+    if (!r.sinDeuda && ids.has(r.deId) && !esCoord(r.deId)) (deudas[r.deId] = deudas[r.deId] || []).push(r.fecha);
   });
   const dmy = iso => iso ? iso.slice(8, 10) + '/' + iso.slice(5, 7) + '/' + iso.slice(0, 4) : '';
   const pendientes = lista.filter(d => deudas[d.id] && deudas[d.id].length)
@@ -1864,7 +1985,9 @@ function ocultarCoincidencias(){ $('coincidencias').hidden = true; $('coincidenc
 function marcasDelCaso(r, hijos){
   const marcas = [];
   const cambio = hijos.filter(h => h.tipoDoc === 'Solicitud de cambio de abogado' && h.resultadoCambio === 'Procede (reasignado)').sort(ordenRegistro).pop();
-  if (cambio) marcas.push(`<span class="marca-coinc">Cambio de abogado el ${fechaCorta(cambio.fecha)}</span>`);
+  const enBloque = hijos.filter(h => h.tipoDoc === TIPO_BLOQUE).sort(ordenRegistro).pop();
+  if (enBloque && (!cambio || ordenRegistro(enBloque, cambio) > 0)) marcas.push(`<span class="marca-coinc">Reasignado en bloque el ${fechaCorta(enBloque.fecha)}</span>`);
+  else if (cambio) marcas.push(`<span class="marca-coinc">Cambio de abogado el ${fechaCorta(cambio.fecha)}</span>`);
   else if (r.abogadoActualId && r.abogadoActualId !== r.abogadoId) marcas.push('<span class="marca-coinc">Reasignado</span>');
   const deriv = hijos.filter(h => esDerivacion(h.tipoDoc)).sort(ordenRegistro).pop();
   if (deriv) marcas.push(`<span class="marca-coinc deriv">Derivado a ${esc(destinoDerivacion(deriv))}${deriv.fecha ? ' el ' + fechaCorta(deriv.fecha) : ''}</span>`);
@@ -2484,6 +2607,12 @@ $('btnGuardarCambio').onclick = async () => {
   $('btnGuardarCambio').disabled = false;
   if (ok) $('fondoCambio').hidden = true;
 };
+// Corregir un caso de una reasignación en bloque: su texto "REASIGNADO … A Y" pasa al corregido
+function textoBloqueCorregido(h, nuevoId){
+  if (!h || h.tipoDoc !== TIPO_BLOQUE) return {};
+  const nuevo = may(nombreAbogado(nuevoId));
+  return { estadoTexto: 'REASIGNADO A ' + nuevo, resumen: String(h.resumen || '').replace(' A ' + may(h.abogadoNombre) + ',', ' A ' + nuevo + ',') };
+}
 async function corregirAbogadoDrive1(r, nuevoId){
   const reasignado = !!r.abogadoActualId && r.abogadoActualId !== r.abogadoId;
   const idA = idAsignacion(r);
@@ -2510,14 +2639,488 @@ async function corregirAbogadoDrive1(r, nuevoId){
     if (await existe('asignaciones', idA)) await W.update(doc(db, 'asignaciones', idA), { abogadoActualId: nuevoId });
     // Si vino de una "Solicitud de cambio de abogado", ese documento pasa al nuevo (si no, al recalcular volvería el anterior)
     const hijo = cache.get(re.id) || (await getDoc(doc(db, COL, re.id)).then(s => s.exists() ? s.data() : null).catch(() => null));
-    if (hijo && hijo.tipoDoc === 'Solicitud de cambio de abogado') await W.update(doc(db, COL, re.id), datosAbogado(nuevoId, 'abogado'));
+    if (hijo && (hijo.tipoDoc === 'Solicitud de cambio de abogado' || hijo.tipoDoc === TIPO_BLOQUE)) await W.update(doc(db, COL, re.id), { ...datosAbogado(nuevoId, 'abogado'), ...textoBloqueCorregido(hijo, nuevoId) });
     const n = datosAbogado(nuevoId, 'abogadoActual');
-    await W.update(doc(db, COL, r.id), n);
+    await W.update(doc(db, COL, r.id), { ...n, ...(hijo && hijo.tipoDoc === TIPO_BLOQUE ? { estado: 'REASIGNADO A ' + may(nombreAbogado(nuevoId)) } : {}) });
     await registrarCambio('Corrigió reasignación (nunca lo asumió)', 'reasignaciones', re.id, { pasaA: nombreAbogado(antes) }, { pasaA: nombreAbogado(nuevoId) });
     notasDelLote.push(async () => avisar('Reasignación corregida: ' + nombreAbogado(antes) + ' nunca lo tuvo; ahora es de ' + nombreAbogado(nuevoId)));
     return true;
     });
   } catch (err){ errorAlGuardar(err); return false; }
+}
+
+// ================= Reasignación en bloque =================
+// Un defensor deja de atender varios casos a la vez (licencia u otro motivo) y se reparten entre varios.
+// Cada caso se guarda IGUAL que una reasignación individual: su reasignación (cuenta en Reasig. de la Agenda, no como caso nuevo),
+// el abogado actual en el Drive 1 y en la Agenda, y su antecedente en el Drive 1 ("REASIGNADO DE X A Y, MEMO N°…, MOTIVO…").
+// Al que sale NO se le debe nada (sinDeuda: true); quienes reciben sí avanzan su turno o se cobran lo que se les debía.
+// Todo lo del bloque lleva el mismo bloqueId (para copiar el memo y deshacerlo completo, sin dejar conteos fantasma).
+const MOTIVOS_BLOQUE = ['LICENCIA POR SALUD', 'LICENCIA SIN GOCE', 'LICENCIA POR MATERNIDAD', 'OTRO'];
+const CASOS_POR_PAQUETE = 80; // Firebase admite hasta 500 escrituras por paquete; cada caso usa 4 o 5
+let BQ = null; // { casos: [...], recibe: Set, repartido, guardado, sigManual }
+let GUARDADOS_BQ = new Map(), bqPorDeshacer = '';
+$('bqMotivo').innerHTML = '<option value="">— Elegir —</option>' + MOTIVOS_BLOQUE.map(m => `<option>${m}</option>`).join('');
+$('bqMotivo').onchange = () => { $('bqMotivoOtro').hidden = $('bqMotivo').value !== 'OTRO'; if (!$('bqMotivoOtro').hidden) $('bqMotivoOtro').focus(); };
+const motivoBloque = () => $('bqMotivo').value === 'OTRO' ? may($('bqMotivoOtro').value) : $('bqMotivo').value;
+const areasDefensores = () => [...new Set(DEFENSORES.map(d => d.area || 'Sin área'))];
+// Tiempo desde la asignación hasta hoy: "1 AÑO 2 MESES", "3 MESES", "12 DÍAS"
+function tiempoDesde(iso){
+  if (!iso) return '';
+  const a = new Date(iso + 'T12:00:00'), h = new Date(hoyIso() + 'T12:00:00');
+  if (isNaN(a) || a > h) return '';
+  let meses = (h.getFullYear() - a.getFullYear()) * 12 + h.getMonth() - a.getMonth();
+  if (h.getDate() < a.getDate()) meses--;
+  if (meses < 1){ const d = Math.round((h - a) / 86400000); return d + (d === 1 ? ' DÍA' : ' DÍAS'); }
+  const an = Math.floor(meses / 12), m = meses % 12;
+  return [an ? an + (an === 1 ? ' AÑO' : ' AÑOS') : '', m ? m + (m === 1 ? ' MES' : ' MESES') : ''].filter(Boolean).join(' ');
+}
+// Última acción del caso: su último antecedente en el Drive 1
+function ultimaAccionDe(hijos){
+  const h = hijos[hijos.length - 1];
+  if (!h) return '';
+  const det = may(h.estadoTexto || h.respuesta || h.resultadoCambio || '');
+  return [may(h.tipoDoc), det && det !== may(h.tipoDoc) ? det : ''].filter(Boolean).join(': ') + (h.fecha ? ' (' + fechaCorta(h.fecha) + ')' : '');
+}
+async function refrescarCache(ids){
+  await Promise.all([...new Set(ids.filter(Boolean))].map(async id => {
+    try { const s = await getDoc(doc(db, COL, id)); if (s.exists()) cache.set(id, { id, ...s.data() }); else cache.delete(id); } catch (e){ /* se verá al recargar */ }
+  }));
+}
+
+function abrirBloque(){
+  if (!usuario || usuario.rol !== 'abogado') return;
+  BQ = { casos: [], recibe: new Set(), repartido: false, guardado: '', sigManual: 0 };
+  const opcion = d => `<option value="${esc(d.id)}">${esc(d.nombre + textoLicencia(d))}</option>`;
+  $('bqSale').innerHTML = '<option value="">— Elegir —</option>' + areasDefensores().map(a =>
+    `<optgroup label="${esc(a)}">${DEFENSORES.filter(d => (d.area || 'Sin área') === a).map(opcion).join('')}</optgroup>`).join('');
+  $('bqMotivo').value = ''; $('bqMotivoOtro').value = ''; $('bqMotivoOtro').hidden = true; $('bqMemo').value = '';
+  cerrarManual();
+  $('bqError').hidden = true; $('bqConfirmar').hidden = true;
+  $('bqGuardar').hidden = false; $('bqGuardar').disabled = false;
+  vistaBloque('nuevo');
+  pintarBloque();
+  $('fondoBloque').hidden = false;
+}
+$('btnBloque').onclick = () => { cargarLicencias().then(() => { if (!$('fondoBloque').hidden && BQ && !BQ.guardado) pintarBloque(); }); abrirBloque(); };
+function vistaBloque(v){
+  marcar($('optVistaBloque'), v);
+  $('bqNuevo').hidden = v !== 'nuevo';
+  $('bqGuardados').hidden = v !== 'guardados';
+  if (v === 'guardados') pintarGuardados();
+}
+$('optVistaBloque').onclick = e => { const o = e.target.closest('.opcion'); if (o) vistaBloque(o.dataset.v); };
+
+// Todos los casos que el defensor tiene HOY (titular o reasignados a él), de cualquier año
+async function cargarCasosDe(saleId){
+  BQ.casos = BQ.casos.filter(c => c.tipo === 'manual');
+  BQ.casos.forEach(c => { c.nuevoId = ''; });
+  BQ.repartido = false;
+  BQ.recibe.delete(saleId);
+  if (!saleId){ pintarBloque(); return; }
+  $('bqCasos').innerHTML = '<p class="ayuda" style="padding:8px">Buscando sus casos en todos los años…</p>';
+  try {
+    await cargarTodos();
+    const hijosDe = {};
+    cache.forEach(h => { if (h.padreId) (hijosDe[h.padreId] = hijosDe[h.padreId] || []).push(h); });
+    const raices = [...cache.values()].filter(r => !r.padreId);
+    const conFila = new Set(raices.flatMap(r => [r.id, r.asignacionId].filter(Boolean)));
+    const lista = raices.filter(r => (r.abogadoActualId || r.abogadoId) === saleId).map(r => {
+      const hijos = (hijosDe[r.id] || []).sort(ordenRegistro);
+      return { clave: r.id, tipo: 'drive1', parentId: r.id, carpeta: r.carpeta || '', usuario: r.usuario || '', fechaAsig: r.fecha || '',
+        area: r.area || '', materia: r.materia || '', ultimaAccion: ultimaAccionDe(hijos) || r.ultimaAccionManual || '',
+        derivado: hijos.some(h => esDerivacion(h.tipoDoc)), marcado: false, nuevoId: '' };
+    });
+    // Casos antiguos que solo están en la Agenda (sin fila en el Drive 1)
+    const [s1, s2] = await Promise.all([
+      getDocs(query(collection(db, 'asignaciones'), where('defensorId', '==', saleId))),
+      getDocs(query(collection(db, 'asignaciones'), where('abogadoActualId', '==', saleId)))]);
+    const vistos = new Set();
+    [...s1.docs, ...s2.docs].forEach(d => {
+      if (vistos.has(d.id) || conFila.has(d.id)) return;
+      vistos.add(d.id);
+      const a = d.data();
+      if ((a.abogadoActualId || a.defensorId) !== saleId) return;
+      lista.push({ clave: d.id, tipo: 'agenda', parentId: d.id, asig: a, carpeta: '', usuario: a.derivadoUsuario || '', fechaAsig: a.fecha || '',
+        area: a.area || '', materia: a.especifica || a.categoria || '', ultimaAccion: '', derivado: !!a.derivadoA, marcado: false, nuevoId: '' });
+    });
+    if ($('bqSale').value !== saleId) return; // ya eligió a otro mientras se buscaba
+    lista.sort((x, y) => (x.fechaAsig || '').localeCompare(y.fechaAsig || ''));
+    BQ.casos = [...lista, ...BQ.casos];
+  } catch (err){
+    console.error(err);
+    $('bqError').textContent = 'No se pudieron leer todos sus casos (' + (err.code || err.message) + '). Inténtalo de nuevo.';
+    $('bqError').hidden = false;
+  }
+  pintarBloque();
+}
+$('bqSale').onchange = () => { $('bqError').hidden = true; $('bqConfirmar').hidden = true; cargarCasosDe($('bqSale').value); };
+
+const marcadosBloque = () => BQ.casos.filter(c => c.marcado);
+function repartoDe(lista){
+  const n = {};
+  lista.forEach(c => { if (c.nuevoId) n[c.nuevoId] = (n[c.nuevoId] || 0) + 1; });
+  return Object.entries(n).sort((a, b) => b[1] - a[1] || nombreAbogado(a[0]).localeCompare(nombreAbogado(b[0]), 'es'));
+}
+const textoReparto = lista => repartoDe(lista).map(([id, n]) => nombreAbogado(id) + ': ' + n).join(' · ');
+function opcionesNuevoAbogado(saleId, elegido){
+  const opcion = d => { const bloq = deLicenciaHoy(d) && d.id !== elegido;
+    return `<option value="${esc(d.id)}" ${d.id === elegido ? 'selected' : ''} ${bloq ? 'disabled style="color:#9A938A"' : ''}>${esc(d.nombre + textoLicencia(d))}</option>`; };
+  const otros = DEFENSORES.filter(d => d.id !== saleId);
+  const elegidos = otros.filter(d => BQ.recibe.has(d.id));
+  return '<option value="">— Elegir —</option>' +
+    (elegidos.length ? `<optgroup label="Elegidos para recibir">${elegidos.map(opcion).join('')}</optgroup>` : '') +
+    `<optgroup label="Otros">${otros.filter(d => !BQ.recibe.has(d.id)).map(opcion).join('')}</optgroup>`;
+}
+function pintarBloque(){
+  if (!BQ) return;
+  const saleId = $('bqSale').value, bloqueado = !!BQ.guardado;
+  // Ya guardado: solo queda copiar el memo (para cambiarlo, deshacerlo en "Bloques guardados")
+  ['bqSale', 'bqMotivo', 'bqMotivoOtro', 'bqMemo', 'bqRepartir'].forEach(i => { $(i).disabled = bloqueado; });
+  // Casos
+  if (!BQ.casos.length){
+    $('bqCasos').innerHTML = `<p class="ayuda" style="padding:8px">${saleId ? 'No tiene casos en la app. Si tiene casos antiguos, agrégalos a mano.' : 'Elige primero al defensor que sale: aquí aparecerán todos sus casos.'}</p>`;
+  } else {
+    $('bqCasos').innerHTML = `<table class="tabla-bq"><thead><tr><th>Pasa</th><th>N°</th><th>N° de caso / carpeta</th><th>Patrocinado</th><th>Fecha de asignación</th><th>Última acción</th><th>Nuevo abogado</th></tr></thead><tbody>` +
+      BQ.casos.map((c, i) => `<tr class="${c.marcado ? 'marcado' : ''}">
+        <td><input type="checkbox" data-bq-marcar="${i}" ${c.marcado ? 'checked' : ''} ${bloqueado ? 'disabled' : ''} aria-label="Pasa este caso"></td>
+        <td>${i + 1}</td>
+        <td>${esc(c.carpeta) || '—'}${c.tipo === 'agenda' ? '<span class="chico">Solo en la Agenda</span>' : ''}${c.tipo === 'manual' ? `<span class="chico">Agregado a mano${bloqueado ? '' : ` · <button type="button" class="enlace-antecedente" data-bq-quitar="${i}">Quitar</button>`}</span>` : ''}</td>
+        <td>${esc(c.usuario) || '—'}${c.materia ? `<span class="chico">${esc(c.materia)}</span>` : ''}${c.derivado ? '<span class="falta">Derivado</span>' : ''}</td>
+        <td>${fechaCorta(c.fechaAsig)}</td>
+        <td>${esc(c.ultimaAccion)}</td>
+        <td>${c.marcado && (BQ.repartido || c.nuevoId) ? (bloqueado ? esc(nombreAbogado(c.nuevoId)) : `<select data-bq-abog="${i}" aria-label="Nuevo abogado">${opcionesNuevoAbogado(saleId, c.nuevoId)}</select>`) : '—'}</td>
+      </tr>`).join('') + '</tbody></table>';
+  }
+  const libres = BQ.casos.filter(c => !c.derivado);
+  $('bqMarcarTodos').textContent = libres.length && libres.every(c => c.marcado) ? 'Desmarcar todos' : 'Marcar todos';
+  $('bqMarcarTodos').disabled = bloqueado; $('bqAgregarManual').disabled = bloqueado;
+  // Quienes reciben (de licencia hoy: gris; el que sale no aparece)
+  $('bqRecibe').innerHTML = areasDefensores().map(a => {
+    const lista = DEFENSORES.filter(d => (d.area || 'Sin área') === a && d.id !== saleId);
+    return lista.length ? `<div class="titulo-recibe">${esc(a)}</div>` + lista.map(d => {
+      const e = estadoLicencia(d.id), bloq = !!e && e.tipo === 'hoy';
+      return `<label class="${bloq ? 'gris' : ''}"><input type="checkbox" data-bq-recibe="${esc(d.id)}" ${BQ.recibe.has(d.id) && !bloq ? 'checked' : ''} ${bloq || bloqueado ? 'disabled' : ''}>
+        <span>${esc(d.nombre)}${e ? `<span class="${bloq ? '' : 'aviso-pronto'}">${esc(e.texto)}</span>` : ''}</span></label>`;
+    }).join('') : '';
+  }).join('');
+  $('bqCuantosReciben').textContent = BQ.recibe.size ? '· elegidos: ' + BQ.recibe.size : '';
+  // Resumen arriba
+  const marc = marcadosBloque();
+  const sinAbogado = marc.filter(c => !c.nuevoId).length;
+  $('bqResumen').innerHTML = !saleId && !marc.length ? '' :
+    `<b>${marc.length}</b> caso${marc.length === 1 ? '' : 's'} marcado${marc.length === 1 ? '' : 's'}` +
+    (repartoDe(marc).length ? ' · Recibe cada uno: ' + repartoDe(marc).map(([id, n]) => `<span class="chip-rep">${esc(nombreAbogado(id))}: <b>${n}</b></span>`).join('') : '') +
+    (BQ.repartido && sinAbogado ? ` <span class="falta">${sinAbogado} sin abogado</span>` : '');
+  // Copiar para memo: cuando todos los marcados ya tienen abogado
+  const listo = marc.length && !sinAbogado;
+  $('bqCopiar').hidden = !listo;
+  if (listo){
+    const previo = $('bqCopiarQuien').value;
+    $('bqCopiarQuien').innerHTML = '<option value="">Todos los casos (un solo memo)</option>' +
+      repartoDe(marc).map(([id, n]) => `<option value="${esc(id)}">Solo los de ${esc(nombreAbogado(id))} (${n})</option>`).join('');
+    if ([...$('bqCopiarQuien').options].some(o => o.value === previo)) $('bqCopiarQuien').value = previo;
+  }
+}
+$('bqCasos').addEventListener('change', e => {
+  const t = e.target;
+  if (t.dataset.bqMarcar !== undefined){ BQ.casos[Number(t.dataset.bqMarcar)].marcado = t.checked; $('bqConfirmar').hidden = true; pintarBloque(); }
+  if (t.dataset.bqAbog !== undefined){ BQ.casos[Number(t.dataset.bqAbog)].nuevoId = t.value; $('bqConfirmar').hidden = true; pintarBloque(); }
+});
+$('bqCasos').addEventListener('click', e => {
+  const q = e.target.closest('[data-bq-quitar]'); if (!q) return;
+  BQ.casos.splice(Number(q.dataset.bqQuitar), 1); pintarBloque();
+});
+$('bqRecibe').addEventListener('change', e => {
+  const id = e.target.dataset.bqRecibe; if (!id) return;
+  if (e.target.checked) BQ.recibe.add(id); else BQ.recibe.delete(id);
+  $('bqConfirmar').hidden = true; pintarBloque();
+});
+$('bqMarcarTodos').onclick = () => {
+  const libres = BQ.casos.filter(c => !c.derivado), todos = libres.length && libres.every(c => c.marcado);
+  libres.forEach(c => { c.marcado = !todos; });
+  $('bqConfirmar').hidden = true; pintarBloque();
+};
+// Caso a mano (antiguo, nunca estuvo en la app)
+function cerrarManual(){ $('bqManual').hidden = true; ['bqmCarpeta', 'bqmUsuario', 'bqmFecha', 'bqmAccion'].forEach(i => $(i).value = ''); $('bqmError').hidden = true; }
+$('bqAgregarManual').onclick = () => { $('bqManual').hidden = false; $('bqmCarpeta').focus(); };
+$('bqmCancelar').onclick = cerrarManual;
+$('bqmAgregar').onclick = () => {
+  const usuarioM = may($('bqmUsuario').value), fechaM = $('bqmFecha').value;
+  const error = !usuarioM ? 'Falta el nombre del patrocinado.' : !fechaM ? 'Falta la fecha de asignación.' : fechaM > hoyIso() ? 'La fecha de asignación no puede ser futura.' : '';
+  if (error){ $('bqmError').textContent = error; $('bqmError').hidden = false; return; }
+  const sale = DEFENSORES.find(d => d.id === $('bqSale').value) || {};
+  BQ.casos.push({ clave: 'm' + (++BQ.sigManual), tipo: 'manual', carpeta: may($('bqmCarpeta').value), usuario: usuarioM, fechaAsig: fechaM,
+    area: sale.area || '', materia: '', ultimaAccion: may($('bqmAccion').value), derivado: false, marcado: true, nuevoId: '' });
+  cerrarManual(); pintarBloque();
+  avisar('Caso agregado a la lista (marcado)');
+};
+
+// Repartir: caso por caso (del más antiguo al más reciente) con la MISMA regla de siempre, solo entre los elegidos:
+// primero a quien se le debe un caso, si nadie debe, turno rotativo por el N° de orden. Así queda parejo.
+$('bqRepartir').onclick = async () => {
+  const saleId = $('bqSale').value, marc = marcadosBloque();
+  const elegidos = DEFENSORES.filter(d => BQ.recibe.has(d.id) && d.id !== saleId && !deLicenciaHoy(d));
+  const error = !saleId ? 'Elige al defensor que sale.' : !marc.length ? 'Marca al menos un caso.' : !elegidos.length ? 'Elige al menos un abogado que reciba.' : '';
+  $('bqConfirmar').hidden = true;
+  if (error){ $('bqError').textContent = error; $('bqError').hidden = false; return; }
+  $('bqError').hidden = true;
+  $('bqRepartir').disabled = true;
+  try {
+    const inicio = (await leerInicioConteos()).reasignaciones;
+    const sim = (await getDocs(collection(db, 'reasignaciones'))).docs.map(d => ({ id: d.id, ...d.data() })).filter(r => (r.fecha || '') >= inicio);
+    const cuenta = {}; let t = Date.now();
+    marc.slice().sort((a, b) => (a.fechaAsig || '').localeCompare(b.fechaAsig || '')).forEach(c => {
+      let id = sugerenciaReasignacion(sim, elegidos, saleId, d => d.notas || '', deLicenciaHoy).id;
+      // Si la regla no da a nadie (por ejemplo, solo se eligió al Coordinador), va al que lleva menos en este reparto
+      if (!id) id = elegidos.slice().sort((a, b) => (cuenta[a.id] || 0) - (cuenta[b.id] || 0))[0].id;
+      c.nuevoId = id; cuenta[id] = (cuenta[id] || 0) + 1;
+      sim.push({ deId: saleId, aId: id, fecha: hoyIso(), creadoEnMs: ++t, sinDeuda: true });
+    });
+    BQ.repartido = true;
+    avisar('Repartido: ' + textoReparto(marc), 5000);
+  } catch (err){ console.error(err); $('bqError').textContent = 'No se pudo leer el historial de reasignaciones (' + (err.code || err.message) + ').'; $('bqError').hidden = false; }
+  $('bqRepartir').disabled = false;
+  pintarBloque();
+};
+
+// Guardar: primero la confirmación dentro de la página (sin ventanas del navegador)
+$('bqGuardar').onclick = () => {
+  const saleId = $('bqSale').value, marc = marcadosBloque();
+  const malos = marc.filter(c => !c.nuevoId || c.nuevoId === saleId);
+  const deLic = marc.map(c => DEFENSORES.find(d => d.id === c.nuevoId)).filter(d => d && deLicenciaHoy(d));
+  const error = !saleId ? 'Elige al defensor que sale.'
+    : !$('bqMotivo').value ? 'Elige el motivo.'
+    : $('bqMotivo').value === 'OTRO' && !motivoBloque() ? 'Escribe el motivo.'
+    : !may($('bqMemo').value) ? 'Escribe el N° de memorándum.'
+    : !marc.length ? 'Marca al menos un caso.'
+    : malos.length ? (BQ.repartido ? malos.length + ' caso(s) marcado(s) no tienen nuevo abogado: elígelo en su fila.' : 'Toca "Repartir" para asignar los casos.')
+    : deLic.length ? deLic[0].nombre + textoLicencia(deLic[0]) + ': elige a otro.' : '';
+  if (error){ $('bqError').textContent = error; $('bqError').hidden = false; $('bqConfirmar').hidden = true; return; }
+  $('bqError').hidden = true;
+  const pronto = [...new Set(marc.map(c => c.nuevoId))].map(id => DEFENSORES.find(d => d.id === id)).filter(d => d && (estadoLicencia(d.id) || {}).tipo === 'pronto');
+  const c = $('bqConfirmar');
+  c.className = 'caja-confirmar';
+  c.innerHTML = `¿Guardar? Se moverán <b>${marc.length}</b> caso${marc.length === 1 ? '' : 's'} de <b>${esc(nombreAbogado(saleId))}</b>:<br>` +
+    repartoDe(marc).map(([id, n]) => `<span class="chip-rep">${esc(nombreAbogado(id))}: <b>${n}</b></span>`).join('') +
+    `<br>Cada uno cuenta en Reasig. de la Agenda (−${marc.length} para quien sale), no como caso nuevo, y deja su antecedente en el Drive 1.` +
+    (pronto.length ? `<br><b class="aviso-pronto">Atención: ${pronto.map(d => esc(d.nombre + textoLicencia(d))).join('; ')}.</b>` : '') +
+    (marc.length > CASOS_POR_PAQUETE ? `<br>Son muchos casos: se guardan en ${Math.ceil(marc.length / CASOS_POR_PAQUETE)} partes.` : '') +
+    '<div class="acciones-coinc"><button type="button" class="si" data-bq-si>Sí, guardar</button><button type="button" data-bq-volver>Volver</button></div>';
+  c.hidden = false;
+  c.scrollIntoView({ block: 'center', behavior: 'smooth' });
+};
+$('bqConfirmar').addEventListener('click', e => {
+  if (e.target.closest('[data-bq-volver]')){ $('bqConfirmar').hidden = true; return; }
+  if (e.target.closest('[data-bq-si]')) guardarBloque();
+});
+const VACIO_BLOQUE = () => ({ origen: '', codigo: '', codigoNorm: '', numDoc: '', prioridad: 'normal', hacer: { memo: false, oficio: false, carta: false, noHacer: false },
+  proveido: '', dirigidoA: '', plazoHoras: null, plazoVence: '', supFecha: '', supNota: '', ocultarPublico: false,
+  diligencias: [], diligencia: '', dilFecha: '', dilHora: '', pendienteProyectar: false, plazoAbierto: false, supAbierta: false });
+// Un caso del bloque (dentro del paquete "todo o nada")
+async function escribirCasoBloque(c, { bloqueId, sale, motivo, memo, hoy, n }){
+  const marcaCreado = () => ({ creadoPor: usuario.correo, creadoEn: serverTimestamp(), creadoEnMs: Date.now() });
+  let padre;
+  if (c.tipo === 'drive1') padre = { ...cache.get(c.parentId) };
+  else {
+    // No estaba en el Drive 1: se crea su fila (no cuenta como caso nuevo en la Agenda: no se crea asignación)
+    const id = c.tipo === 'agenda' ? c.parentId : doc(collection(db, COL)).id;
+    const titular = c.tipo === 'agenda' ? c.asig.defensorId : sale.id;
+    padre = { ...VACIO_BLOQUE(), fecha: c.fechaAsig, anio: Number((c.fechaAsig || '').slice(0, 4)) || null, mes: (c.fechaAsig || '').slice(0, 7),
+      tipoDoc: 'Caso nuevo', padreId: null, usuario: may(c.usuario), carpeta: may(c.carpeta), area: c.area || sale.area || '', materia: c.materia || '',
+      ...datosAbogado(titular, 'abogado'),
+      ...(c.tipo === 'agenda' ? { asignacionId: id, desdeAgenda: true, porCompletar: true } : { casoAntiguo: true, ultimaAccionManual: may(c.ultimaAccion) }),
+      creadoPorBloque: bloqueId, ...marcaCreado() };
+    if (c.tipo === 'agenda' && c.asig.abogadoActualId && c.asig.abogadoActualId !== titular) Object.assign(padre, datosAbogado(c.asig.abogadoActualId, 'abogadoActual'));
+    await W.set(doc(db, COL, id), padre);
+    padre.id = id;
+  }
+  const nuevo = datosAbogado(c.nuevoId, 'abogado');
+  const idA = padre.asignacionId || padre.id;
+  const antRef = doc(collection(db, COL));
+  const estadoTexto = 'REASIGNADO A ' + may(nuevo.abogadoNombre);
+  const ultimaAccion = c.ultimaAccion || '';
+  await W.set(antRef, { ...VACIO_BLOQUE(), fecha: hoy, anio: Number(hoy.slice(0, 4)), mes: hoy.slice(0, 7), tipoDoc: TIPO_BLOQUE,
+    numDoc: 'MEMORÁNDUM N° ' + memo, ...nuevo, abogadoAnteriorId: sale.id,
+    padreId: padre.id, padreCodigo: padre.codigo || '', padreUsuario: padre.usuario || '', usuario: padre.usuario || '',
+    area: padre.area || '', carpeta: padre.carpeta || '', materia: padre.materia || '',
+    resumen: `REASIGNADO DE ${may(sale.nombre)} A ${may(nuevo.abogadoNombre)}, MEMO N° ${memo}, MOTIVO: ${motivo}`, estadoTexto,
+    respuesta: '', distrital: '', derivaTipo: '', derivaMotivo: '', resultadoCambio: '', opinionNum: null,
+    bloqueId, bloqueN: n, bloqueMotivo: motivo, bloqueMemo: memo, bloqueDeId: sale.id, bloqueDeNombre: sale.nombre,
+    bloqueFechaAsig: padre.fecha || '', bloqueUltimaAccion: ultimaAccion, previoActualId: padre.abogadoActualId || '', ...marcaCreado() });
+  await W.update(doc(db, COL, padre.id), { ...datosAbogado(c.nuevoId, 'abogadoActual'), estado: estadoTexto });
+  if (c.tipo === 'agenda' || await existe('asignaciones', idA)) await W.update(doc(db, 'asignaciones', idA), { abogadoActualId: c.nuevoId });
+  // Misma reasignación que una individual (columna Reasig. de la Agenda), con el mismo id que su antecedente
+  await W.set(doc(db, 'reasignaciones', antRef.id), { fecha: hoy, mes: hoy.slice(0, 7), deId: sale.id, aId: c.nuevoId, casoId: idA,
+    area: padre.area || '', usuario: padre.usuario || '', carpeta: padre.carpeta || '',
+    referencia: 'REASIGNACIÓN EN BLOQUE · MEMO N° ' + memo, nota: motivo, sinDeuda: true, bloqueId,
+    creadoPor: usuario.correo, creadoEn: serverTimestamp(), creadoEnMs: Date.now() });
+  return [padre.id, antRef.id];
+}
+async function guardarBloque(){
+  const saleId = $('bqSale').value;
+  const sale = { id: saleId, nombre: nombreAbogado(saleId), area: (DEFENSORES.find(d => d.id === saleId) || {}).area || '' };
+  const motivo = motivoBloque(), memo = may($('bqMemo').value), hoy = hoyIso();
+  const bloqueId = 'BQ' + Date.now().toString(36).toUpperCase();
+  const marc = marcadosBloque().slice().sort((a, b) => (a.fechaAsig || '').localeCompare(b.fechaAsig || ''));
+  $('bqConfirmar').innerHTML = 'Guardando…'; $('bqGuardar').disabled = true;
+  let hechos = 0; const tocados = [];
+  try {
+    for (let i = 0; i < marc.length; i += CASOS_POR_PAQUETE){
+      const parte = marc.slice(i, i + CASOS_POR_PAQUETE);
+      const ids = await enUnSoloPaso(async () => {
+        const r = [];
+        for (const [k, c] of parte.entries()) r.push(...await escribirCasoBloque(c, { bloqueId, sale, motivo, memo, hoy, n: i + k + 1 }));
+        return r;
+      });
+      tocados.push(...ids); hechos += parte.length;
+    }
+  } catch (err){
+    errorAlGuardar(err);
+    $('bqConfirmar').className = 'caja-confirmar';
+    $('bqConfirmar').innerHTML = hechos
+      ? `Se guardaron ${hechos} de ${marc.length} casos y el resto falló. Los guardados están en "Bloques guardados" (puedes deshacerlos).`
+      : 'No se guardó nada. Revisa tu conexión e inténtalo de nuevo.';
+    $('bqGuardar').disabled = false;
+    if (!hechos) return;
+  }
+  await registrarCambio('Reasignación en bloque', 'casos', bloqueId, {},
+    { de: sale.nombre, motivo, memo, casos: hechos, reparto: textoReparto(marc.slice(0, hechos)) });
+  await refrescarCache(tocados);
+  pintar();
+  if (hechos < marc.length) return;
+  BQ.guardado = bloqueId;
+  $('bqGuardar').hidden = true;
+  $('bqConfirmar').className = 'caja-confirmar ok';
+  $('bqConfirmar').innerHTML = `✓ Guardado: se movieron <b>${hechos}</b> caso${hechos === 1 ? '' : 's'} de ${esc(sale.nombre)}.<br>` +
+    repartoDe(marc).map(([id, n]) => `<span class="chip-rep">${esc(nombreAbogado(id))}: <b>${n}</b></span>`).join('') +
+    '<br>Ya puedes copiar los datos para el memo. Si te equivocaste, deshazlo en "Bloques guardados".';
+  pintarBloque();
+  avisar('Reasignación en bloque guardada: ' + hechos + ' casos', 5000);
+}
+
+// ---------- Copiar para memo (REASIGNACIÓN DE CASOS) ----------
+// Encabezado + tabla. Se copia como tabla de verdad (Word la pega como tabla) y, por si acaso, también con tabulaciones.
+function memoBloque(filas, { saleNombre, motivo, memo }, soloId){
+  const lista = (soloId ? filas.filter(f => f.nuevoId === soloId) : filas).map((f, i) => ({ ...f, n: i + 1 }));
+  const recibe = [...new Set(lista.map(f => f.nuevoId))];
+  const aLineas = recibe.map(id => { const f = lista.find(x => x.nuevoId === id); const d = DEFENSORES.find(x => x.id === id) || {};
+    return [f.nuevoNombre, may(d.area || '')].filter(Boolean).join(' – '); });
+  const enc = [['A', aLineas], ['ASUNTO', ['REASIGNACIÓN DE CASOS']], ['REFERENCIA', [memo ? 'MEMORÁNDUM N° ' + memo : '']],
+    ['MOTIVO', [[motivo, saleNombre ? 'DE ' + saleNombre : ''].filter(Boolean).join(' ')]], ['FECHA', [fechaCorta(hoyIso())]]];
+  const cab = ['N°', 'N° DE CASO / CARPETA', 'PATROCINADO', 'FECHA DE ASIGNACIÓN', 'ÚLTIMA ACCIÓN', 'TIEMPO TRANSCURRIDO', 'NUEVO ABOGADO'];
+  const celdas = f => [String(f.n), f.carpeta || '', f.usuario || '', fechaCorta(f.fechaAsig), f.ultimaAccion || '', tiempoDesde(f.fechaAsig), f.nuevoNombre || ''];
+  const ini = inicialesDe(usuario.nombre || '');
+  const limpio = s => String(s).replace(/[\t\n]+/g, ' ');
+  const texto = enc.map(([k, v]) => k + ': ' + v.join('\n   ')).join('\n') + '\n\n' +
+    [cab, ...lista.map(celdas)].map(fila => fila.map(limpio).join('\t')).join('\n') + '\n\n' + ini;
+  const td = 'border:1px solid #000;padding:3px 5px;font-family:Arial;font-size:10pt;vertical-align:top';
+  const html = enc.map(([k, v]) => `<p style="margin:0;font-family:Arial;font-size:11pt"><b>${k}:</b> ${v.map(esc).join('<br>')}</p>`).join('') +
+    `<br><table style="border-collapse:collapse"><tr>${cab.map(h => `<th style="${td};background:#D9D9D9">${h}</th>`).join('')}</tr>` +
+    lista.map(f => `<tr>${celdas(f).map(x => `<td style="${td}">${esc(x)}</td>`).join('')}</tr>`).join('') +
+    `</table><br><p style="margin:0;font-family:Arial;font-size:9pt">${esc(ini)}</p>`;
+  return { texto, html };
+}
+async function copiarConTabla({ texto, html }){
+  try {
+    if (window.ClipboardItem && navigator.clipboard && navigator.clipboard.write){
+      await navigator.clipboard.write([new ClipboardItem({ 'text/plain': new Blob([texto], { type: 'text/plain' }), 'text/html': new Blob([html], { type: 'text/html' }) })]);
+      return true;
+    }
+  } catch (e){ /* se intenta solo con el texto */ }
+  return copiarTexto(texto);
+}
+$('bqCopiarBtn').onclick = async () => {
+  const filas = marcadosBloque().slice().sort((a, b) => (a.fechaAsig || '').localeCompare(b.fechaAsig || ''))
+    .map(c => ({ carpeta: c.carpeta, usuario: c.usuario, fechaAsig: c.fechaAsig, ultimaAccion: c.ultimaAccion, nuevoId: c.nuevoId, nuevoNombre: nombreAbogado(c.nuevoId) }));
+  const ok = await copiarConTabla(memoBloque(filas, { saleNombre: nombreAbogado($('bqSale').value), motivo: motivoBloque(), memo: may($('bqMemo').value) }, $('bqCopiarQuien').value));
+  avisar(ok ? 'Copiado' : 'No se pudo copiar. Inténtalo de nuevo.', 3000);
+};
+
+// ---------- Bloques guardados: copiar el memo o deshacer el bloque completo ----------
+async function pintarGuardados(){
+  const caja = $('bqGuardados');
+  caja.innerHTML = '<p class="ayuda">Cargando…</p>';
+  try {
+    const snap = await getDocs(query(collection(db, COL), where('tipoDoc', '==', TIPO_BLOQUE)));
+    GUARDADOS_BQ = new Map();
+    snap.docs.forEach(d => {
+      const h = { id: d.id, ...d.data() };
+      const b = GUARDADOS_BQ.get(h.bloqueId) || { id: h.bloqueId, fecha: h.fecha, deNombre: h.bloqueDeNombre, motivo: h.bloqueMotivo, memo: h.bloqueMemo, creadoEnMs: h.creadoEnMs || 0, quien: h.creadoPor || '', casos: [] };
+      b.casos.push(h);
+      GUARDADOS_BQ.set(h.bloqueId, b);
+    });
+    const lista = [...GUARDADOS_BQ.values()].sort((a, b) => b.creadoEnMs - a.creadoEnMs);
+    if (!lista.length){ caja.innerHTML = '<p class="ayuda">Todavía no hay reasignaciones en bloque guardadas.</p>'; return; }
+    caja.innerHTML = lista.map(b => {
+      b.casos.sort((x, y) => (x.bloqueN || 0) - (y.bloqueN || 0));
+      const rep = repartoDe(b.casos.map(h => ({ nuevoId: h.abogadoId })));
+      return `<div class="tarjeta-bq">
+        <b>${fechaCorta(b.fecha)}</b> · Sale: <b>${esc(b.deNombre)}</b> · ${esc(b.motivo)} · Memo N° ${esc(b.memo)}<br>
+        <b>${b.casos.length}</b> caso${b.casos.length === 1 ? '' : 's'}: ${rep.map(([id, n]) => `<span class="chip-rep">${esc(nombreAbogado(id))}: <b>${n}</b></span>`).join('')}
+        <span class="ayuda" style="display:block">Registró: ${esc(b.quien)}</span>
+        <div class="acciones-coinc">
+          <select data-bq-g-quien="${esc(b.id)}" aria-label="Qué casos copiar" style="width:auto;min-width:200px;padding:5px 8px;font-size:12.5px">
+            <option value="">Todos los casos</option>${rep.map(([id, n]) => `<option value="${esc(id)}">Solo los de ${esc(nombreAbogado(id))} (${n})</option>`).join('')}</select>
+          <button type="button" data-bq-g-copiar="${esc(b.id)}">📋 Copiar para memo</button>
+          ${bqPorDeshacer === b.id
+            ? `<span class="aviso-pronto">¿Deshacer los ${b.casos.length} casos? Vuelven a quien los tenía y se quita su conteo en Reasig.</span><button type="button" class="mismo" style="background:var(--rojo-oscuro);border-color:var(--rojo-oscuro)" data-bq-g-si="${esc(b.id)}">Sí, deshacer</button><button type="button" data-bq-g-no>No</button>`
+            : `<button type="button" data-bq-g-deshacer="${esc(b.id)}">↩ Deshacer</button>`}
+        </div></div>`;
+    }).join('');
+  } catch (err){ console.error(err); caja.innerHTML = '<p class="ayuda">No se pudieron leer los bloques guardados (' + esc(err.code || err.message) + ').</p>'; }
+}
+$('bqGuardados').addEventListener('click', async e => {
+  const t = e.target.closest('button'); if (!t) return;
+  if (t.dataset.bqGCopiar){
+    const b = GUARDADOS_BQ.get(t.dataset.bqGCopiar); if (!b) return;
+    const quien = ($('bqGuardados').querySelector(`[data-bq-g-quien="${CSS.escape(b.id)}"]`) || {}).value || '';
+    const filas = b.casos.map(h => ({ carpeta: h.carpeta, usuario: h.usuario, fechaAsig: h.bloqueFechaAsig, ultimaAccion: h.bloqueUltimaAccion, nuevoId: h.abogadoId, nuevoNombre: h.abogadoNombre }));
+    const ok = await copiarConTabla(memoBloque(filas, { saleNombre: b.deNombre, motivo: b.motivo, memo: b.memo }, quien));
+    avisar(ok ? 'Copiado' : 'No se pudo copiar. Inténtalo de nuevo.', 3000);
+    return;
+  }
+  if (t.dataset.bqGDeshacer){ bqPorDeshacer = t.dataset.bqGDeshacer; pintarGuardados(); return; }
+  if (t.dataset.bqGNo !== undefined){ bqPorDeshacer = ''; pintarGuardados(); return; }
+  if (t.dataset.bqGSi){ bqPorDeshacer = ''; t.disabled = true; t.textContent = 'Deshaciendo…'; await deshacerBloque(t.dataset.bqGSi); }
+});
+// Un caso del bloque vuelve a quien lo tenía antes (si nadie lo cambió después) y se quita su reasignación
+async function deshacerCasoBloque(h){
+  await W.del(doc(db, COL, h.id));
+  await W.del(doc(db, 'reasignaciones', h.id));
+  const ps = await getDoc(doc(db, COL, h.padreId));
+  if (!ps.exists()) return;
+  const p = { id: ps.id, ...ps.data() };
+  const otros = (await getDocs(query(collection(db, COL), where('padreId', '==', p.id)))).docs.map(d => ({ id: d.id, ...d.data() })).filter(x => x.id !== h.id);
+  const sigueConElNuevo = (p.abogadoActualId || p.abogadoId) === h.abogadoId;
+  const previo = h.previoActualId && h.previoActualId !== p.abogadoId ? h.previoActualId : '';
+  const idA = p.asignacionId || p.id;
+  if (sigueConElNuevo && await existe('asignaciones', idA)) await W.update(doc(db, 'asignaciones', idA), { abogadoActualId: previo || deleteField() });
+  // La fila que creó el bloque (caso a mano o solo de la Agenda) se quita si no tiene nada más
+  if (p.creadoPorBloque === h.bloqueId && !otros.length){ await W.del(ps.ref); return; }
+  const cambios = {};
+  if (sigueConElNuevo) Object.assign(cambios, previo ? datosAbogado(previo, 'abogadoActual')
+    : { abogadoActualId: deleteField(), abogadoActualNombre: deleteField(), abogadoActualCelular: deleteField(), abogadoActualCorreo: deleteField() });
+  const ult = otros.filter(x => x.estadoTexto).sort(ordenRegistro).pop();
+  cambios.estado = ult ? ult.estadoTexto : '';
+  if (p.creadoPorBloque === h.bloqueId) cambios.creadoPorBloque = deleteField();
+  await W.update(ps.ref, cambios);
+}
+async function deshacerBloque(bloqueId){
+  const b = GUARDADOS_BQ.get(bloqueId); if (!b) return;
+  let hechos = 0;
+  try {
+    for (let i = 0; i < b.casos.length; i += CASOS_POR_PAQUETE){
+      const parte = b.casos.slice(i, i + CASOS_POR_PAQUETE);
+      await enUnSoloPaso(async () => { for (const h of parte) await deshacerCasoBloque(h); });
+      hechos += parte.length;
+    }
+    await registrarCambio('Deshizo reasignación en bloque', 'casos', bloqueId, { de: b.deNombre, motivo: b.motivo, memo: b.memo, casos: b.casos.length }, {});
+    avisar('Reasignación en bloque deshecha: ' + hechos + ' casos volvieron a quien los tenía', 6000);
+  } catch (err){ errorAlGuardar(err); if (hechos) avisar('Se deshicieron ' + hechos + ' de ' + b.casos.length + ' casos. Toca "Deshacer" otra vez para el resto.', 8000); }
+  b.casos.slice(0, hechos).forEach(h => cache.delete(h.id));
+  await refrescarCache(b.casos.map(h => h.padreId));
+  pintar();
+  pintarGuardados();
 }
 
 // ---------- Registro desde la Agenda (Drive 2) ----------

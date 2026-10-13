@@ -898,9 +898,18 @@ async function corregirAbogado(a, nuevoId){
     lote.update(doc(db, 'asignaciones', a.id), { abogadoActualId: nuevoId });
     if (usuario.drive1 === 'editar'){
       await ponerAbogadoActualDrive1(a.id, nuevoId, lote);
-      // Si la reasignación vino de una "Solicitud de cambio de abogado" del Drive 1, ese documento también pasa al nuevo
+      // Si la reasignación vino de una "Solicitud de cambio de abogado" o de una reasignación en bloque del Drive 1, ese documento también pasa al nuevo
       const cambio = await getDoc(doc(db, 'casos', r.id));
-      if (cambio.exists() && cambio.data().tipoDoc === 'Solicitud de cambio de abogado') lote.update(cambio.ref, datosAbogadoDrive1(nuevoId, 'abogado'));
+      if (cambio.exists() && ['Solicitud de cambio de abogado', 'Reasignación en bloque'].includes(cambio.data().tipoDoc)){
+        const extra = {};
+        if (cambio.data().tipoDoc === 'Reasignación en bloque'){
+          // Su texto "REASIGNADO … A Y" y el estado del caso pasan al corregido
+          const nuevo = String(nombreDe(nuevoId) || '').toUpperCase(), viejo = String(cambio.data().abogadoNombre || '').toUpperCase();
+          Object.assign(extra, { estadoTexto: 'REASIGNADO A ' + nuevo, resumen: String(cambio.data().resumen || '').replace(' A ' + viejo + ',', ' A ' + nuevo + ',') });
+          if (cambio.data().padreId) lote.update(doc(db, 'casos', cambio.data().padreId), { estado: 'REASIGNADO A ' + nuevo });
+        }
+        lote.update(cambio.ref, { ...datosAbogadoDrive1(nuevoId, 'abogado'), ...extra });
+      }
     }
     await lote.commit();
     a.abogadoActualId = nuevoId;
@@ -971,7 +980,8 @@ function sugerenciaReasignacion(historial, lista, pierdeId, nota, deLicencia = (
   eventos.forEach(r => {
     if (deudas[r.aId] && deudas[r.aId].length) deudas[r.aId].shift();          // se le compensa
     else if (ids.has(r.aId) && !esCoord(r.aId)) ultimoTurno = r.aId;           // lo recibió por turno
-    if (ids.has(r.deId) && !esCoord(r.deId)) (deudas[r.deId] = deudas[r.deId] || []).push(r.fecha); // queda debiéndosele
+    // queda debiéndosele (en una reasignación en bloque del Drive 1, al que sale NO se le debe nada: sinDeuda)
+    if (!r.sinDeuda && ids.has(r.deId) && !esCoord(r.deId)) (deudas[r.deId] = deudas[r.deId] || []).push(r.fecha);
   });
   const dmy = iso => iso ? iso.slice(8, 10) + '/' + iso.slice(5, 7) + '/' + iso.slice(0, 4) : '';
   const pendientes = lista.filter(d => deudas[d.id] && deudas[d.id].length)
