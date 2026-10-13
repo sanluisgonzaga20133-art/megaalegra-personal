@@ -172,6 +172,15 @@
   .acciones-coinc button{padding:5px 10px;border-radius:7px;font-size:12px;font-weight:700;cursor:pointer;border:1.5px solid var(--linea);background:#fff;color:var(--tinta)}
   .acciones-coinc button.mismo{background:var(--azul);border-color:var(--azul);color:#fff}
   .ayuda{font-size:12px;color:var(--gris);margin-top:4px}
+  /* Diligencias: un recuadro por cada una, con ✕ para quitarla */
+  .caja-dil{position:relative;border:1px solid var(--linea);border-radius:10px;padding:2px 12px 10px;margin-bottom:8px;background:#FCFAF6}
+  .caja-dil .num-dil{font-size:12px;font-weight:800;color:var(--gris);margin-top:8px}
+  .quitar-dil{position:absolute;top:6px;right:6px;width:30px;height:30px;border-radius:50%;border:1.5px solid var(--linea);background:#fff;color:var(--tinta);font-weight:700;cursor:pointer}
+  .quitar-dil:hover{border-color:var(--rojo);color:var(--rojo-oscuro)}
+  .btn-agregar-dil{margin-top:4px;padding:8px 12px;border-radius:8px;border:1.5px dashed var(--azul);background:#fff;color:var(--azul);font-weight:700;font-size:13px;cursor:pointer}
+  .dil-linea + .dil-linea{border-top:1px dashed var(--celda);margin-top:4px;padding-top:4px}
+  .enlace-meet{display:inline-block;font-size:11px;font-weight:700;color:var(--azul)}
+  tbody tr.urgente .enlace-meet, tbody tr.muy-urgente .enlace-meet{color:#fff}
   .error-form{color:var(--rojo-oscuro);font-size:13px;font-weight:700;margin-top:12px}
   /* Dato obligatorio que falta: borde rojo y mensaje debajo del mismo casillero */
   .falta-campo{border:2px solid var(--rojo) !important;border-radius:8px;background:#FFF5F5}
@@ -593,18 +602,11 @@
       <textarea id="fResumen" class="may" placeholder="Lo que dice el documento, en pocas palabras"></textarea>
     </div>
 
+    <!-- Diligencias o audiencias: varias por caso (se guardan como lista en el mismo caso) -->
     <div class="bloque">
-      <div class="rejilla">
-        <div>
-          <label class="campo" for="fDiligencia">Diligencia o audiencia</label>
-          <select id="fDiligencia"></select>
-          <input type="text" id="fDiligenciaOtra" class="may" placeholder="Describir" style="margin-top:6px" hidden>
-        </div>
-        <div style="display:flex;gap:8px">
-          <div style="flex:1"><label class="campo" for="fDilFecha">Fecha</label><input type="date" id="fDilFecha"></div>
-          <div style="flex:1"><label class="campo" for="fDilHora">Hora</label><input type="time" id="fDilHora"></div>
-        </div>
-      </div>
+      <label class="campo">Diligencias o audiencias</label>
+      <div id="listaDiligencias"></div>
+      <button type="button" class="btn-agregar-dil" id="btnAgregarDil">+ Agregar diligencia</button>
     </div>
 
     <div class="bloque">
@@ -1031,7 +1033,7 @@ function ordenRegistro(a, b){ return a.fecha.localeCompare(b.fecha) || (a.creado
 function textoBusqueda(r){
   return norm([r.codigo, codigoNorm(r.codigo), codigoNorm(r.padreCodigo), r.numDoc, r.usuario, r.abogadoNombre, r.carpeta, r.materia, r.origen, r.tipoDoc, r.proveido,
     r.memoNum, r.oficioNum, r.resumen, r.respuesta, r.distrital, r.dirigidoA, r.padreCodigo, r.padreUsuario, r.estado,
-    r.diligencia, r.supNota, r.asistenteNombre, r.apoyoNombre].join(' | '));
+    diligenciasDe(r).map(d => d.tipo).join(' '), r.supNota, r.asistenteNombre, r.apoyoNombre].join(' | '));
 }
 
 // ---------------- Pintar la tabla ----------------
@@ -1113,7 +1115,11 @@ function pintar(){
         plazo += `<button class="mini-accion solo-abogado" data-plazo-ok="${r.id}">✓ Cumplido</button>`;
       }
     }
-    const dilig = r.diligencia ? `${esc(r.diligencia)}${r.dilFecha ? `<span class="chico">${fechaCorta(r.dilFecha)} ${esc(r.dilHora || '')}</span>` : ''}` : '';
+    // Todas las diligencias del caso, una debajo de otra
+    const dilig = diligenciasDe(r).map(d => `<div class="dil-linea">${esc(d.tipo || 'Diligencia')}` +
+      `${d.fecha || d.hora ? `<span class="chico">${fechaCorta(d.fecha)} ${esc(d.hora || '')}</span>` : ''}` +
+      `${d.fecha2 ? `<span class="chico">2ª fecha: ${fechaCorta(d.fecha2)}</span>` : ''}` +
+      `${/^https?:\/\//i.test(d.meet || '') ? `<a class="enlace-meet" href="${esc(d.meet)}" target="_blank" rel="noopener">Meet ↗</a>` : ''}</div>`).join('');
     let sup = r.supFecha ? `${fechaCorta(r.supFecha)}<span class="chico">${esc(r.supNota || '')}</span>` : '';
     if (r.supFecha){
       if (r.supHecha) sup += '<span class="insignia ok">✓ Hecha</span>';
@@ -1149,7 +1155,7 @@ function pintar(){
       <td>${dilig}</td>
       <td>${estado}</td>
       <td class="verde">${esc(r.proveido)}</td>
-      <td class="verde celda-num-doc">${celdaMemo}${proyecta}</td>
+      <td class="verde celda-num-doc">${celdaMemo}${proyecta}<button type="button" class="mini-accion" data-copiar-memo="${r.id}" title="Copia los datos ordenados como el memo de asignación de caso">📋 Copiar para memo</button></td>
       <td class="verde celda-num-doc">${celdaOficio}</td>
       <td>${esc(r.dirigidoA)}</td>
       <td>${plazo}</td>
@@ -1170,6 +1176,7 @@ $('cuerpo').addEventListener('click', e => {
   if (t.dataset.hist){ abrirHistorial(t.dataset.hist, t.dataset.actual); return; }
   if (t.dataset.editar){ abrirForm({ editarId: t.dataset.editar }); return; }
   if (t.dataset.antecedente){ abrirForm({ padreId: t.dataset.antecedente }); return; }
+  if (t.dataset.copiarMemo){ copiarParaMemo(t.dataset.copiarMemo); return; }
   if (t.dataset.borrar){ idPorBorrar = t.dataset.borrar; pintar(); return; }
   if (t.dataset.borrarNo !== undefined){ idPorBorrar = null; pintar(); return; }
   if (t.dataset.borrarSi){ borrar(t.dataset.borrarSi); return; }
@@ -1203,6 +1210,53 @@ $('cuerpo').addEventListener('change', e => {
     updateDoc(doc(db, COL, t.dataset.ocultar), { ocultarPublico: t.checked }).catch(errorAlGuardar);
   }
 });
+// ---------- "📋 Copiar para memo": datos ordenados como el memo de ASIGNACIÓN DE CASO ----------
+// Solo lee (no guarda nada): lo pueden usar todos los que ven el Drive 1, también los asistentes. Lo que falte queda en blanco.
+const CONECTORES = new Set(['de', 'del', 'la', 'las', 'los', 'y', 'da', 'van', 'von']);
+function inicialesDe(nombre){
+  return norm(nombre).replace(/[^a-z\s]/g, ' ').split(/\s+/).filter(p => p && !CONECTORES.has(p)).map(p => p[0]).join('');
+}
+function textoMemo(r){
+  // A quien va: quien apoya (si tiene "Le apoya"); si no, el abogado que tiene el caso hoy
+  const id = r.apoyoNombre ? r.apoyoId : r.abogadoActualNombre ? r.abogadoActualId : r.abogadoId;
+  const nombre = r.apoyoNombre || r.abogadoActualNombre || r.abogadoNombre || '';
+  const area = ((DEFENSORES.find(d => d.id === id) || {}).area) || r.area || '';
+  const plazo = !r.plazoVence ? ''
+    : (r.plazoHoras ? r.plazoHoras + ' HORAS (vence ' : 'HASTA EL ') + fechaCorta(r.plazoVence.slice(0, 10)) + ' ' + r.plazoVence.slice(11, 16) + (r.plazoHoras ? ')' : '');
+  const dils = diligenciasDe(r).map((d, i) => ' ' + (i + 1) + '. ' + [
+    may(d.tipo) || 'DILIGENCIA',
+    [fechaCorta(d.fecha), d.hora].filter(Boolean).join(' '),
+    d.fecha2 ? '2ª fecha: ' + fechaCorta(d.fecha2) : '',
+    d.meet || '' // el enlace va tal cual (sin mayúsculas)
+  ].filter(Boolean).join(' – '));
+  return [
+    'A: ' + [nombre, may(area)].filter(Boolean).join(' – '),
+    'ASUNTO: ASIGNACIÓN DE CASO',
+    'REFERENCIA: ' + [r.numDoc, r.codigo].filter(Boolean).join(' · '),
+    'FECHA: ' + fechaCorta(hoyIso()),
+    'USUARIO: ' + (r.usuario || r.padreUsuario || ''),
+    'MATERIA/DELITO: ' + (r.materia || ''),
+    'N° DE CASO / CARPETA: ' + (r.carpeta || ''),
+    'PLAZO DE INFORME: ' + plazo,
+    'DILIGENCIAS:',
+    ...dils,
+    inicialesDe(r.asistenteNombre || '')
+  ].join('\n');
+}
+async function copiarTexto(txt){
+  try { await navigator.clipboard.writeText(txt); return true; } catch (e){ /* se intenta a la antigua */ }
+  const ta = document.createElement('textarea');
+  ta.value = txt; ta.setAttribute('readonly', ''); ta.style.cssText = 'position:fixed;top:0;left:0;opacity:0';
+  document.body.appendChild(ta); ta.select(); ta.setSelectionRange(0, txt.length);
+  let ok = false; try { ok = document.execCommand('copy'); } catch (e){ ok = false; }
+  ta.remove();
+  return ok;
+}
+async function copiarParaMemo(id){
+  const r = cache.get(id) || pendMemo.get(id);
+  if (!r){ avisar('No se encontró ese caso.'); return; }
+  avisar(await copiarTexto(textoMemo(r)) ? 'Copiado' : 'No se pudo copiar. Inténtalo de nuevo.', 3000);
+}
 $('cuerpo').addEventListener('keydown', e => { if (e.key === 'Enter' && e.target.dataset.campo) e.target.blur(); });
 
 // ---------- "Todo o nada": al guardar, borrar o corregir, todo va en UN solo paquete ----------
@@ -1407,8 +1461,60 @@ $('optTipoRegistro').onclick = e => { const o = e.target.closest('.opcion'); if 
 
 $('fTipoDoc').innerHTML = TIPOS_DOC.map(t => `<option>${t}</option>`).join('');
 $('fRespuesta').innerHTML = '<option value="">— Elegir —</option>' + RESPUESTAS.map(t => `<option>${t}</option>`).join('');
-$('fDiligencia').innerHTML = '<option value="">— Ninguna —</option>' + DILIGENCIAS.map(t => `<option>${t}</option>`).join('');
-$('fDiligencia').onchange = () => $('fDiligenciaOtra').hidden = $('fDiligencia').value !== 'Otra';
+// ---------- Diligencias (varias por caso) ----------
+// Se guardan como lista "diligencias" [{ tipo, fecha, hora, fecha2, meet }] dentro del caso.
+// La primera también va en diligencia/dilFecha/dilHora (los campos de siempre). Los casos antiguos (una sola) se leen como la primera de la lista.
+// El enlace de Meet NO se pasa a mayúsculas (se rompería).
+function diligenciasDe(r){
+  if (Array.isArray(r.diligencias) && r.diligencias.length) return r.diligencias;
+  return r.diligencia ? [{ tipo: r.diligencia, fecha: r.dilFecha || '', hora: r.dilHora || '', fecha2: '', meet: '' }] : [];
+}
+function numerarDiligencias(){ [...$('listaDiligencias').children].forEach((c, i) => { c.querySelector('.num-dil').textContent = 'Diligencia ' + (i + 1); }); }
+function agregarDiligencia(d = {}){
+  const caja = document.createElement('div');
+  caja.className = 'caja-dil';
+  caja.innerHTML = `<button type="button" class="quitar-dil" aria-label="Quitar esta diligencia" title="Quitar esta diligencia">✕</button>
+    <div class="num-dil"></div>
+    <div class="rejilla">
+      <div class="ancho"><label class="campo">Tipo</label>
+        <select data-dil="tipo" aria-label="Tipo de diligencia"><option value="">— Elegir —</option>${DILIGENCIAS.map(t => `<option>${t}</option>`).join('')}</select>
+        <input type="text" data-dil="otra" class="may" placeholder="Describir" aria-label="Describir la diligencia" style="margin-top:6px" hidden></div>
+      <div><label class="campo">Fecha</label><input type="date" data-dil="fecha" aria-label="Fecha de la diligencia"></div>
+      <div><label class="campo">Hora</label><input type="time" data-dil="hora" aria-label="Hora de la diligencia"></div>
+      <div><label class="campo">Segunda fecha (opcional)</label><input type="date" data-dil="fecha2" aria-label="Segunda fecha"></div>
+      <div><label class="campo">Enlace de Google Meet (opcional)</label><input type="text" data-dil="meet" inputmode="url" autocomplete="off" placeholder="https://meet.google.com/…" aria-label="Enlace de Google Meet"></div>
+    </div>`;
+  const campo = k => caja.querySelector(`[data-dil="${k}"]`);
+  const enLista = !d.tipo || DILIGENCIAS.includes(d.tipo);
+  campo('tipo').value = !d.tipo ? '' : enLista ? d.tipo : 'Otra';
+  campo('otra').value = d.tipo && !enLista ? d.tipo : '';
+  campo('otra').hidden = campo('tipo').value !== 'Otra';
+  campo('fecha').value = d.fecha || ''; campo('hora').value = d.hora || '';
+  campo('fecha2').value = d.fecha2 || ''; campo('meet').value = d.meet || '';
+  $('listaDiligencias').appendChild(caja);
+  numerarDiligencias();
+  return caja;
+}
+function ponerDiligencias(lista){ $('listaDiligencias').innerHTML = ''; (lista || []).forEach(d => agregarDiligencia(d)); }
+function leerDiligencias(){
+  return [...$('listaDiligencias').querySelectorAll('.caja-dil')].map(c => {
+    const v = k => c.querySelector(`[data-dil="${k}"]`).value.trim();
+    let meet = v('meet');
+    if (meet && !/^https?:\/\//i.test(meet)) meet = 'https://' + meet;
+    return { tipo: v('tipo') === 'Otra' ? may(v('otra')) : v('tipo'), fecha: v('fecha'), hora: v('hora'), fecha2: v('fecha2'), meet };
+  }).filter(d => d.tipo || d.fecha || d.hora || d.fecha2 || d.meet); // los recuadros vacíos no se guardan
+}
+$('btnAgregarDil').onclick = () => { const c = agregarDiligencia(); c.querySelector('[data-dil="tipo"]').focus(); };
+$('listaDiligencias').addEventListener('change', e => {
+  if (e.target.dataset.dil !== 'tipo') return;
+  const otra = e.target.closest('.caja-dil').querySelector('[data-dil="otra"]');
+  otra.hidden = e.target.value !== 'Otra';
+  if (!otra.hidden) otra.focus();
+});
+$('listaDiligencias').addEventListener('click', e => {
+  const x = e.target.closest('.quitar-dil'); if (!x) return;
+  x.closest('.caja-dil').remove(); numerarDiligencias();
+});
 $('fPlazo').onchange = () => $('bloquePlazoOtro').hidden = $('fPlazo').value !== 'otro';
 $('fDirigido').onchange = () => $('fDirigidoOtro').hidden = !$('fDirigido').value.startsWith('OTRA');
 $('fMateria').onchange = () => $('fMateriaOtra').hidden = $('fMateria').value !== 'Otra';
@@ -2171,16 +2277,16 @@ function limpiarForm(){
   coincidenciasDescartadas = ''; clearTimeout(tCoincidencias); ocultarCoincidencias();
   limpiarFono(); $('bloqueFono').hidden = true;
   apoyoPrecargado = ''; dirigidoAuto = ''; $('bloqueApoyo').hidden = true; $('fApoyo').innerHTML = '';
-  ['fNumDoc', 'fCodigo', 'fUsuario', 'fCarpeta', 'fResumen', 'fDistrital', 'fProveido', 'fDiligenciaOtra', 'fSupNota', 'fDilHora', 'fDilFecha', 'fPlazoFecha', 'fPlazoHora', 'fSupFecha']
+  ['fNumDoc', 'fCodigo', 'fUsuario', 'fCarpeta', 'fResumen', 'fDistrital', 'fProveido', 'fSupNota', 'fPlazoFecha', 'fPlazoHora', 'fSupFecha']
     .forEach(i => $(i).value = '');
   ['fHacerMemo', 'fHacerOficio', 'fHacerCarta', 'fNoHacer', 'fOcultar'].forEach(i => $(i).checked = false);
   $('fFecha').value = hoyIso();
   $('fArea').value = 'Asistencia Legal';
   $('fTipoDoc').value = TIPOS_DOC[0];
   $('ayudaAbogado').textContent = AYUDA_ABOGADO;
-  $('fRespuesta').value = ''; $('fDiligencia').value = ''; $('fPlazo').value = '';
+  $('fRespuesta').value = ''; ponerDiligencias([]); $('fPlazo').value = '';
   $('fDerivaTipo').value = ''; $('fDerivaMotivo').value = ''; $('fDerivaMotivoOtro').value = ''; $('fDerivaMotivoOtro').hidden = true;
-  $('fDiligenciaOtra').hidden = true; $('bloquePlazoOtro').hidden = true;
+  $('bloquePlazoOtro').hidden = true;
   marcar($('optOrigen'), ''); marcar($('optResultado'), ''); marcar($('optPrioridad'), 'normal');
   llenarMaterias(); llenarAbogados(); llenarDirigido();
   limpiarAgendaForm();
@@ -2229,10 +2335,7 @@ function abrirForm({ editarId = null, padreId = null } = {}){
       $('fDerivaMotivoOtro').value = esOtro ? mot.replace(/^OTRO:s*/i, '') : ''; $('fDerivaMotivoOtro').hidden = !esOtro;
     }
     resultadoCambio = r.resultadoCambio || ''; marcar($('optResultado'), resultadoCambio);
-    const dilExiste = DILIGENCIAS.includes(r.diligencia);
-    $('fDiligencia').value = !r.diligencia ? '' : dilExiste ? r.diligencia : 'Otra';
-    $('fDiligenciaOtra').value = r.diligencia && !dilExiste ? r.diligencia : ''; $('fDiligenciaOtra').hidden = $('fDiligencia').value !== 'Otra';
-    $('fDilFecha').value = r.dilFecha || ''; $('fDilHora').value = r.dilHora || '';
+    ponerDiligencias(diligenciasDe(r)); // caso antiguo: su única diligencia sale como la primera
     prioridad = r.prioridad || 'normal'; marcar($('optPrioridad'), prioridad);
     const h = r.hacer || {};
     $('fHacerMemo').checked = !!h.memo; $('fHacerOficio').checked = !!h.oficio; $('fHacerCarta').checked = !!h.carta; $('fNoHacer').checked = !!h.noHacer;
@@ -2710,14 +2813,14 @@ $('btnGuardarForm').onclick = async () => {
 
   let dirigido = $('fDirigido').value.startsWith('OTRA') ? may($('fDirigidoOtro').value) : $('fDirigido').value;
   if (!dirigido && apoyoElegido() && ($('fHacerMemo').checked || $('fHacerOficio').checked || $('fHacerCarta').checked)) dirigido = apoyoElegido().nombre;
-  const diligencia = $('fDiligencia').value === 'Otra' ? may($('fDiligenciaOtra').value) : $('fDiligencia').value;
+  const diligencias = leerDiligencias(), dil1 = diligencias[0] || {};
   const fecha = $('fFecha').value;
 
   const datos = {
     fecha, anio: Number(fecha.slice(0, 4)), mes: fecha.slice(0, 7),
     tipoDoc, origen, codigo: may($('fCodigo').value), codigoNorm: codigoNorm($('fCodigo').value), numDoc: may($('fNumDoc').value),
     abogadoId: abog.id, abogadoNombre: abog.nombre, abogadoCelular: abog.celular || '', abogadoCorreo: abog.correo || '',
-    diligencia, dilFecha: diligencia ? $('fDilFecha').value : '', dilHora: diligencia ? $('fDilHora').value : '',
+    diligencias, diligencia: dil1.tipo || '', dilFecha: dil1.fecha || '', dilHora: dil1.hora || '',
     prioridad,
     hacer,
     proveido: may($('fProveido').value), dirigidoA: dirigido,
@@ -2836,7 +2939,11 @@ $('btnDescargar').onclick = async () => {
       'Materia o delito': r.materia, 'N° carpeta': r.carpeta,
       'Respuesta / resultado': r.respuesta || r.resultadoCambio || (esDerivacion(r.tipoDoc) ? 'DERIVADO A ' + destinoDerivacion(r) + (r.derivaMotivo ? ' · MOTIVO: ' + r.derivaMotivo : '') : '') || (r.opinionNum ? r.opinionNum + 'ª OPINIÓN' : ''),
       'Resumen': r.resumen || '', 'Estado del caso': r.estado || '',
-      'Diligencia': r.diligencia, 'Fecha diligencia': fechaCorta(r.dilFecha), 'Hora': r.dilHora,
+      // Mismas 3 columnas de siempre; si hay varias diligencias, van una tras otra separadas por " | "
+      ...(l => ({
+        'Diligencia': l.map(d => (d.tipo || 'DILIGENCIA') + (d.fecha2 ? ' (2ª FECHA ' + fechaCorta(d.fecha2) + ')' : '') + (d.meet ? ' · ' + d.meet : '')).join(' | '),
+        'Fecha diligencia': l.map(d => fechaCorta(d.fecha) || (l.length > 1 ? '—' : '')).join(' | '), 'Hora': l.map(d => d.hora || (l.length > 1 ? '—' : '')).join(' | ')
+      }))(diligenciasDe(r)),
       'Prioridad': (r.prioridad || 'normal').toUpperCase(),
       'Hacer': (r.hacer || {}).noHacer ? 'NO HACER MEMO' : ['memo', 'oficio', 'carta'].filter(k => (r.hacer || {})[k]).join(', ').toUpperCase(),
       'Proveído': r.proveido, 'Memo': r.memoNum || '', 'Oficio / Carta': r.oficioNum || '',
