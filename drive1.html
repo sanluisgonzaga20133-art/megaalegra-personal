@@ -353,6 +353,7 @@
     <a href="drive1.html" class="actual" aria-current="page">Drive 1 · Registro de casos</a>
     <a href="index.html">Drive 2 · Agenda diaria</a>
     <a href="drive3.html" id="enlaceDrive3" hidden>Drive 3 · Fono Alegra</a>
+    <a href="drive4.html" id="enlaceDrive4" hidden>Drive 4 · Consolidación</a>
     <a href="licencias.html" id="enlaceLicencias" hidden>Licencias</a>
     <a href="permisos.html" id="enlacePermisos" hidden>Personal y permisos</a>
     <span class="separador" aria-hidden="true"></span>
@@ -3892,6 +3893,7 @@ onAuthStateChanged(auth, async user => {
     $('btnVerAgenda').hidden = nivelSeccion(ficha.data(), 'drive2') === 'sin';
     $('enlaceLicencias').hidden = nivelSeccion(ficha.data(), 'licencias') === 'sin';
     $('enlaceDrive3').hidden = nivelSeccion(ficha.data(), 'drive3') === 'sin';
+    $('enlaceDrive4').hidden = nivelSeccion(ficha.data(), 'drive4') === 'sin';
     // Enlaces a las hojas de Google: solo para quien tiene acceso a ese drive
     let hojasVisibles = 0;
     document.querySelectorAll('.menu-drives a.hoja[data-drive]').forEach(a => { a.hidden = nivelSeccion(ficha.data(), a.dataset.drive) === 'sin'; if (!a.hidden) hojasVisibles++; });

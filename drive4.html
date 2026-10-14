@@ -1,0 +1,962 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Drive 4 · Consolidación · MEGA ALEGRA</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Source+Serif+4:opsz,wght@8..60,600&family=Public+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<!-- Excel con colores (leer y escribir): la misma librería del Drive 3 -->
+<script src="https://cdn.jsdelivr.net/npm/xlsx-js-style@1.2.0/dist/xlsx.bundle.js"></script>
+<style>
+  :root{
+    --rojo:#D91023; --rojo-oscuro:#A10C1A; --dorado:#B8873A; --tinta:#241E1B; --gris:#6A635C; --gris-claro:#9A938A;
+    --papel:#F7F2EA; --linea:#E6DECF; --celda:#D9D2C5; --verde:#3F6B52; --verde-fondo:#EAF2ED; --azul:#2C6478; --ambar-fondo:#FFF3D6; --ambar:#6B4A0E;
+    --cumple:#C6EFCE; --cumple-txt:#1E5A2B; --nocumple:#FFC7CE; --nocumple-txt:#8A0B16; --amarillo:#FFF2A8;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0}
+  body{font-family:'Public Sans',system-ui,sans-serif;background:var(--papel);color:var(--tinta);padding:max(10px, env(safe-area-inset-top,0px)) 12px 30px}
+  [hidden]{display:none !important}
+  button,input,select,textarea{font:inherit}
+  :focus-visible{outline:2px solid var(--azul);outline-offset:2px}
+
+  #pantallaLogin{min-height:100vh;display:flex;align-items:center;justify-content:center;padding:20px}
+  .caja-login{background:#fff;border:1px solid var(--linea);border-radius:14px;padding:28px;max-width:380px;width:100%}
+  .caja-login h2{font-family:'Source Serif 4',Georgia,serif;margin:0 0 12px;color:var(--rojo-oscuro)}
+  .caja-login input{width:100%;padding:10px 12px;border:1px solid var(--linea);border-radius:8px;margin:4px 0 10px}
+  #msgLogin{margin-top:12px;font-size:13px;font-weight:600;color:var(--rojo-oscuro);min-height:18px}
+
+  .barra-sesion{display:flex;justify-content:space-between;align-items:center;gap:10px;margin-bottom:8px;font-size:12.5px;color:var(--gris)}
+  .barra-sesion button{background:#fff;border:1px solid var(--linea);border-radius:8px;padding:4px 12px;cursor:pointer}
+  .menu-drives{display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin:0 0 10px;padding:6px;background:#fff;border:1px solid var(--linea);border-radius:12px}
+  .menu-drives a{padding:7px 12px;border-radius:8px;font-size:13.5px;font-weight:600;color:var(--tinta);text-decoration:none;white-space:nowrap}
+  .menu-drives a:hover{background:var(--papel)}
+  .menu-drives a.actual{background:var(--tinta);color:#fff}
+
+  header{background:var(--rojo);color:#fff;border-radius:14px;padding:12px 18px;margin-bottom:10px}
+  header::after{content:"";display:block;height:3px;background:var(--dorado);margin-top:10px;border-radius:2px}
+  header h1{font-family:'Source Serif 4',Georgia,serif;font-weight:600;font-size:19px;margin:0 0 2px}
+  header p{margin:0;font-size:14px;color:rgba(255,255,255,.9)}
+  .acciones-cab{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}
+  .acciones-cab .btn{background:#fff;color:var(--rojo-oscuro)}
+  .acciones-cab .btn.sec{background:transparent;color:#fff;border:1.5px solid rgba(255,255,255,.7)}
+
+  .caja{background:#fff;border:1px solid var(--linea);border-radius:12px;padding:14px;margin-bottom:10px}
+  .caja h3{margin:0 0 8px;font-size:15px}
+  .ayuda{font-size:12.5px;color:var(--gris);line-height:1.5;margin:4px 0}
+  .btn{padding:8px 14px;border-radius:8px;border:none;background:var(--rojo);color:#fff;font-weight:700;cursor:pointer;text-decoration:none;display:inline-block}
+  .btn:disabled{background:#D8CFC3;cursor:default}
+  .btn.sec{background:#fff;color:var(--tinta);border:1.5px solid var(--linea)}
+  .btn.chico{padding:4px 10px;font-size:12px}
+  .advertencia{background:var(--ambar-fondo);color:var(--ambar);border-radius:8px;padding:8px 10px;font-size:13px;margin:0 0 10px}
+  .confirmar{background:var(--ambar-fondo);border:1.5px solid #E8C872;border-radius:10px;padding:10px 12px;margin-top:10px;font-size:13.5px;line-height:1.5}
+  .confirmar.ok{background:var(--verde-fondo);border-color:var(--verde);color:var(--verde)}
+
+  .barra{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin:0 0 10px}
+  .barra label{font-size:13px;font-weight:700;display:flex;align-items:center;gap:6px}
+  .barra input, .barra select{padding:8px 10px;border:1.5px solid var(--linea);border-radius:9px;background:#fff}
+  .leyenda{display:flex;gap:10px;flex-wrap:wrap;font-size:12px;color:var(--gris);align-items:center}
+  .muestra{display:inline-block;width:14px;height:14px;border-radius:3px;vertical-align:-2px;margin-right:4px;border:1px solid var(--celda)}
+
+  /* Tabla de consolidación (como el Excel) */
+  .tabla-wrap{background:#fff;border:1px solid var(--celda);border-radius:10px;overflow:auto;max-height:calc(100vh - 150px)}
+  table{border-collapse:collapse;width:max-content;min-width:100%}
+  th{position:sticky;top:0;z-index:2;background:#EFE9DD;font-size:11px;font-weight:700;padding:5px 6px;border:1px solid var(--celda);white-space:nowrap;text-align:center}
+  thead tr:nth-child(2) th{top:27px}
+  th.grupo{background:var(--rojo-oscuro);color:#fff;font-size:11.5px}
+  th.poi{background:#FFF2CC}
+  td{padding:2px 4px;border:1px solid var(--celda);font-size:12.5px;background:#fff;text-align:center;font-variant-numeric:tabular-nums}
+  td.nombre, th.nombre{position:sticky;left:0;z-index:1;text-align:left;min-width:230px;max-width:260px;white-space:normal;font-weight:600;padding:4px 8px}
+  th.nombre{z-index:3}
+  td.n{color:var(--gris);font-size:11.5px}
+  td.gris, td.nombre.gris{color:var(--gris-claro);font-style:italic}
+  td.calc{background:#F6F1E8;font-weight:700}
+  td.falta{color:var(--rojo-oscuro);font-weight:800;background:#F6F1E8}
+  td.obs{text-align:left;min-width:220px;max-width:340px;white-space:normal;font-size:11.5px;color:var(--ambar)}
+  td.cumple{background:var(--cumple) !important;color:var(--cumple-txt)}
+  td.nocumple{background:var(--nocumple) !important;color:var(--nocumple-txt)}
+  td input{width:46px;padding:3px 2px;border:1px solid transparent;border-radius:4px;background:transparent;text-align:center;font-size:12.5px;color:inherit}
+  td input:hover{border-color:var(--celda)}
+  td input:focus{border-color:var(--azul);background:#fff;outline:none}
+  tr.total td{font-weight:800;background:#F6F1E8}
+  tr.meta-dist td{font-size:11.5px;color:var(--azul);background:#EEF5F8;font-weight:700}
+  .sep{border-left:3px solid var(--tinta) !important}
+
+  /* Metas (solo administrador) */
+  .metas-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,300px),1fr));gap:10px;margin-top:8px}
+  .metas-area{border:1px solid var(--linea);border-radius:10px;padding:10px}
+  .metas-area h4{margin:0 0 6px;font-size:13.5px}
+  .metas-area label{display:flex;justify-content:space-between;align-items:center;gap:8px;font-size:12.5px;margin:4px 0}
+  .metas-area input{width:90px;padding:5px 8px;border:1.5px solid var(--linea);border-radius:7px;background:var(--papel);text-align:right}
+  .meses-poi{display:flex;gap:6px;flex-wrap:wrap}
+  .meses-poi label{display:flex;gap:4px;align-items:center;border:1px solid var(--linea);border-radius:7px;padding:4px 8px;font-size:12.5px;cursor:pointer}
+
+  /* Revisión (PDF del SSC y Excel) */
+  .revision td{text-align:left;vertical-align:top;padding:4px 6px}
+  .revision td.amarillo{background:var(--amarillo) !important}
+  .revision select, .revision input{padding:4px 6px;border:1px solid var(--celda);border-radius:6px;font-size:12.5px;background:#fff}
+  .revision input.num{width:58px;text-align:right}
+  .revision .nota{display:block;font-size:11px;color:var(--ambar);font-weight:700}
+  .revision .cambio{font-size:11.5px;color:var(--rojo-oscuro);font-weight:700}
+  .revision tr.excluida td{opacity:.45}
+
+  #sinAcceso{background:#fff;border:1px solid var(--linea);border-radius:12px;padding:20px}
+  #aviso{position:fixed;left:50%;bottom:calc(20px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);background:#222;color:#fff;
+    padding:10px 16px;border-radius:10px;font-size:13.5px;font-weight:600;z-index:99;display:none;max-width:90vw}
+</style>
+</head>
+<body>
+<div id="pantallaLogin">
+  <div id="cargandoSesion" style="text-align:center;color:#6A635C;font-size:15px;font-weight:600">Cargando MEGA ALEGRA…</div>
+  <div class="caja-login" id="cajaLogin" hidden>
+    <h2>MEGA ALEGRA · Consolidación</h2>
+    <label for="loginCorreo" style="font-size:13px;font-weight:700">Correo</label>
+    <input type="email" id="loginCorreo" autocomplete="username">
+    <label for="loginClave" style="font-size:13px;font-weight:700">Contraseña</label>
+    <input type="password" id="loginClave" autocomplete="current-password">
+    <button class="btn" id="btnEntrar" style="width:100%;padding:11px">Entrar</button>
+    <div id="msgLogin"></div>
+  </div>
+</div>
+<div id="aviso" role="status" aria-live="polite"></div>
+
+<div id="app" hidden>
+  <div class="barra-sesion"><span id="usuarioSesion"></span><button id="btnSalir">Salir</button></div>
+  <nav class="menu-drives" aria-label="Drives">
+    <a href="drive1.html" data-seccion="drive1" hidden>Drive 1 · Registro de casos</a>
+    <a href="index.html" data-seccion="drive2" hidden>Drive 2 · Agenda diaria</a>
+    <a href="drive3.html" data-seccion="drive3" hidden>Drive 3 · Fono Alegra</a>
+    <a href="drive4.html" class="actual" aria-current="page">Drive 4 · Consolidación</a>
+    <a href="licencias.html" data-seccion="licencias" hidden>Licencias</a>
+    <a href="permisos.html" id="enlacePermisos" hidden>Personal y permisos</a>
+  </nav>
+  <div id="sinAcceso" hidden>No tienes acceso al Drive 4 · Consolidación. Si lo necesitas, pídeselo al Coordinador.</div>
+
+  <div id="contenido" hidden>
+    <header>
+      <h1>Drive 4 · Consolidación</h1>
+      <p>Dato real mensual de cada defensor (Consolidado del SSC): casos asumidos, consultas y escritos</p>
+      <div class="acciones-cab">
+        <button class="btn" id="btnPdf" hidden>📄 Subir PDF del SSC</button>
+        <input type="file" id="archivoPdf" accept="application/pdf,.pdf" multiple hidden>
+        <button class="btn sec" id="btnExcel">⬇ Descargar Excel</button>
+        <button class="btn sec" id="btnImportar" hidden>⬆ Importar mi Excel</button>
+        <input type="file" id="archivoExcel" accept=".xlsx,.xls" hidden>
+        <button class="btn sec" id="btnMetas" hidden>⚙ Metas</button>
+      </div>
+    </header>
+
+    <!-- Metas (solo el administrador) -->
+    <section class="caja" id="cajaMetas" hidden>
+      <h3>⚙ Metas <span id="tituloMetasAnio"></span></h3>
+      <p class="ayuda">Meta mensual por defensor y meses que cuentan para la meta POI. La meta distrital POI de Lima (opcional) se compara con la fila TOTAL. Se guardan en Firebase (configuracion/metasConsolidacion), no en el código.</p>
+      <div class="barra">
+        <label>Año <select id="metasAnio"></select></label>
+      </div>
+      <strong style="font-size:13px">Meses que cuentan para la meta POI</strong>
+      <div class="meses-poi" id="metasMeses"></div>
+      <div class="metas-grid" id="metasAreas"></div>
+      <div class="barra" style="margin-top:10px">
+        <button class="btn" id="btnGuardarMetas">Guardar metas</button>
+        <button class="btn sec" id="btnCerrarMetas">Cerrar</button>
+        <span class="ayuda" id="ayudaMetas"></span>
+      </div>
+    </section>
+
+    <!-- Revisión antes de guardar (PDF del SSC o Excel) -->
+    <section class="caja" id="cajaRevision" hidden>
+      <h3 id="tituloRevision">Revisión antes de guardar</h3>
+      <p class="ayuda" id="ayudaRevision"></p>
+      <div class="tabla-wrap" style="max-height:60vh"><table class="revision">
+        <thead id="encRevision"></thead>
+        <tbody id="cuerpoRevision"></tbody>
+      </table></div>
+      <div class="barra" style="margin-top:10px">
+        <button class="btn" id="btnGuardarRevision">Guardar</button>
+        <button class="btn sec" id="btnCancelarRevision">Cancelar</button>
+        <span class="ayuda" id="resumenRevision"></span>
+      </div>
+      <div class="confirmar" id="confirmarRevision" hidden></div>
+    </section>
+
+    <div class="barra">
+      <label>Área <select id="selArea">
+        <option>Asistencia Legal</option>
+        <option>Defensa de Víctimas</option>
+        <option>Equipo multidisciplinario</option>
+      </select></label>
+      <label>Año <select id="selAnio"></select></label>
+      <label id="etiquetaRubros" hidden>Ver <select id="selRubro"></select></label>
+      <div class="leyenda">
+        <span><span class="muestra" style="background:var(--cumple)"></span>Cumple la meta</span>
+        <span><span class="muestra" style="background:var(--nocumple)"></span>No cumple</span>
+        <span><span class="muestra" style="background:#FFF2CC"></span>Mes que cuenta para la meta POI</span>
+        <span id="textoMetas"></span>
+      </div>
+    </div>
+    <p class="ayuda" id="ayudaTabla"></p>
+    <div class="tabla-wrap"><table>
+      <thead id="encTabla"></thead>
+      <tbody id="cuerpoTabla"></tbody>
+    </table></div>
+  </div>
+</div>
+
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
+import { getAuth, onAuthStateChanged, signInWithEmailAndPassword, signOut } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
+import { initializeFirestore, collection, doc, getDoc, getDocs, setDoc, query, where, onSnapshot, writeBatch, deleteField }
+  from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+
+const fbApp = initializeApp({
+  apiKey: "AIzaSyBHxewV5R3CAj-5i3AzCgfdKvwI5A3jXnA",
+  authDomain: "defensapublica-limacentro.firebaseapp.com",
+  projectId: "defensapublica-limacentro",
+  storageBucket: "defensapublica-limacentro.firebasestorage.app",
+  messagingSenderId: "595677954487",
+  appId: "1:595677954487:web:8a68160c5927bf5cf0a832"
+});
+const auth = getAuth(fbApp);
+const db = initializeFirestore(fbApp, { experimentalForceLongPolling: true });
+
+const $ = id => document.getElementById(id);
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+function avisar(t, ms = 3500){ const a = $('aviso'); a.textContent = t; a.style.display = 'block'; clearTimeout(avisar.t); avisar.t = setTimeout(() => a.style.display = 'none', ms); }
+function hoyIso(){ const d = new Date(); return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'); }
+const diaMes = iso => iso.slice(8, 10) + '/' + iso.slice(5, 7);
+const norm = s => String(s || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+function error(err){
+  console.error(err);
+  avisar(err && err.code === 'permission-denied' ? 'Firebase no dio permiso para este cambio.' : 'No se pudo guardar. Revisa tu conexión.', 6000);
+}
+// Mismo cálculo de permisos que en el Drive 1, la Agenda, el Drive 3 y Licencias
+function nivelSeccion(f, s){
+  if (f.esAdmin === true) return 'editar';
+  const temporal = f.rol === 'asistente' && f.permisoTemporalHasta && f.permisoTemporalHasta.toDate && f.permisoTemporalHasta.toDate() > new Date();
+  let n;
+  if (temporal && (s === 'drive1' || s === 'drive2')) n = 'editar';
+  else if ((f.permisos || {})[s]) n = f.permisos[s];
+  else n = 'sin';
+  if (f.bloqueado === true && n !== 'sin') n = 'ver';
+  return n;
+}
+
+// ================= Datos y configuración =================
+// "consolidacion": un documento por defensor y año → id "2026__DEFENSOR_ID", { anio, defensorId, nombre, area, meses: { "9": { nuevos, consultas, escritos, … } } }.
+// Quien ya no está en Defensores (renunció, etc.) puede tener filas con su nombre: id "2025__X_NOMBRE", defensorId "".
+const COL = 'consolidacion';
+const MESES = ['ENE', 'FEB', 'MAR', 'ABR', 'MAY', 'JUN', 'JUL', 'AGO', 'SET', 'OCT', 'NOV', 'DIC'];
+const MESES_LARGOS = ['ENERO', 'FEBRERO', 'MARZO', 'ABRIL', 'MAYO', 'JUNIO', 'JULIO', 'AGOSTO', 'SETIEMBRE', 'OCTUBRE', 'NOVIEMBRE', 'DICIEMBRE'];
+const RUBROS_AL_V = [
+  { k: 'nuevos', t: 'NUEVOS = PATROCINIOS', poi: true },
+  { k: 'consultas', t: 'CONSULTAS', poi: true },
+  { k: 'escritos', t: 'ESCRITOS VARIOS', poi: false }
+];
+const RUBROS_EQUIPO = [
+  { k: 'informesPericiales', t: 'INFORMES PERICIALES' }, { k: 'consultas', t: 'CONSULTAS' }, { k: 'asesorias', t: 'ASESORÍAS' },
+  { k: 'informesTecnicos', t: 'INFORMES TÉCNICOS' }, { k: 'diligenciasForenses', t: 'DILIGENCIAS FORENSES' }, { k: 'capacitaciones', t: 'CAPACITACIONES' },
+  { k: 'charlas', t: 'CHARLAS' }, { k: 'contraPeritajes', t: 'CONTRA PERITAJES' }, { k: 'otros', t: 'OTROS' }
+].map(r => ({ ...r, poi: true }));
+const AREAS = ['Asistencia Legal', 'Defensa de Víctimas', 'Equipo multidisciplinario'];
+const rubrosDe = area => area === 'Equipo multidisciplinario' ? RUBROS_EQUIPO : RUBROS_AL_V;
+const NOMBRE_HOJA = { 'Asistencia Legal': 'ASISTENCIA', 'Defensa de Víctimas': 'VÍCTIMAS', 'Equipo multidisciplinario': 'EQUIPO' };
+
+// Metas: configuracion/metasConsolidacion (solo el administrador las cambia).
+// Mientras un año no tenga metas guardadas se usan estos valores iniciales (los que ya se conocían); al guardar quedan en Firebase.
+const MESES_POI_DEFECTO = [4, 5, 6, 7, 8, 9, 10, 11]; // abril a noviembre
+const METAS_INICIALES = {
+  2025: { mesesPOI: [4, 5, 6, 7, 8, 9, 10, 11, 12], areas: { // como en el Excel de 2025 (9 meses)
+    'Asistencia Legal': { metas: { nuevos: 20, consultas: 100 }, distrital: {} },
+    'Defensa de Víctimas': { metas: { nuevos: 20, consultas: 40 }, distrital: {} } } },
+  2026: { mesesPOI: MESES_POI_DEFECTO, areas: {
+    'Asistencia Legal': { metas: { nuevos: 21, consultas: 116 }, distrital: {} },
+    'Defensa de Víctimas': { metas: { nuevos: 13, consultas: 31 }, distrital: {} } } },
+  2027: { mesesPOI: MESES_POI_DEFECTO, areas: {
+    'Asistencia Legal': { metas: {}, distrital: { nuevos: 311, consultas: 1731 } },
+    'Defensa de Víctimas': { metas: {}, distrital: { nuevos: 178, consultas: 852 } } } }
+};
+let METAS_GUARDADAS = {};
+function configAnio(anio){
+  const c = METAS_GUARDADAS[anio] || METAS_INICIALES[anio] || {};
+  return { mesesPOI: Array.isArray(c.mesesPOI) ? c.mesesPOI.map(Number) : MESES_POI_DEFECTO, areas: c.areas || {}, guardada: !!METAS_GUARDADAS[anio] };
+}
+function metaDe(anio, area, k){ const v = (((configAnio(anio).areas[area] || {}).metas) || {})[k]; return v === '' || v == null ? null : Number(v); }
+function distritalDe(anio, area, k){ const v = (((configAnio(anio).areas[area] || {}).distrital) || {})[k]; return v === '' || v == null ? null : Number(v); }
+
+let yo = null, nivel = 'sin', esAdmin = false;
+let DEFS = [], LICENCIAS = [], MOTIVOS_LIC = {};
+let DATOS = new Map(); // id → documento del año elegido
+let cortarDatos = null;
+const puedeEditar = () => nivel === 'editar';
+const anioSel = () => Number($('selAnio').value);
+const areaSel = () => $('selArea').value;
+const idDoc = (anio, fila) => anio + '__' + (fila.defensorId || 'X_' + norm(fila.nombre).toUpperCase().replace(/[^A-Z0-9]+/g, '_').replace(/^_|_$/g, ''));
+const valor = (d, m, k) => { const v = (((d || {}).meses || {})[m] || {})[k]; return v === '' || v == null ? null : Number(v); };
+
+async function registrarCambio(accion, docId, antes, despues){
+  const claves = [...new Set([...Object.keys(antes || {}), ...Object.keys(despues || {})])];
+  try {
+    await setDoc(doc(collection(db, 'cambios')), { cuandoMs: Date.now(), quien: yo.correo, quienNombre: yo.nombre || yo.correo, accion, coleccion: COL, docId,
+      detalle: claves.filter(k => String((antes || {})[k] ?? '') !== String((despues || {})[k] ?? '')).map(k => ({ campo: k, antes: String((antes || {})[k] ?? ''), despues: String((despues || {})[k] ?? '') })) });
+  } catch (e){ console.error('No se pudo anotar en el registro de cambios', e); }
+}
+
+// ================= Tabla =================
+// Filas: los defensores activos del área (orden de Personal y permisos) + quien ya no está pero tiene datos ese año (en gris)
+function filasDelArea(anio, area){
+  const activos = DEFS.filter(d => d.activo !== false && (d.area || '') === area);
+  const ids = new Set(activos.map(d => d.id));
+  const filas = activos.map(d => ({ defensorId: d.id, nombre: d.nombre, gris: false }));
+  [...DATOS.values()].filter(x => x.anio === anio && !ids.has(x.defensorId)).forEach(x => {
+    const def = DEFS.find(d => d.id === x.defensorId);
+    const areaFila = def && def.activo !== false ? def.area : x.area;
+    if (areaFila === area) filas.push({ defensorId: x.defensorId || '', nombre: (def && def.nombre) || x.nombre, gris: true });
+  });
+  return filas.map(f => ({ ...f, doc: DATOS.get(idDoc(anio, f)) }));
+}
+// Observaciones: licencias del año (página Licencias). El motivo solo lo ve quien tiene permiso de ver Licencias.
+function observaciones(defId, anio){
+  if (!defId) return '';
+  return LICENCIAS.filter(l => l.defensorId === defId && l.inicio <= anio + '-12-31' && l.fin >= anio + '-01-01')
+    .sort((a, b) => a.inicio.localeCompare(b.inicio))
+    .map(l => (MOTIVOS_LIC[l.id] ? MOTIVOS_LIC[l.id] : 'Licencia') + ' del ' + diaMes(l.inicio) + (l.inicio.slice(0, 4) !== String(anio) ? '/' + l.inicio.slice(0, 4) : '') + ' al ' + diaMes(l.fin) + (l.fin.slice(0, 4) !== String(anio) ? '/' + l.fin.slice(0, 4) : ''))
+    .join('; ');
+}
+// Cálculos por fila y rubro: TOTAL POI, META POI y FALTA (nunca negativo)
+function calculos(d, anio, area, r){
+  const poi = configAnio(anio).mesesPOI;
+  const meta = metaDe(anio, area, r.k);
+  const totalPOI = poi.reduce((s, m) => s + (valor(d, m, r.k) || 0), 0);
+  const totalAnio = Array.from({ length: 12 }, (_, i) => valor(d, i + 1, r.k) || 0).reduce((a, b) => a + b, 0);
+  const metaPOI = meta == null ? null : meta * poi.length;
+  return { totalPOI, totalAnio, metaPOI, falta: metaPOI == null ? null : Math.max(0, metaPOI - totalPOI) };
+}
+function claseColor(v, m, anio, meta){
+  if (v == null || meta == null || !configAnio(anio).mesesPOI.includes(m)) return '';
+  return v >= meta ? 'cumple' : 'nocumple';
+}
+function rubrosVisibles(){
+  const area = areaSel(), todos = rubrosDe(area);
+  if (area !== 'Equipo multidisciplinario' || !$('selRubro').value) return todos;
+  return todos.filter(r => r.k === $('selRubro').value);
+}
+function pintarTabla(){
+  const anio = anioSel(), area = areaSel(), rubros = rubrosVisibles(), poi = configAnio(anio).mesesPOI;
+  const filas = filasDelArea(anio, area);
+  const persona = area === 'Equipo multidisciplinario' ? 'Servidor/a' : 'Defensor/a';
+  const extras = r => r.poi ? ['TOTAL POI', 'META POI', 'FALTA'] : ['TOTAL'];
+  // Encabezados
+  $('encTabla').innerHTML = `<tr><th rowspan="2">N°</th><th rowspan="2" class="nombre">${persona}</th>` +
+    rubros.map(r => `<th class="grupo sep" colspan="${12 + extras(r).length}">${r.t} ${anio}${r.poi && metaDe(anio, area, r.k) != null ? ' · meta ' + metaDe(anio, area, r.k) + '/mes' : ''}</th>`).join('') +
+    '<th rowspan="2">OBSERVACIONES</th></tr><tr>' +
+    rubros.map(r => MESES.map((m, i) => `<th class="${poi.includes(i + 1) ? 'poi' : ''} ${i === 0 ? 'sep' : ''}">${m}</th>`).join('') + extras(r).map(t => `<th>${t}</th>`).join('')).join('') + '</tr>';
+  // Filas
+  const editable = puedeEditar();
+  const tot = {}; // rubro → mes → suma
+  $('cuerpoTabla').innerHTML = filas.map((f, idx) => {
+    const celdas = rubros.map(r => {
+      const meta = r.poi ? metaDe(anio, area, r.k) : null;
+      const c = calculos(f.doc, anio, area, r);
+      const meses = Array.from({ length: 12 }, (_, i) => {
+        const m = i + 1, v = valor(f.doc, m, r.k);
+        if (v != null){ tot[r.k] = tot[r.k] || {}; tot[r.k][m] = (tot[r.k][m] || 0) + v; }
+        const clase = [claseColor(v, m, anio, meta), i === 0 ? 'sep' : ''].join(' ');
+        return editable
+          ? `<td class="${clase}"><input inputmode="numeric" data-fila="${idx}" data-mes="${m}" data-rubro="${r.k}" value="${v ?? ''}" aria-label="${esc(f.nombre)} · ${MESES[i]} · ${r.t}"></td>`
+          : `<td class="${clase}">${v ?? ''}</td>`;
+      }).join('');
+      const ext = r.poi
+        ? `<td class="calc">${c.totalPOI}</td><td class="calc">${c.metaPOI ?? '—'}</td><td class="falta">${c.falta ?? '—'}</td>`
+        : `<td class="calc">${c.totalAnio}</td>`;
+      return meses + ext;
+    }).join('');
+    return `<tr><td class="n">${idx + 1}</td><td class="nombre ${f.gris ? 'gris' : ''}" title="${f.gris ? 'Ya no está en Defensores (activo) de esta área' : ''}">${esc(f.nombre)}</td>${celdas}<td class="obs">${esc(observaciones(f.defensorId, anio))}</td></tr>`;
+  }).join('') || `<tr><td colspan="40" class="ayuda" style="padding:14px">No hay ${persona.toLowerCase()}es activos en esta área.</td></tr>`;
+  // Fila TOTAL (y la meta distrital POI de Lima, si está configurada)
+  const activosN = filas.filter(f => !f.gris).length;
+  const filaTotal = rubros.map(r => {
+    const dist = r.poi ? distritalDe(anio, area, r.k) : null;
+    const meses = Array.from({ length: 12 }, (_, i) => { const m = i + 1, v = ((tot[r.k] || {})[m]) ?? null;
+      return `<td class="${[claseColor(v, m, anio, dist), i === 0 ? 'sep' : ''].join(' ')}">${v ?? ''}</td>`; }).join('');
+    const totalPOI = poi.reduce((s, m) => s + (((tot[r.k] || {})[m]) || 0), 0);
+    const totalAnio = Object.values(tot[r.k] || {}).reduce((a, b) => a + b, 0);
+    const meta = r.poi ? metaDe(anio, area, r.k) : null;
+    const metaPOI = meta == null ? null : meta * poi.length * activosN;
+    return meses + (r.poi ? `<td>${totalPOI}</td><td>${metaPOI ?? '—'}</td><td>${metaPOI == null ? '—' : Math.max(0, metaPOI - totalPOI)}</td>` : `<td>${totalAnio}</td>`);
+  }).join('');
+  let html = `<tr class="total"><td></td><td class="nombre">TOTAL</td>${filaTotal}<td></td></tr>`;
+  if (rubros.some(r => r.poi && distritalDe(anio, area, r.k) != null)){
+    html += `<tr class="meta-dist"><td></td><td class="nombre">META DISTRITAL POI (Lima, por mes)</td>` + rubros.map(r => {
+      const dist = r.poi ? distritalDe(anio, area, r.k) : null;
+      return Array.from({ length: 12 }, (_, i) => `<td class="${i === 0 ? 'sep' : ''}">${dist != null && poi.includes(i + 1) ? dist : ''}</td>`).join('') +
+        (r.poi ? `<td>${dist != null ? dist * poi.length : ''}</td><td></td><td></td>` : '<td></td>');
+    }).join('') + '<td></td></tr>';
+  }
+  $('cuerpoTabla').insertAdjacentHTML('beforeend', html);
+  pintarTabla.filas = filas;
+  // Leyenda de metas
+  const cfg = configAnio(anio);
+  $('textoMetas').textContent = 'Meses POI ' + anio + ': ' + cfg.mesesPOI.map(m => MESES[m - 1]).join(', ') + (cfg.guardada ? '' : ' (valores iniciales: el administrador debe guardarlos en ⚙ Metas)');
+  $('ayudaTabla').textContent = editable ? 'Escribe en la celda y se guarda solo al salir de ella. Los colores solo se ven en los meses que cuentan para la meta POI.' : 'Solo lectura. Puedes descargar el Excel.';
+}
+// Guardar una celda (al salir de ella)
+$('cuerpoTabla').addEventListener('change', async e => {
+  const t = e.target; if (!t.dataset.rubro || !puedeEditar()) return;
+  const f = pintarTabla.filas[Number(t.dataset.fila)], m = t.dataset.mes, k = t.dataset.rubro, anio = anioSel();
+  const texto = t.value.trim();
+  if (texto !== '' && !/^\d+$/.test(texto)){ avisar('Escribe solo números (o deja vacío).'); t.value = valor(f.doc, m, k) ?? ''; return; }
+  const nuevo = texto === '' ? null : Number(texto), antes = valor(f.doc, m, k);
+  if (nuevo === antes) return;
+  const id = idDoc(anio, f);
+  const def = DEFS.find(d => d.id === f.defensorId);
+  try {
+    await setDoc(doc(db, COL, id), { anio, defensorId: f.defensorId || '', nombre: (def && def.nombre) || f.nombre, area: areaSel(),
+      meses: { [m]: { [k]: nuevo == null ? deleteField() : nuevo } }, actualizadoPor: yo.correo, actualizadoEnMs: Date.now() }, { merge: true });
+    registrarCambio('Consolidación: cambió un dato', id, { [MESES[m - 1] + ' ' + k]: antes ?? '' }, { [MESES[m - 1] + ' ' + k]: nuevo ?? '' });
+    avisar('Guardado: ' + f.nombre.split(',')[0] + ' · ' + MESES[m - 1] + ' = ' + (nuevo ?? 'vacío'));
+  } catch (err){ error(err); t.value = antes ?? ''; }
+});
+$('cuerpoTabla').addEventListener('keydown', e => { if (e.key === 'Enter' && e.target.dataset.rubro) e.target.blur(); });
+
+function escucharAnio(anio){
+  if (cortarDatos) cortarDatos();
+  DATOS = new Map();
+  cortarDatos = onSnapshot(query(collection(db, COL), where('anio', '==', anio)), snap => {
+    DATOS = new Map(snap.docs.map(d => [d.id, { id: d.id, ...d.data() }]));
+    // No repintar mientras se escribe en una celda (se perdería lo escrito)
+    if (document.activeElement && document.activeElement.dataset && document.activeElement.dataset.rubro){ pintarTabla.pendiente = true; return; }
+    pintarTabla();
+  }, err => { console.error(err); avisar('No se pudo leer la consolidación (' + err.code + ').', 6000); });
+}
+$('cuerpoTabla').addEventListener('focusout', () => { if (pintarTabla.pendiente){ pintarTabla.pendiente = false; setTimeout(pintarTabla, 0); } });
+$('selAnio').onchange = () => { escucharAnio(anioSel()); pintarTabla(); };
+$('selArea').onchange = () => { pintarRubros(); pintarTabla(); };
+$('selRubro').onchange = pintarTabla;
+function pintarRubros(){
+  const equipo = areaSel() === 'Equipo multidisciplinario';
+  $('etiquetaRubros').hidden = !equipo;
+  if (equipo && !$('selRubro').options.length) $('selRubro').innerHTML = '<option value="">Todos los rubros</option>' + RUBROS_EQUIPO.map(r => `<option value="${r.k}">${r.t}</option>`).join('');
+}
+
+// ================= Metas (solo el administrador) =================
+function pintarMetas(){
+  const anio = Number($('metasAnio').value), c = configAnio(anio);
+  $('tituloMetasAnio').textContent = anio + (c.guardada ? '' : ' · valores iniciales, aún sin guardar');
+  $('metasMeses').innerHTML = MESES.map((m, i) => `<label><input type="checkbox" data-mes-poi="${i + 1}" ${c.mesesPOI.includes(i + 1) ? 'checked' : ''}> ${m}</label>`).join('');
+  const inp = (area, grupo, k, etiqueta) => { const v = (((c.areas[area] || {})[grupo]) || {})[k];
+    return `<label>${etiqueta}<input inputmode="numeric" data-area="${esc(area)}" data-grupo="${grupo}" data-k="${k}" value="${v ?? ''}"></label>`; };
+  $('metasAreas').innerHTML = ['Asistencia Legal', 'Defensa de Víctimas'].map(a => `<div class="metas-area"><h4>${a}</h4>
+      ${inp(a, 'metas', 'nuevos', 'Meta mensual por defensor · NUEVOS')}${inp(a, 'metas', 'consultas', 'Meta mensual por defensor · CONSULTAS')}
+      ${inp(a, 'distrital', 'nuevos', 'Meta distrital POI Lima · patrocinios / mes')}${inp(a, 'distrital', 'consultas', 'Meta distrital POI Lima · atenciones / mes')}</div>`).join('') +
+    `<div class="metas-area"><h4>Equipo multidisciplinario <span class="ayuda" style="display:inline">(opcional: vacío = no se colorea)</span></h4>
+      ${RUBROS_EQUIPO.map(r => inp('Equipo multidisciplinario', 'metas', r.k, r.t.charAt(0) + r.t.slice(1).toLowerCase())).join('')}</div>`;
+}
+$('btnMetas').onclick = () => { $('cajaMetas').hidden = !$('cajaMetas').hidden; $('metasAnio').value = String(anioSel()); pintarMetas(); };
+$('btnCerrarMetas').onclick = () => { $('cajaMetas').hidden = true; };
+$('metasAnio').onchange = pintarMetas;
+$('btnGuardarMetas').onclick = async () => {
+  const anio = Number($('metasAnio').value);
+  const mesesPOI = [...$('metasMeses').querySelectorAll('[data-mes-poi]')].filter(x => x.checked).map(x => Number(x.dataset.mesPoi));
+  const areas = {};
+  let malo = '';
+  $('metasAreas').querySelectorAll('input[data-k]').forEach(x => {
+    const t = x.value.trim();
+    if (t !== '' && !/^\d+$/.test(t)) malo = 'Escribe solo números enteros en las metas.';
+    const a = areas[x.dataset.area] = areas[x.dataset.area] || { metas: {}, distrital: {} };
+    a[x.dataset.grupo][x.dataset.k] = t === '' ? null : Number(t);
+  });
+  if (malo){ $('ayudaMetas').textContent = malo; return; }
+  if (!mesesPOI.length){ $('ayudaMetas').textContent = 'Marca al menos un mes para la meta POI.'; return; }
+  try {
+    await setDoc(doc(db, 'configuracion', 'metasConsolidacion'), { anios: { [anio]: { mesesPOI, areas } }, actualizadoPor: yo.correo, actualizadoEnMs: Date.now() }, { merge: true });
+    METAS_GUARDADAS[anio] = { mesesPOI, areas };
+    registrarCambio('Consolidación: guardó metas ' + anio, 'metasConsolidacion', {}, { meses: mesesPOI.join(','), ...Object.fromEntries(Object.entries(areas).flatMap(([a, g]) => Object.entries(g.metas).map(([k, v]) => [a + ' ' + k, v ?? '']))) });
+    $('ayudaMetas').textContent = '✓ Metas de ' + anio + ' guardadas.';
+    pintarMetas(); pintarTabla();
+  } catch (err){ error(err); }
+};
+async function cargarMetas(){
+  try { const s = await getDoc(doc(db, 'configuracion', 'metasConsolidacion')); METAS_GUARDADAS = s.exists() ? (s.data().anios || {}) : {}; }
+  catch (e){ console.warn('No se pudieron leer las metas', e); }
+}
+
+// ================= Unir nombres con Defensores =================
+// "CELIA MARISELA ARCE VILLAR" = "ARCE VILLAR, Celia Marisela": sin importar tildes, orden ni comas; tolera una letra de diferencia
+// ("GUILLEMO" / "GUILLERMO") y apellidos pegados ("CRUZCRISOLO" / "CRUZ CRISOLO").
+const VACIAS = new Set(['de', 'del', 'la', 'las', 'los', 'y', 'dr', 'dra']);
+const palabras = s => norm(s).replace(/\(.*?\)/g, ' ').replace(/[^a-zñ\s]/g, ' ').split(/\s+/).filter(p => p.length > 1 && !VACIAS.has(p));
+function distancia(a, b){
+  if (Math.abs(a.length - b.length) > 1) return 2;
+  const d = Array.from({ length: a.length + 1 }, (_, i) => [i]);
+  for (let j = 1; j <= b.length; j++) d[0][j] = j;
+  for (let i = 1; i <= a.length; i++) for (let j = 1; j <= b.length; j++)
+    d[i][j] = Math.min(d[i - 1][j] + 1, d[i][j - 1] + 1, d[i - 1][j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1));
+  return d[a.length][b.length];
+}
+const parecida = (a, b) => a === b || (Math.min(a.length, b.length) >= 4 && distancia(a, b) <= 1);
+function coincidencias(A, B){
+  const usados = new Set(); let m = 0;
+  A.forEach(w => {
+    const j = B.findIndex((x, i) => !usados.has(i) && parecida(w, x));
+    if (j >= 0){ usados.add(j); m++; return; }
+    // Apellido pegado: una palabra = dos seguidas del otro nombre
+    for (let i = 0; i < B.length - 1; i++) if (!usados.has(i) && !usados.has(i + 1) && parecida(w, B[i] + B[i + 1])){ usados.add(i); usados.add(i + 1); m += 2; return; }
+  });
+  return m;
+}
+function unirDefensor(nombre, lista){
+  const A = palabras(nombre);
+  if (!A.length) return { id: '', segura: false };
+  const res = lista.map(d => { const B = palabras(d.nombre); const m = Math.max(coincidencias(A, B), coincidencias(B, A)); return { d, m, r: m / Math.max(A.length, B.length) }; })
+    .filter(x => x.m >= 2).sort((a, b) => b.r - a.r || b.m - a.m);
+  if (!res.length) return { id: '', segura: false };
+  const [p, s] = res;
+  const segura = p.r >= 0.6 && !(s && s.r === p.r && s.m === p.m);
+  return { id: p.d.id, segura };
+}
+
+// ================= Leer los PDF del SSC ("Consolidado de trabajo según Período y Abogado") =================
+// Se lee por posición en la página: el número a la derecha de "Nuevos"; el "Total" de Escritos Varios y de Consultas
+// (cada "Total" pertenece a la sección cuyo título está más cerca encima); el abogado junto a "Abogado:" y el período junto a "Período:".
+let pdfListo = null;
+function cargarPdfJs(){
+  if (pdfListo) return pdfListo;
+  pdfListo = new Promise((res, rej) => {
+    const s = document.createElement('script');
+    s.src = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js';
+    s.onload = () => { window.pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js'; res(window.pdfjsLib); };
+    s.onerror = () => { pdfListo = null; rej(new Error('No se pudo cargar el lector de PDF. Revisa tu conexión.')); };
+    document.head.appendChild(s);
+  });
+  return pdfListo;
+}
+function leerConsolidado(items){
+  const it = items.filter(i => i.s);
+  const misma = (a, b) => Math.abs(a.y - b.y) <= 3;
+  const num = s => /^\d+$/.test(s) ? Number(s) : null;
+  const res = { nombre: '', mes: null, anio: null, nuevos: null, consultas: null, escritos: null };
+  const lab = it.find(i => /^Abogado:?$/i.test(i.s));
+  if (lab) res.nombre = it.filter(i => misma(i, lab) && i.x > lab.x).sort((a, b) => a.x - b.x).map(i => i.s).join(' ').replace(/\s+/g, ' ').trim();
+  const fechas = it.filter(i => /^\d{2}\/\d{2}\/\d{4}$/.test(i.s));
+  const per = it.find(i => /^Per[ií]odo:?$/i.test(i.s));
+  const f = (per && fechas.filter(x => misma(x, per)).sort((a, b) => a.x - b.x)[0]) || fechas[0];
+  if (f){ res.mes = Number(f.s.slice(3, 5)); res.anio = Number(f.s.slice(6)); }
+  const nuevos = it.find(i => /^Nuevos$/i.test(i.s));
+  if (nuevos){ const n = it.filter(i => misma(i, nuevos) && i.x > nuevos.x + 100 && num(i.s) !== null).sort((a, b) => b.x - a.x)[0]; if (n) res.nuevos = num(n.s); }
+  const secciones = it.filter(i => /^(Escritos Varios|Consultas)$/i.test(i.s));
+  it.filter(i => /^Total$/i.test(i.s)).forEach(t => {
+    const sec = secciones.filter(s => s.y > t.y).sort((a, b) => a.y - b.y)[0]; if (!sec) return;
+    const n = it.filter(i => misma(i, t) && i.x > t.x && num(i.s) !== null).sort((a, b) => b.x - a.x)[0];
+    if (!n) return;
+    if (/escritos/i.test(sec.s)) res.escritos = num(n.s); else res.consultas = num(n.s);
+  });
+  // Si la sección existe pero no tiene filas, es 0
+  if (res.escritos == null && secciones.some(s => /escritos/i.test(s.s))) res.escritos = 0;
+  return res;
+}
+$('btnPdf').onclick = () => $('archivoPdf').click();
+$('archivoPdf').onchange = async () => {
+  const archivos = [...$('archivoPdf').files]; $('archivoPdf').value = '';
+  if (!archivos.length) return;
+  avisar('Leyendo ' + archivos.length + ' PDF…', 20000);
+  try {
+    const pdfjs = await cargarPdfJs();
+    const filas = [];
+    for (const a of archivos){
+      try {
+        const pdf = await pdfjs.getDocument({ data: new Uint8Array(await a.arrayBuffer()) }).promise;
+        const tc = await (await pdf.getPage(1)).getTextContent();
+        const r = leerConsolidado(tc.items.map(i => ({ s: String(i.str || '').trim(), x: i.transform[4], y: i.transform[5] })));
+        filas.push({ tipo: 'pdf', fuente: a.name, nombreLeido: r.nombre, anio: r.anio, mes: r.mes,
+          valores: { nuevos: r.nuevos, consultas: r.consultas, escritos: r.escritos } });
+      } catch (e){ console.error(e); filas.push({ tipo: 'pdf', fuente: a.name, nombreLeido: '', anio: null, mes: null, valores: {}, error: 'No se pudo leer este PDF' }); }
+    }
+    await abrirRevision('pdf', filas);
+    avisar('Listo: revisa la tabla antes de guardar', 4000);
+  } catch (err){ console.error(err); avisar(err.message || 'No se pudo leer los PDF.', 7000); }
+};
+
+// ================= Importar el Excel de consolidación (una sola vez) =================
+// Pestañas de Asistencia Legal y Víctimas. El año sale del nombre de la pestaña (sin año = 2025).
+// "v", "V", "VACACIONES", "L", "S", "no envió"… quedan vacíos (las observaciones salen de Licencias). Se ignoran las columnas META y TOTAL.
+const MES_DE = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'se', 'oct', 'nov', 'dic'];
+function mesDeTexto(t){ const p = norm(t).trim().split(/\s+/)[0] || ''; if (p.length < 3) return null; const i = MES_DE.findIndex(m => p.startsWith(m)); return i < 0 ? null : i + 1; }
+function rubroDeTexto(t){ const s = norm(t); return /nuevo|patrocin/.test(s) ? 'nuevos' : /consulta/.test(s) ? 'consultas' : /escrito/.test(s) ? 'escritos' : null; }
+function leerPestana(ws, hoja){
+  const filas = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '' });
+  const area = /victima/.test(norm(hoja)) ? 'Defensa de Víctimas' : /asistencia|aistencia/i.test(norm(hoja)) ? 'Asistencia Legal' : null;
+  if (!area) return { area: null, filas: [] };
+  const anio = Number((hoja.match(/20\d\d/) || ['2025'])[0]);
+  const iMeses = filas.findIndex(f => f.filter(c => mesDeTexto(c)).length >= 6);
+  if (iMeses < 1) return { area, anio, filas: [] };
+  // Grupo (NUEVOS / CONSULTAS / ESCRITOS) de cada columna: el título de arriba se arrastra hacia la derecha (celdas combinadas)
+  const grupos = []; let g = '';
+  filas[iMeses - 1].forEach((c, i) => { if (String(c).trim()) g = String(c); grupos[i] = g; });
+  const sub = filas[iMeses + 1] || [];
+  const tieneSub = sub.some(c => /^(meta|act|nuevos|consultas)$/i.test(String(c).trim()));
+  const columnas = [];
+  filas[iMeses].forEach((c, i) => {
+    const m = mesDeTexto(c), rubro = rubroDeTexto(grupos[i] || '') || rubroDeTexto(c);
+    if (!m || !rubro || (tieneSub && /meta/i.test(String(sub[i] || '')))) return;
+    columnas.push({ i, m, rubro });
+  });
+  const datos = [];
+  for (let r = iMeses + (tieneSub ? 2 : 1); r < filas.length; r++){
+    const f = filas[r];
+    const nombre = String(f[1] || '').replace(/\(.*?\)/g, ' ').replace(/\s+/g, ' ').trim();
+    if (!nombre || /^total$/i.test(String(f[0]).trim()) || /^total$/i.test(nombre)) { if (/^total$/i.test(String(f[0]).trim())) break; continue; }
+    const meses = {}; let ignorados = [];
+    columnas.forEach(({ i, m, rubro }) => {
+      const v = f[i];
+      if (v === '' || v == null) return;
+      if (typeof v === 'number' || /^\s*\d+\s*$/.test(String(v))){ (meses[m] = meses[m] || {})[rubro] = Math.round(Number(v)); return; }
+      ignorados.push(MESES[m - 1] + ': "' + String(v).trim() + '"');
+    });
+    datos.push({ nombre, meses, ignorados: [...new Set(ignorados)] });
+  }
+  return { area, anio, filas: datos };
+}
+$('btnImportar').onclick = () => $('archivoExcel').click();
+$('archivoExcel').onchange = async () => {
+  const a = $('archivoExcel').files[0]; $('archivoExcel').value = '';
+  if (!a) return;
+  try {
+    const libro = XLSX.read(new Uint8Array(await a.arrayBuffer()), { type: 'array' });
+    const filas = [];
+    libro.SheetNames.forEach(h => {
+      const p = leerPestana(libro.Sheets[h], h);
+      p.filas.forEach(f => filas.push({ tipo: 'excel', fuente: h, area: p.area, nombreLeido: f.nombre, anio: p.anio, meses: f.meses, ignorados: f.ignorados }));
+    });
+    if (!filas.length){ avisar('No se encontraron las pestañas de Asistencia Legal o Víctimas en ese Excel.', 7000); return; }
+    await abrirRevision('excel', filas);
+  } catch (err){ console.error(err); avisar('No se pudo leer el Excel.', 6000); }
+};
+
+// ================= Revisión antes de guardar (la misma para PDF y Excel) =================
+let REV = [], TIPO_REV = '', EXISTENTES = new Map();
+async function abrirRevision(tipo, filas){
+  TIPO_REV = tipo;
+  // Lo que ya está guardado (para mostrar "antes → ahora")
+  const snap = await getDocs(collection(db, COL));
+  EXISTENTES = new Map(snap.docs.map(d => [d.id, d.data()]));
+  REV = filas.map((f, i) => {
+    const lista = f.area ? DEFS.filter(d => (d.area || '') === f.area) : DEFS;
+    let u = unirDefensor(f.nombreLeido, lista);
+    if (!u.id && f.area) u = unirDefensor(f.nombreLeido, DEFS);
+    // PDF de alguien del Equipo: no se guarda solo (ese PDF no trae sus rubros)
+    const def = DEFS.find(d => d.id === u.id);
+    return { ...f, n: i, defId: u.id, segura: u.segura, incluir: !f.error && !(tipo === 'pdf' && def && def.area === 'Equipo multidisciplinario') };
+  });
+  $('tituloRevision').textContent = tipo === 'pdf' ? 'Revisión de los PDF del SSC (' + REV.length + ')' : 'Revisión del Excel (' + REV.length + ' filas)';
+  $('ayudaRevision').innerHTML = 'En <b style="background:var(--amarillo)">amarillo</b> lo que no se pudo leer o unir con un defensor: corrígelo aquí. ' +
+    (tipo === 'pdf' ? 'Si ya había un valor distinto, se ve "antes → ahora". ' : 'Las celdas con "v", "VACACIONES", etc. quedan vacías (las observaciones salen de Licencias). ') +
+    'Nada se guarda hasta que confirmes.';
+  $('confirmarRevision').hidden = true;
+  $('cajaRevision').hidden = false;
+  pintarRevision();
+  $('cajaRevision').scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+const docIdRev = f => !f.defId ? '' : f.defId === '__nombre__' ? idDoc(f.anio, { defensorId: '', nombre: f.nombreLeido }) : idDoc(f.anio, { defensorId: f.defId });
+function opcionesDefensor(f){
+  const grupo = area => { const l = DEFS.filter(d => (d.area || '') === area);
+    return l.length ? `<optgroup label="${esc(area)}">${l.map(d => `<option value="${esc(d.id)}" ${d.id === f.defId ? 'selected' : ''}>${esc(d.nombre)}${d.activo === false ? ' (inactivo)' : ''}</option>`).join('')}</optgroup>` : ''; };
+  return `<option value="" ${!f.defId ? 'selected' : ''}>— No guardar —</option>` +
+    (f.tipo === 'excel' ? `<option value="__nombre__" ${f.defId === '__nombre__' ? 'selected' : ''}>Guardar con el nombre leído (ya no está en Defensores)</option>` : '') +
+    AREAS.map(grupo).join('');
+}
+// Diferencias con lo guardado: [{ mes, k, antes, ahora }]
+function cambiosDe(f){
+  const id = docIdRev(f); if (!id) return [];
+  const prev = EXISTENTES.get(id) || {};
+  const meses = f.tipo === 'pdf' ? (f.mes ? { [f.mes]: f.valores } : {}) : f.meses;
+  const lista = [];
+  Object.entries(meses || {}).forEach(([m, vals]) => Object.entries(vals || {}).forEach(([k, v]) => {
+    if (v == null) return;
+    const a = valor(prev, m, k);
+    if (a !== v) lista.push({ mes: Number(m), k, antes: a, ahora: v });
+  }));
+  return lista;
+}
+function problemasDe(f){
+  const p = [];
+  if (f.error) p.push(f.error);
+  if (!f.defId) p.push('Sin defensor: elige uno o no se guarda');
+  else if (!f.segura && f.defId !== '__nombre__') p.push('Revisa que sea la misma persona');
+  if (f.tipo === 'pdf'){
+    if (!f.anio || !f.mes) p.push('No se leyó el período');
+    ['nuevos', 'consultas', 'escritos'].forEach(k => { if (f.valores[k] == null) p.push('No se leyó ' + k); });
+    const def = DEFS.find(d => d.id === f.defId);
+    if (def && def.area === 'Equipo multidisciplinario') p.push('Es del Equipo: este PDF no trae sus rubros');
+    const repetido = REV.some(o => o !== f && o.incluir && docIdRev(o) && docIdRev(o) === docIdRev(f) && o.mes === f.mes);
+    if (repetido) p.push('Repetido: hay otro PDF del mismo defensor y mes');
+  }
+  return p;
+}
+function pintarRevision(){
+  const pdf = TIPO_REV === 'pdf';
+  $('encRevision').innerHTML = '<tr><th>Guardar</th><th>' + (pdf ? 'Archivo' : 'Pestaña') + '</th><th>Nombre leído</th><th>Defensor/a</th><th>Año</th>' +
+    (pdf ? '<th>Mes</th><th>Nuevos</th><th>Consultas</th><th>Escritos</th>' : '<th>Datos leídos</th>') + '<th>Antes → ahora</th></tr>';
+  $('cuerpoRevision').innerHTML = REV.map((f, i) => {
+    const prob = problemasDe(f), amar = prob.length ? 'amarillo' : '';
+    const cambios = cambiosDe(f);
+    const textoCambios = cambios.filter(c => c.antes != null).map(c => `${MESES[c.mes - 1]} ${c.k}: ${c.antes} → ${c.ahora}`);
+    const nuevosN = cambios.filter(c => c.antes == null).length;
+    const celdaCambios = (textoCambios.length ? `<span class="cambio">${esc(textoCambios.slice(0, 6).join(' · '))}${textoCambios.length > 6 ? ' · y ' + (textoCambios.length - 6) + ' más' : ''}</span>` : '') +
+      (nuevosN ? `<span class="nota" style="color:var(--verde)">${nuevosN} dato${nuevosN === 1 ? '' : 's'} nuevo${nuevosN === 1 ? '' : 's'}</span>` : '') + (!cambios.length && f.defId ? '<span class="nota" style="color:var(--gris)">Sin cambios</span>' : '');
+    const v = k => `<td class="${f.valores[k] == null ? 'amarillo' : ''}"><input class="num" inputmode="numeric" data-rev="${i}" data-campo="${k}" value="${f.valores[k] ?? ''}"></td>`;
+    const datos = !pdf ? `<td>${RUBROS_AL_V.map(r => { const l = Array.from({ length: 12 }, (_, m) => valor({ meses: f.meses }, m + 1, r.k)); return l.some(x => x != null) ? `<b>${r.t.split(' ')[0]}:</b> ${l.map(x => x ?? '·').join(' ')}` : ''; }).filter(Boolean).join('<br>')}${f.ignorados && f.ignorados.length ? `<span class="nota">Texto que queda vacío: ${esc(f.ignorados.join(', '))}</span>` : ''}</td>` : '';
+    return `<tr class="${f.incluir ? '' : 'excluida'}">
+      <td><input type="checkbox" data-rev="${i}" data-campo="incluir" ${f.incluir ? 'checked' : ''} aria-label="Guardar esta fila"></td>
+      <td>${esc(f.fuente)}${f.area ? `<span class="nota" style="color:var(--gris)">${esc(f.area)}</span>` : ''}</td>
+      <td class="${f.nombreLeido ? '' : 'amarillo'}">${esc(f.nombreLeido) || '(no se leyó)'}</td>
+      <td class="${amar}"><select data-rev="${i}" data-campo="defId">${opcionesDefensor(f)}</select>${prob.map(p => `<span class="nota">${esc(p)}</span>`).join('')}</td>
+      <td class="${f.anio ? '' : 'amarillo'}"><input class="num" inputmode="numeric" data-rev="${i}" data-campo="anio" value="${f.anio ?? ''}"></td>
+      ${pdf ? `<td class="${f.mes ? '' : 'amarillo'}"><select data-rev="${i}" data-campo="mes"><option value="">—</option>${MESES_LARGOS.map((m, k) => `<option value="${k + 1}" ${f.mes === k + 1 ? 'selected' : ''}>${m}</option>`).join('')}</select></td>${v('nuevos')}${v('consultas')}${v('escritos')}` : datos}
+      <td>${celdaCambios}</td></tr>`;
+  }).join('');
+  const listos = REV.filter(f => f.incluir && docIdRev(f) && (f.tipo !== 'pdf' || f.mes));
+  const conProblema = REV.filter(f => f.incluir && problemasDe(f).length).length;
+  $('resumenRevision').textContent = listos.length + ' de ' + REV.length + ' se guardarán' + (conProblema ? ' · ' + conProblema + ' en amarillo para revisar' : '');
+  $('btnGuardarRevision').textContent = 'Guardar ' + listos.length;
+  $('btnGuardarRevision').disabled = !listos.length;
+}
+$('cuerpoRevision').addEventListener('change', e => {
+  const t = e.target, f = REV[Number(t.dataset.rev)]; if (!f) return;
+  const c = t.dataset.campo;
+  if (c === 'incluir') f.incluir = t.checked;
+  else if (c === 'defId'){ f.defId = t.value; f.segura = true; }
+  else if (c === 'anio') f.anio = /^\d{4}$/.test(t.value.trim()) ? Number(t.value.trim()) : null;
+  else if (c === 'mes') f.mes = t.value ? Number(t.value) : null;
+  else { const s = t.value.trim(); f.valores[c] = /^\d+$/.test(s) ? Number(s) : null; }
+  $('confirmarRevision').hidden = true;
+  pintarRevision();
+});
+$('btnCancelarRevision').onclick = () => { $('cajaRevision').hidden = true; REV = []; };
+$('btnGuardarRevision').onclick = () => {
+  const listos = REV.filter(f => f.incluir && docIdRev(f) && (f.tipo !== 'pdf' || f.mes));
+  const amarillos = listos.filter(f => problemasDe(f).length).length;
+  const cambian = listos.reduce((s, f) => s + cambiosDe(f).filter(c => c.antes != null).length, 0);
+  const c = $('confirmarRevision');
+  c.className = 'confirmar';
+  c.innerHTML = `¿Guardar? Se guardarán <b>${listos.length}</b> fila${listos.length === 1 ? '' : 's'}` +
+    (cambian ? `; <b>${cambian}</b> valor${cambian === 1 ? '' : 'es'} ya guardado${cambian === 1 ? '' : 's'} cambia${cambian === 1 ? '' : 'n'}` : '') + '.' +
+    (amarillos ? `<br><b>Atención:</b> ${amarillos} fila${amarillos === 1 ? '' : 's'} en amarillo se guardará${amarillos === 1 ? '' : 'n'} igual. Si alguna está mal, desmárcala.` : '') +
+    '<div class="barra" style="margin:8px 0 0"><button class="btn" data-rev-si>Sí, guardar</button><button class="btn sec" data-rev-no>Volver</button></div>';
+  c.hidden = false;
+  c.scrollIntoView({ block: 'center', behavior: 'smooth' });
+};
+$('confirmarRevision').addEventListener('click', async e => {
+  if (e.target.closest('[data-rev-no]')){ $('confirmarRevision').hidden = true; return; }
+  if (!e.target.closest('[data-rev-si]')) return;
+  e.target.disabled = true;
+  await guardarRevision();
+});
+async function guardarRevision(){
+  const listos = REV.filter(f => f.incluir && docIdRev(f) && (f.tipo !== 'pdf' || f.mes));
+  // Se juntan por documento (defensor y año); lo vacío no borra lo que ya estaba
+  const porDoc = new Map();
+  listos.forEach(f => {
+    const id = docIdRev(f);
+    const def = DEFS.find(d => d.id === f.defId);
+    const base = porDoc.get(id) || { anio: f.anio, defensorId: def ? def.id : '', nombre: def ? def.nombre : f.nombreLeido,
+      area: def ? (def.area || f.area || '') : (f.area || ''), meses: {}, actualizadoPor: yo.correo, actualizadoEnMs: Date.now() };
+    const meses = f.tipo === 'pdf' ? { [f.mes]: f.valores } : f.meses;
+    Object.entries(meses).forEach(([m, vals]) => Object.entries(vals || {}).forEach(([k, v]) => { if (v != null) (base.meses[m] = base.meses[m] || {})[k] = v; }));
+    porDoc.set(id, base);
+  });
+  try {
+    const entradas = [...porDoc.entries()];
+    for (let i = 0; i < entradas.length; i += 400){
+      const lote = writeBatch(db);
+      entradas.slice(i, i + 400).forEach(([id, d]) => lote.set(doc(db, COL, id), d, { merge: true }));
+      await lote.commit();
+    }
+    await registrarCambio(TIPO_REV === 'pdf' ? 'Consolidación: subió PDF del SSC' : 'Consolidación: importó el Excel', 'lote', {},
+      { filas: listos.length, documentos: porDoc.size, anios: [...new Set(listos.map(f => f.anio))].join(',') });
+    const c = $('confirmarRevision');
+    c.className = 'confirmar ok';
+    c.innerHTML = `✓ Guardado: ${listos.length} fila${listos.length === 1 ? '' : 's'} (${porDoc.size} defensor${porDoc.size === 1 ? '' : 'es'}-año).` +
+      '<div class="barra" style="margin:8px 0 0"><button class="btn sec" id="btnCerrarRevision">Cerrar la revisión</button></div>';
+    $('btnCerrarRevision').onclick = () => { $('cajaRevision').hidden = true; REV = []; };
+    $('btnGuardarRevision').disabled = true;
+    avisar('Guardado en el Drive 4', 4000);
+  } catch (err){ error(err); $('confirmarRevision').hidden = true; }
+}
+
+// ================= Descargar Excel (como el Excel de consolidación, con verde y rojo) =================
+const borde = { top: { style: 'thin', color: { rgb: 'BBBBBB' } }, bottom: { style: 'thin', color: { rgb: 'BBBBBB' } }, left: { style: 'thin', color: { rgb: 'BBBBBB' } }, right: { style: 'thin', color: { rgb: 'BBBBBB' } } };
+const EST = {
+  base: { border: borde, alignment: { horizontal: 'center', vertical: 'center' } },
+  nombre: { border: borde, alignment: { horizontal: 'left', vertical: 'center', wrapText: false } },
+  enc: { font: { bold: true }, fill: { fgColor: { rgb: 'EFE9DD' } }, border: borde, alignment: { horizontal: 'center', vertical: 'center', wrapText: true } },
+  poi: { font: { bold: true }, fill: { fgColor: { rgb: 'FFF2CC' } }, border: borde, alignment: { horizontal: 'center', vertical: 'center' } },
+  grupo: { font: { bold: true, color: { rgb: 'FFFFFF' } }, fill: { fgColor: { rgb: 'A10C1A' } }, border: borde, alignment: { horizontal: 'center', vertical: 'center' } },
+  calc: { font: { bold: true }, fill: { fgColor: { rgb: 'F6F1E8' } }, border: borde, alignment: { horizontal: 'center' } },
+  falta: { font: { bold: true, color: { rgb: 'A10C1A' } }, fill: { fgColor: { rgb: 'F6F1E8' } }, border: borde, alignment: { horizontal: 'center' } },
+  cumple: { fill: { fgColor: { rgb: 'C6EFCE' } }, font: { color: { rgb: '1E5A2B' } }, border: borde, alignment: { horizontal: 'center' } },
+  nocumple: { fill: { fgColor: { rgb: 'FFC7CE' } }, font: { color: { rgb: '8A0B16' } }, border: borde, alignment: { horizontal: 'center' } },
+  total: { font: { bold: true }, fill: { fgColor: { rgb: 'F6F1E8' } }, border: borde, alignment: { horizontal: 'center' } },
+  obs: { border: borde, alignment: { horizontal: 'left', vertical: 'center', wrapText: true }, font: { color: { rgb: '6B4A0E' } } },
+  titulo: { font: { bold: true, sz: 13 } },
+  // Notas de abajo (metas): desde la columna B, alineadas a la izquierda y sin cortar
+  nota: { alignment: { horizontal: 'left', vertical: 'center', wrapText: false } },
+  notaTitulo: { font: { bold: true, sz: 12 }, alignment: { horizontal: 'left', vertical: 'center', wrapText: false } }
+};
+function descargarExcel(){
+  const anio = anioSel(), area = areaSel(), rubros = rubrosDe(area), poi = configAnio(anio).mesesPOI;
+  const filas = filasDelArea(anio, area);
+  const extras = r => r.poi ? ['TOTAL POI', 'META POI', 'FALTA'] : ['TOTAL'];
+  const aoa = [], estilos = [], merges = [];
+  const fila = (celdas) => { aoa.push(celdas.map(c => c.v)); estilos.push(celdas.map(c => c.s)); };
+  const c = (v, s = EST.base) => ({ v: v ?? '', s });
+  fila([c(NOMBRE_HOJA[area] + ' · CONSOLIDACIÓN ' + anio, EST.titulo)]);
+  merges.push({ s: { r: 0, c: 0 }, e: { r: 0, c: 10 } });
+  // Encabezados (dos filas, como el Excel)
+  const e1 = [c('N°', EST.enc), c('Nombre', EST.enc)], e2 = [c('', EST.enc), c('', EST.enc)];
+  let col = 2;
+  rubros.forEach(r => {
+    const ancho = 12 + extras(r).length;
+    e1.push(c(r.t + ' ' + anio, EST.grupo)); for (let i = 1; i < ancho; i++) e1.push(c('', EST.grupo));
+    merges.push({ s: { r: 1, c: col }, e: { r: 1, c: col + ancho - 1 } });
+    MESES.forEach((m, i) => e2.push(c(m, poi.includes(i + 1) ? EST.poi : EST.enc)));
+    extras(r).forEach(t => e2.push(c(t, EST.enc)));
+    col += ancho;
+  });
+  e1.push(c('OBSERVACIONES', EST.enc)); e2.push(c('', EST.enc));
+  merges.push({ s: { r: 1, c: 0 }, e: { r: 2, c: 0 } }, { s: { r: 1, c: 1 }, e: { r: 2, c: 1 } }, { s: { r: 1, c: col }, e: { r: 2, c: col } });
+  fila(e1); fila(e2);
+  const tot = {};
+  filas.forEach((f, idx) => {
+    const celdas = [c(idx + 1), c(f.nombre, EST.nombre)];
+    rubros.forEach(r => {
+      const meta = r.poi ? metaDe(anio, area, r.k) : null, k = calculos(f.doc, anio, area, r);
+      for (let m = 1; m <= 12; m++){
+        const v = valor(f.doc, m, r.k);
+        if (v != null){ tot[r.k] = tot[r.k] || {}; tot[r.k][m] = (tot[r.k][m] || 0) + v; }
+        const cl = claseColor(v, m, anio, meta);
+        celdas.push(c(v, cl ? EST[cl] : EST.base));
+      }
+      if (r.poi) celdas.push(c(k.totalPOI, EST.calc), c(k.metaPOI ?? '', EST.calc), c(k.falta ?? '', EST.falta));
+      else celdas.push(c(k.totalAnio, EST.calc));
+    });
+    celdas.push(c(observaciones(f.defensorId, anio), EST.obs));
+    fila(celdas);
+  });
+  const activosN = filas.filter(f => !f.gris).length;
+  const ct = [c('TOTAL', EST.total), c('', EST.total)];
+  rubros.forEach(r => {
+    const dist = r.poi ? distritalDe(anio, area, r.k) : null;
+    for (let m = 1; m <= 12; m++){ const v = ((tot[r.k] || {})[m]) ?? null; const cl = claseColor(v, m, anio, dist); ct.push(c(v, cl ? EST[cl] : EST.total)); }
+    const totalPOI = poi.reduce((s, m) => s + (((tot[r.k] || {})[m]) || 0), 0);
+    const meta = r.poi ? metaDe(anio, area, r.k) : null, metaPOI = meta == null ? null : meta * poi.length * activosN;
+    if (r.poi) ct.push(c(totalPOI, EST.total), c(metaPOI ?? '', EST.total), c(metaPOI == null ? '' : Math.max(0, metaPOI - totalPOI), EST.falta));
+    else ct.push(c(Object.values(tot[r.k] || {}).reduce((a, b) => a + b, 0), EST.total));
+  });
+  ct.push(c('', EST.total));
+  fila(ct);
+  if (rubros.some(r => r.poi && distritalDe(anio, area, r.k) != null)){
+    const cd = [c('', EST.base), c('META DISTRITAL POI (Lima, por mes)', EST.nombre)];
+    rubros.forEach(r => { const dist = r.poi ? distritalDe(anio, area, r.k) : null;
+      for (let m = 1; m <= 12; m++) cd.push(c(dist != null && poi.includes(m) ? dist : '', EST.base));
+      if (r.poi) cd.push(c(dist != null ? dist * poi.length : '', EST.base), c('', EST.base), c('', EST.base)); else cd.push(c('', EST.base)); });
+    cd.push(c('', EST.base)); fila(cd);
+  }
+  // Metas del año (como al pie del Excel)
+  fila([c('')]);
+  fila([c(''), c('META POR ' + anio, EST.notaTitulo)]);
+  fila([c(''), c('Meses POI: ' + poi.map(m => MESES[m - 1]).join(', ') + ' (' + poi.length + ' meses)', EST.nota)]);
+  rubros.filter(r => r.poi && metaDe(anio, area, r.k) != null).forEach(r => {
+    const meta = metaDe(anio, area, r.k);
+    fila([c(''), c(r.t + ': ' + meta + ' por mes · ' + poi.length + ' x ' + meta + ' = ' + poi.length * meta + ' por defensor', EST.nota)]);
+  });
+  const ws = XLSX.utils.aoa_to_sheet(aoa);
+  aoa.forEach((r, i) => r.forEach((_, j) => { const ref = XLSX.utils.encode_cell({ r: i, c: j }); if (ws[ref] && estilos[i][j]) ws[ref].s = estilos[i][j]; }));
+  ws['!merges'] = merges;
+  ws['!cols'] = [{ wch: 4 }, { wch: 44 }, ...rubros.flatMap(r => [...Array(12).fill({ wch: 5 }), ...extras(r).map(() => ({ wch: 9 }))]), { wch: 40 }];
+  const libro = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(libro, ws, (NOMBRE_HOJA[area] + ' ' + anio).slice(0, 31));
+  return descargarLibro(libro, 'CONSOLIDACION ' + NOMBRE_HOJA[area] + ' ' + anio + '.xlsx');
+}
+$('btnExcel').onclick = () => descargarExcel().catch(err => { console.error(err); avisar('No se pudo descargar el Excel.', 6000); });
+
+// ---------- Entregar un archivo (igual que en los otros drives: en iPhone se abre "Compartir") ----------
+const esIOS = () => /iP(hone|ad|od)/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+function descargarDirecto(blob, nombre){
+  const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = nombre;
+  document.body.appendChild(a); a.click(); setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 5000);
+}
+function botonCompartir(archivo){
+  const caja = document.createElement('div');
+  caja.style.cssText = 'position:fixed;left:16px;right:16px;bottom:calc(16px + env(safe-area-inset-bottom,0px));z-index:500;background:#241E1B;color:#fff;border-radius:12px;padding:12px;display:flex;gap:8px;align-items:center;flex-wrap:wrap;box-shadow:0 6px 18px rgba(0,0,0,.3);font-weight:700;font-size:13.5px';
+  caja.innerHTML = '<span style="flex:1;min-width:160px">Archivo listo: ' + archivo.name.replace(/[<>&]/g, '') + '</span>';
+  const b = document.createElement('button'); b.textContent = '📤 Compartir / guardar';
+  b.style.cssText = 'background:#fff;color:#241E1B;border:none;border-radius:8px;padding:8px 12px;font:inherit;font-weight:800';
+  const x = document.createElement('button'); x.textContent = '✕'; x.setAttribute('aria-label', 'Cerrar');
+  x.style.cssText = 'background:none;color:#fff;border:1px solid #fff;border-radius:8px;padding:6px 10px;font:inherit';
+  b.onclick = async () => { try { await navigator.share({ files: [archivo], title: archivo.name }); } catch (e){ if (e.name !== 'AbortError'){ descargarDirecto(archivo, archivo.name); avisar('Descargado: búscalo en Archivos → Descargas', 8000); } } caja.remove(); };
+  x.onclick = () => caja.remove();
+  caja.append(b, x); document.body.appendChild(caja);
+}
+async function entregarArchivo(blob, nombre){
+  if (esIOS() && navigator.canShare){
+    const archivo = new File([blob], nombre, { type: blob.type });
+    if (navigator.canShare({ files: [archivo] })){
+      try { await navigator.share({ files: [archivo], title: nombre }); return; }
+      catch (e){ if (e.name === 'AbortError') return; if (e.name === 'NotAllowedError'){ botonCompartir(archivo); return; } }
+    }
+  }
+  descargarDirecto(blob, nombre);
+  if (esIOS()) avisar('Descargado: búscalo en Archivos → Descargas', 8000);
+}
+function descargarLibro(libro, nombre){
+  const datos = XLSX.write(libro, { bookType: 'xlsx', type: 'array' });
+  return entregarArchivo(new Blob([datos], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }), nombre);
+}
+
+// ================= Sesión =================
+$('btnEntrar').onclick = async () => {
+  try { await signInWithEmailAndPassword(auth, $('loginCorreo').value.trim().toLowerCase(), $('loginClave').value); }
+  catch (e){ $('msgLogin').textContent = 'No se pudo entrar (' + e.code + ').'; }
+};
+$('loginClave').addEventListener('keydown', e => { if (e.key === 'Enter') $('btnEntrar').click(); });
+$('btnSalir').onclick = () => signOut(auth);
+onAuthStateChanged(auth, async user => {
+  if (!user){ if (cortarDatos) cortarDatos(); $('app').hidden = true; $('pantallaLogin').hidden = false; $('cargandoSesion').hidden = true; $('cajaLogin').hidden = false; return; }
+  try {
+    const correo = (user.email || '').toLowerCase();
+    const ficha = await getDoc(doc(db, 'staff', correo));
+    if (!ficha.exists()){ $('msgLogin').textContent = 'Tu correo no está autorizado.'; $('cargandoSesion').hidden = true; $('cajaLogin').hidden = false; await signOut(auth); return; }
+    const f = ficha.data();
+    yo = { correo, ...f };
+    nivel = nivelSeccion(f, 'drive4');
+    esAdmin = f.esAdmin === true;
+    document.querySelectorAll('.menu-drives [data-seccion]').forEach(a => a.hidden = nivelSeccion(f, a.dataset.seccion) === 'sin');
+    $('enlacePermisos').hidden = !(esAdmin || f.puedeAutorizar === true);
+    $('usuarioSesion').textContent = (f.nombre || correo) + (nivel === 'editar' ? ' · puede editar el Drive 4' : nivel === 'ver' ? ' · solo puede ver' : '');
+    $('pantallaLogin').hidden = true; $('app').hidden = false;
+    if (nivel === 'sin'){ $('sinAcceso').hidden = false; $('contenido').hidden = true; return; }
+    $('contenido').hidden = false;
+    $('btnPdf').hidden = !puedeEditar(); $('btnImportar').hidden = !puedeEditar(); $('btnMetas').hidden = !esAdmin;
+    const anioActual = Number(hoyIso().slice(0, 4));
+    const anios = []; for (let a = anioActual + 1; a >= 2025; a--) anios.push(a);
+    $('selAnio').innerHTML = anios.map(a => `<option ${a === anioActual ? 'selected' : ''}>${a}</option>`).join('');
+    $('metasAnio').innerHTML = anios.map(a => `<option>${a}</option>`).join('');
+    const [sd, sl] = await Promise.all([getDocs(collection(db, 'defensores')), getDocs(collection(db, 'licencias')).catch(() => ({ docs: [] }))]);
+    DEFS = sd.docs.map(d => ({ id: d.id, ...d.data() }))
+      .sort((a, b) => (a.area || '').localeCompare(b.area || '') || (a.orden ?? 999) - (b.orden ?? 999) || (a.nombre || '').localeCompare(b.nombre || '', 'es'));
+    LICENCIAS = sl.docs.map(d => ({ id: d.id, ...d.data() }));
+    // El motivo de cada licencia solo lo lee quien tiene Ver o Editar en Licencias
+    if (nivelSeccion(f, 'licencias') !== 'sin'){
+      try { (await getDocs(collection(db, 'licenciasPrivado'))).docs.forEach(d => { if (d.data().motivo) MOTIVOS_LIC[d.id] = d.data().motivo; }); } catch (e){ /* se muestra "Licencia" */ }
+    }
+    await cargarMetas();
+    pintarRubros();
+    escucharAnio(anioSel());
+    pintarTabla();
+  } catch (e){ console.error(e); $('msgLogin').textContent = 'No se pudo cargar tu acceso (' + (e.code || e.message) + ').'; $('cargandoSesion').hidden = true; $('cajaLogin').hidden = false; }
+});
+</script>
+</body>
+</html>

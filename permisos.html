@@ -110,6 +110,7 @@
     <a href="drive1.html">Drive 1 · Registro de casos</a>
     <a href="index.html">Drive 2 · Agenda diaria</a>
     <a href="drive3.html" id="enlaceDrive3" hidden>Drive 3 · Fono Alegra</a>
+    <a href="drive4.html" id="enlaceDrive4" hidden>Drive 4 · Consolidación</a>
     <a href="licencias.html" id="enlaceLicencias" hidden>Licencias</a>
     <a href="permisos.html" class="actual" aria-current="page">Personal y permisos</a>
   </nav>
@@ -216,6 +217,17 @@
         <tbody id="cuerpoSeparar"></tbody>
       </table></div>
       <button class="btn" id="btnSeparar">Aplicar a los marcados</button>
+    </div>
+    <!-- Corregir nombres (una sola vez): forma única "APELLIDOS, Nombres", sin tildes (la Ñ se mantiene) -->
+    <div class="caja" id="cajaNombres" hidden style="border-color:var(--dorado)">
+      <h3>Corregir nombres de defensores (una sola vez)</h3>
+      <p class="ayuda">Una sola forma en toda la app: <b>APELLIDOS, Nombres</b>, sin tildes (la Ñ se mantiene). Se cambia el nombre en la lista oficial y en las copias guardadas en el Drive 1 (abogado, abogado actual, le apoya, dirigido a y textos "REASIGNADO…"), Drive 3, Licencias, Opiniones y Drive 4. Todo sigue unido por el código del defensor, que no cambia. Revisa la columna <b>Quedará</b> (puedes corregirla), desmarca a quien no quieras tocar y toca <b>Corregir</b>.</p>
+      <div class="tabla-wrap" style="max-height:none;margin-bottom:8px"><table>
+        <thead><tr><th>Corregir</th><th>Área</th><th>Hoy</th><th>Quedará</th></tr></thead>
+        <tbody id="cuerpoNombres"></tbody>
+      </table></div>
+      <button class="btn" id="btnCorregirNombres">Corregir los marcados</button>
+      <div id="confirmarNombres" class="ayuda" hidden style="margin-top:8px;background:#FFF3D6;border:1.5px solid #E8C872;border-radius:10px;padding:10px 12px;color:var(--tinta)"></div>
     </div>
     <div class="fila-form" style="margin-bottom:8px">
       <label>Área<select id="filtroAreaDef"><option value="">Todas</option><option>Asistencia Legal</option><option>Defensa de Víctimas</option><option>Equipo multidisciplinario</option></select></label>
@@ -661,6 +673,163 @@ async function cargarDefs(){
   }
   pintarDefs();
   pintarSeparar();
+  pintarNombres();
+}
+
+// ---------- Nombre oficial: "APELLIDOS, Nombres", sin tildes (la Ñ se mantiene) ----------
+const PARTICULAS = new Set(['de', 'del', 'la', 'las', 'los', 'y']);
+// Quita las tildes pero conserva la Ñ
+const sinTildesNombre = s => String(s || '').replace(/ñ/g, '\u0001').replace(/Ñ/g, '\u0002').normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+  .replace(/\u0001/g, 'ñ').replace(/\u0002/g, 'Ñ');
+// "alejandro huaman , guillermo" → "ALEJANDRO HUAMAN, Guillermo". Sin coma devuelve null (falta separar apellidos y nombres).
+function nombreOficial(texto){
+  const t = sinTildesNombre(texto).replace(/\s+/g, ' ').trim();
+  const i = t.indexOf(',');
+  if (i < 1) return null;
+  const apellidos = t.slice(0, i).trim().toUpperCase();
+  const nombres = t.slice(i + 1).trim().toLowerCase().split(' ').filter(Boolean)
+    .map((p, k) => k > 0 && PARTICULAS.has(p) ? p : p.charAt(0).toUpperCase() + p.slice(1)).join(' ');
+  return nombres ? apellidos + ', ' + nombres : null;
+}
+// Corrección única (oct. 2026): nombres revisados con los PDF oficiales del SSC y el Excel de consolidación (con sus segundos nombres)
+const NOMBRES_CORREGIDOS = {
+  BAO_HERRERA__MARIA_EUGENIA_AMELIA: 'BAO HERRERA, Maria Eugenia Amelia',
+  BUSTINZA_ROBLES__MARIA_COQUI: 'BUSTINZA ROBLES, Maria Coqui',
+  COLQUI_GANTO__JOHNY_BERNABE: 'COLQUI GANTO, Johny Bernabe',
+  DORREGARAY_OVIEDO__PATRICIA: 'DORREGARAY OVIEDO, Patricia Fernandina',
+  PILARES_FLOREZ__MARITZA_ANGELICA: 'PILARES FLOREZ, Maritsa Angelica',
+  RAMOS_ANDRADE__ANGEL: 'RAMOS ANDRADE, Angel Martin',
+  GUILLEMO_ALEJANDRO_HUAMAN: 'ALEJANDRO HUAMAN, Guillermo',
+  PERCY_HERMAN_AMPUERO_LINARES: 'AMPUERO LINARES, Percy Hernan',
+  OSCAR_ARCE_ZAVALA: 'ARCE ZAVALA, Oscar',
+  MARIANA_BARBOZA_BECERRA: 'BARBOZA BECERRA, Mariana',
+  CARMEN_ANTONIA_BERROCAL_GONZALES: 'BERROCAL GONZALES, Carmen Antonia',
+  LUIS_MARTIN_CHACALTANA_HUASASQUICHE: 'CHACALTANA HUASASQUICHE, Luis Martin',
+  ESLEYMAN_JOVANY_CORDOVA_DE_LA_ROSA: 'CORDOVA DE LA ROSA, Esleyman Jovany',
+  MILAGROS_DE_LA_CRUZ_CRISOLO: 'DE LA CRUZ CRISOLO, Milagros del Pilar',
+  CARMELA_LUZ_ERAZO_MANRIQUE: 'ERAZO MANRIQUE, Carmela Luz',
+  LILIANA_MARGOTH_GALINDO_SARAS: 'GALINDO SARAS, Liliana Margoth',
+  LUPE_LULY_GOMEZ_HUAMAN: 'GOMEZ HUAMAN, Lupe Lily',
+  EDUARDO_ALVARO_GUILLEN_RAMOS: 'GUILLEN RAMOS, Eduardo Alvaro',
+  WILBERT_ELI_GUIZADO_SICOS: 'GUIZADO SICOS, Wilbert Eli',
+  KATHERINE_HIDALGO_BUSTAMENTE: 'HIDALGO BUSTAMANTE, Katherine',
+  ARNOLD_HUAMAN_PAIMA: 'HUAMAN PAIMA, Arnold Teofilo',
+  DANNY_ILLACONZA_MORALES: 'ILLACONZA MORALES, Danny Alvaro',
+  LIZETH_MERCADO_LAGUNA: 'MERCADO LAGUNA, Lizeth',
+  LUIS_CARLO_MUENTE_MAURICIO: 'MUENTE MAURICIO, Luis Carlo',
+  JENNY_ROCIO_ORTEGA_OLVEA: 'ORTEGA OLVEA, Jenny Rocio',
+  LEADY_VANNESA_PACO_HUERTA_DE_FLORES: 'PACO HUERTA DE FLORES, Leady Vannesa',
+  MERY_PAJA_OLVEA: 'PAJA OLVEA, Mery',
+  CASTORINA_QUIROZ_VASQUEZ: 'QUIROZ VASQUEZ, Castorina Yodali',
+  JOHSSY_LUZ_QUISPE_APONTE: 'QUISPE APONTE, Johssy Luz',
+  INGRID_DANIELA_RIVERA_MARTINEZ: 'RIVERA MARTINEZ, Ingri Daniela',
+  LAURA_ISABEL_RODRIGUEZ_BELLEZA: 'RODRIGUEZ BELLEZA, Laura Isabel',
+  LESLY_KATHERINE_ROJAS_VALDEZ: 'ROJAS VALDEZ, Lesly Katherine',
+  SHEILA_SABOYA_CARDENAS: 'SABOYA CARDENAS, Sheila',
+  VLADIMIR_TALENAS_QUISPE: 'TALENAS QUISPE, Vladimir Antony',
+  LISSI_INDIRA_TRUJILLO_ROLDAN: 'TRUJILLO ROLDAN, Lissi Indira',
+  RUTH_GIOVANNA_VARGAS_ANTAURCO: 'VARGAS ANTAURCO, Ruth Giovanna',
+  MYRCEA_VASQUEZ_PIZARRO: 'VASQUEZ PIZARRO, Myrcea Yuleana',
+  TREJO_CABANA__MARIA_BERTHA: 'TREJO CABANA, Maria Bertha',
+  BOJORQUEZ_BUSTAMANTE__JOSE_LUIS: 'BOJORQUEZ BUSTAMANTE, Jose Luis',
+  JOYCE_TERESA_DE_JESUS_CASTRO_TRIGOSO: 'CASTRO TRIGOSO, Joyce Teresa de Jesus',
+  SILVIA_BEATRIZ_MELENDEZ_KOHATSU: 'MELENDEZ KOHATSU, Silvia Beatriz',
+  JUAN_LANDABURO_CALDERON: 'LANDABURO CALDERON, Juan'
+};
+// Nombre que debería tener: el de la corrección; si no está, el suyo en la forma oficial (si ya tiene coma)
+const nombreDebido = d => NOMBRES_CORREGIDOS[d.id] || nombreOficial(d.nombre) || d.nombre;
+function pintarNombres(){
+  const lista = esAdmin() ? DEFS.filter(d => d.nombre && nombreDebido(d) !== d.nombre) : [];
+  $('cajaNombres').hidden = !lista.length;
+  $('confirmarNombres').hidden = true;
+  if (!lista.length) return;
+  $('cuerpoNombres').innerHTML = lista.map(d => `<tr data-fila="${esc(d.id)}">
+      <td><input type="checkbox" data-aplicar checked aria-label="Corregir ${esc(d.nombre)}"></td>
+      <td>${esc(d.area || '')}${d.activo === false ? '<span class="chico">De baja</span>' : ''}</td>
+      <td class="nombre">${esc(d.nombre)}</td>
+      <td><input type="text" data-nuevo value="${esc(nombreDebido(d))}" style="min-width:300px"></td>
+    </tr>`).join('');
+}
+$('btnCorregirNombres').onclick = () => {
+  const filas = [...$('cuerpoNombres').querySelectorAll('tr')].filter(tr => tr.querySelector('[data-aplicar]').checked);
+  if (!filas.length){ avisar('Marca al menos una fila.'); return; }
+  const malos = filas.filter(tr => !nombreOficial(tr.querySelector('[data-nuevo]').value));
+  const c = $('confirmarNombres');
+  if (malos.length){ c.hidden = false; c.textContent = 'Falta la coma en ' + malos.length + ' nombre(s): escribe "APELLIDOS, Nombres".'; return; }
+  c.innerHTML = `¿Corregir ${filas.length} nombre(s) en la lista oficial y en todas sus copias (Drive 1, Drive 3, Licencias, Opiniones y Drive 4)? Todo sigue unido por el código del defensor.` +
+    '<div style="margin-top:8px;display:flex;gap:8px"><button class="btn" data-nombres-si>Sí, corregir</button><button class="btn sec" data-nombres-no>Volver</button></div>';
+  c.hidden = false;
+};
+$('confirmarNombres').addEventListener('click', async e => {
+  if (e.target.closest('[data-nombres-no]')){ $('confirmarNombres').hidden = true; return; }
+  if (!e.target.closest('[data-nombres-si]')) return;
+  e.target.disabled = true; e.target.textContent = 'Corrigiendo…';
+  await corregirNombres();
+});
+// Cambia el nombre en "defensores" y en las copias guardadas. Las copias se buscan por el CÓDIGO del defensor;
+// solo "dirigido a", el apoyo del Drive 3 y los textos "REASIGNADO DE X A Y" guardan el nombre como texto: ahí se cambia el texto exacto.
+async function corregirNombres(){
+  const filas = [...$('cuerpoNombres').querySelectorAll('tr')].filter(tr => tr.querySelector('[data-aplicar]').checked);
+  const cambios = filas.map(tr => { const d = DEFS.find(x => x.id === tr.dataset.fila); return { id: d.id, antes: d.nombre, ahora: nombreOficial(tr.querySelector('[data-nuevo]').value) }; })
+    .filter(x => x.ahora && x.ahora !== x.antes);
+  try {
+    const n = await propagarNombres(cambios);
+    await registrarCambio('Corrigió nombres de defensores (forma oficial, sin tildes)', 'defensores', 'nombres',
+      Object.fromEntries(cambios.map(x => [x.id, x.antes])), Object.fromEntries(cambios.map(x => [x.id, x.ahora])));
+    avisar('Listo: ' + cambios.length + ' nombres corregidos y ' + n + ' copias actualizadas.', 8000);
+  } catch (err){ error(err); }
+  await cargarDefs();
+}
+// Copias del nombre (Drive 1, Drive 3, Licencias, Opiniones, Drive 4) y, AL FINAL, la lista oficial:
+// si algo falla a medias, la lista conserva el nombre antiguo y se puede repetir sin dejar copias viejas.
+// Devuelve cuántas copias se actualizaron.
+async function propagarNombres(cambios, conLista = true){
+  if (!cambios.length) return 0;
+  const porId = Object.fromEntries(cambios.map(x => [x.id, x]));
+  // Campos que guardan el nombre tal cual ("dirigido a", apoyo del Drive 3): nombre exacto → nombre oficial
+  const textoNuevo = Object.fromEntries(cambios.map(x => [x.antes, x.ahora]));
+  // Textos en mayúsculas ("REASIGNADO DE X A Y", estado del caso): nombre en mayúsculas → nombre oficial en mayúsculas
+  const mayNuevo = Object.fromEntries(cambios.map(x => [x.antes.toUpperCase(), x.ahora.toUpperCase()]));
+  const enTexto = s => { let t = String(s || ''); Object.entries(mayNuevo).forEach(([a, b]) => { t = t.split(a).join(b); }); return t; };
+  const escrituras = []; // [ref, datos]
+  const ahora = new Date().toISOString();
+  {
+    const leer = async c => (await getDocs(collection(db, c))).docs;
+    const [casos, fono, lic, opin, cons] = await Promise.all(['casos', 'fonoAlegra', 'licencias', 'opiniones', 'consolidacion'].map(leer));
+    casos.forEach(s => {
+      const r = s.data(), u = {};
+      [['abogadoId', 'abogadoNombre'], ['abogadoActualId', 'abogadoActualNombre'], ['apoyoId', 'apoyoNombre'], ['bloqueDeId', 'bloqueDeNombre']]
+        .forEach(([kid, kn]) => { if (porId[r[kid]] && r[kn] !== porId[r[kid]].ahora) u[kn] = porId[r[kid]].ahora; });
+      if (r.dirigidoA && textoNuevo[r.dirigidoA]) u.dirigidoA = textoNuevo[r.dirigidoA];
+      ['resumen', 'estado', 'estadoTexto'].forEach(k => { if (typeof r[k] === 'string'){ const t = enTexto(r[k]); if (t !== r[k]) u[k] = t; } });
+      if (Object.keys(u).length) escrituras.push([s.ref, u]);
+    });
+    fono.forEach(s => {
+      const r = s.data(), u = {};
+      if (porId[r.defensorId] && r.defensorNombre !== porId[r.defensorId].ahora) u.defensorNombre = porId[r.defensorId].ahora;
+      if (r.apoyoNombre && textoNuevo[r.apoyoNombre]) u.apoyoNombre = textoNuevo[r.apoyoNombre];
+      if (Object.keys(u).length) escrituras.push([s.ref, u]);
+    });
+    lic.forEach(s => {
+      const r = s.data(), u = {};
+      if (porId[r.defensorId] && r.defensorNombre !== porId[r.defensorId].ahora) u.defensorNombre = porId[r.defensorId].ahora;
+      if ((r.apoyos || []).some(a => porId[a.id])) u.apoyos = r.apoyos.map(a => porId[a.id] ? { ...a, nombre: porId[a.id].ahora } : a);
+      if (Object.keys(u).length) escrituras.push([s.ref, u]);
+    });
+    opin.forEach(s => { const r = s.data(); if (porId[r.abogadoId] && r.abogadoNombre !== porId[r.abogadoId].ahora) escrituras.push([s.ref, { abogadoNombre: porId[r.abogadoId].ahora }]); });
+    cons.forEach(s => { const r = s.data(); if (porId[r.defensorId] && r.nombre !== porId[r.defensorId].ahora) escrituras.push([s.ref, { nombre: porId[r.defensorId].ahora }]); });
+  }
+  const copias = escrituras.length;
+  if (conLista){
+    cambios.filter(x => PRIVADO[x.id]).forEach(x => escrituras.push([doc(db, 'defensoresPrivado', x.id), { nombre: x.ahora, actualizadoEn: ahora }]));
+    cambios.forEach(x => escrituras.push([doc(db, 'defensores', x.id), { nombre: x.ahora, actualizadoEn: ahora }]));
+  }
+  for (let i = 0; i < escrituras.length; i += 400){
+    const lote = writeBatch(db);
+    escrituras.slice(i, i + 400).forEach(([ref, datos]) => lote.update(ref, datos));
+    await lote.commit();
+  }
+  return copias;
 }
 // Celular personal: primero el del lugar privado; si aún no se movió, el antiguo de "defensores"
 const celularPersonalDe = d => (PRIVADO[d.id] && PRIVADO[d.id].celularPersonal) || d.celularPersonal || '';
@@ -841,7 +1010,13 @@ $('cuerpoDef').addEventListener('click', async e => {
   const cambios = {};
   const actual = c => c === 'celularPersonal' ? celularPersonalDe(d) : d[c] || '';
   fila.querySelectorAll('[data-def]').forEach(i => { const v = i.value.trim(); if (actual(i.dataset.def) !== v) cambios[i.dataset.def] = i.dataset.def === 'correo' ? v.toLowerCase() : v; });
-  if (!Object.keys(cambios).length) return;
+  // Nombre: siempre en la forma oficial "APELLIDOS, Nombres", sin tildes (la Ñ se mantiene)
+  if ('nombre' in cambios){
+    const oficial = nombreOficial(cambios.nombre);
+    if (!oficial){ avisar('Escribe el nombre así: APELLIDOS, Nombres (con coma).', 6000); return; }
+    if (oficial === d.nombre) delete cambios.nombre; else cambios.nombre = oficial;
+  }
+  if (!Object.keys(cambios).length){ await cargarDefs(); return; }
   try {
     // El celular personal se guarda en el lugar privado y se borra de la lista pública si quedaba ahí
     const publicos = { ...cambios }; delete publicos.celularPersonal;
@@ -856,13 +1031,16 @@ $('cuerpoDef').addEventListener('click', async e => {
     await lote.commit();
     const antes = {}; Object.keys(cambios).forEach(k => antes[k] = actual(k));
     await registrarCambio('Editó defensor ' + (d.nombre || id), 'defensores', id, antes, cambios);
+    // Nombre nuevo: también en sus copias (Drive 1, Drive 3, Licencias, Opiniones, Drive 4); todo sigue unido por el código
+    if ('nombre' in cambios) await propagarNombres([{ id, antes: d.nombre, ahora: cambios.nombre }], false);
     avisar('Guardado');
   } catch (err){ error(err); }
   await cargarDefs();
 });
 $('btnAgregarDef').onclick = async () => {
-  const nombre = $('dNombre').value.trim(), area = $('dArea').value;
-  if (!nombre){ avisar('Escribe el nombre.'); return; }
+  const nombre = nombreOficial($('dNombre').value), area = $('dArea').value;
+  if (!$('dNombre').value.trim()){ avisar('Escribe el nombre.'); return; }
+  if (!nombre){ avisar('Escribe el nombre así: APELLIDOS, Nombres (con coma).', 6000); return; }
   const id = nombre.toUpperCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^A-Z0-9]+/g, '_').replace(/^_|_$/g, '');
   if (DEFS.some(d => d.id === id)){ avisar('Ya existe un defensor con ese nombre. Si estaba de baja, reactívalo en la lista.', 6000); return; }
   // Entra al final de su área contando solo a los activos; si había huecos, se cierran en el mismo paso
@@ -922,6 +1100,7 @@ onAuthStateChanged(auth, async user => {
     yo = { correo, ...ficha.data() };
     $('enlaceLicencias').hidden = !(esAdmin() || ['ver', 'editar'].includes((yo.permisos || {}).licencias));
     $('enlaceDrive3').hidden = !(esAdmin() || ['ver', 'editar'].includes((yo.permisos || {}).drive3));
+    $('enlaceDrive4').hidden = !(esAdmin() || ['ver', 'editar'].includes((yo.permisos || {}).drive4));
     $('pantallaLogin').hidden = true; $('app').hidden = false;
     $('usuarioSesion').textContent = (yo.nombre || correo) + (esAdmin() ? ' · administrador' : puedeAutorizar() ? ' · puede autorizar asistentes' : '');
     if (!puedeAutorizar()){
