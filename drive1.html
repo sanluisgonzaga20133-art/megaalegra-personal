@@ -8,6 +8,7 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Source+Serif+4:opsz,wght@8..60,600&family=Public+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
 <style>
   :root{
     --rojo:#D91023; --rojo-oscuro:#A10C1A; --dorado:#B8873A;
@@ -108,6 +109,8 @@
   .vacio{padding:28px;text-align:center;color:var(--gris);font-size:14px}
   .ver-mas{display:block;margin:10px auto;padding:8px 16px;border-radius:8px;border:1px solid var(--linea);background:#fff;font-weight:600;cursor:pointer}
   .solo-lectura .solo-abogado{display:none !important}
+  .bloqueado .solo-proyecta{display:none !important}
+  .chip-no-procede{display:inline-block;margin-left:6px;font-size:11px;font-weight:800;color:#fff;background:#6B5E57;border-radius:5px;padding:1px 6px;vertical-align:middle;white-space:nowrap}
   .bloqueado .celda-num-doc input{pointer-events:none;background:#F1EEE8;border-color:#D9D2C5}
 
   /* Ventanas */
@@ -371,6 +374,7 @@
     <div class="fila-controles">
       <button class="btn-registrar solo-abogado" id="btnRegistrar">+ Registrar caso</button>
       <button class="btn-blanco solo-abogado" id="btnBloque">🔁 Reasignación en bloque</button>
+      <button class="btn-blanco solo-proyecta" id="btnCarta">✉ Carta: No procede</button>
       <button class="btn-blanco" id="btnAbrirDescarga">⬇ Descargar por fechas</button>
     </div>
     <div class="fila-controles" id="panelDescarga" hidden>
@@ -795,6 +799,50 @@
     </div>
 
     <div id="bqGuardados" hidden></div>
+  </div>
+</div>
+
+<!-- Carta al ciudadano "No procede la asignación de un Defensor Público" (Word con el membrete). No guarda los datos del usuario. -->
+<div class="fondo-modal" id="fondoCarta" hidden>
+  <div class="modal" role="dialog" aria-labelledby="tituloCarta">
+    <button type="button" class="btn-x" data-cerrar-modal aria-label="Cerrar">✕</button>
+    <h2 id="tituloCarta">Carta: No procede la asignación de un Defensor Público</h2>
+    <p class="sub">Sale en Word con la redacción del modelo (Art. 9-A del D.S. 009-2019-JUS, línea 1884 y Mesa de Partes Virtual). Los datos del usuario solo se usan para armar la carta: no se guardan en ninguna parte.</p>
+    <div class="caja-confirmar" id="ctDeFila" hidden></div>
+    <div class="rejilla">
+      <div class="ancho"><label class="campo" for="ctArea">Área <span class="obl">*</span></label>
+        <select id="ctArea"><option value="">Elige…</option><option value="Defensa de Víctimas">Defensa de Víctimas</option><option disabled>Asistencia Legal (falta la carta modelo)</option><option disabled>Equipo multidisciplinario (no aplica)</option></select></div>
+      <div><label class="campo" for="ctNum">N° de carta <span class="obl">*</span></label><input type="text" id="ctNum" placeholder="Ej. 442" autocomplete="off"></div>
+      <div><label class="campo" for="ctFecha">Fecha de la carta <span class="obl">*</span></label><input type="date" id="ctFecha"></div>
+    </div>
+    <div class="bloque">
+      <div class="rejilla">
+        <div class="ancho"><label class="campo" for="ctUsuario">Nombre del usuario <span class="obl">*</span></label><input type="text" id="ctUsuario" class="may" autocomplete="off"></div>
+        <div><label class="campo" for="ctDni">DNI</label><input type="text" id="ctDni" inputmode="numeric" autocomplete="off"></div>
+        <div><label class="campo" for="ctCelular">Celular</label><input type="text" id="ctCelular" inputmode="tel" autocomplete="off"></div>
+        <div class="ancho"><label class="campo" for="ctCorreo">Correo</label><input type="text" id="ctCorreo" inputmode="email" autocomplete="off"></div>
+      </div>
+      <div class="ayuda">Lo que se deje vacío no sale en la carta.</div>
+    </div>
+    <div class="bloque">
+      <div class="rejilla">
+        <div><label class="campo" for="ctFechaCorreo">Documento recibido el <span class="obl">*</span></label><input type="date" id="ctFechaCorreo"></div>
+        <div><label class="campo" for="ctInforme">N° del informe del Coordinador <span class="obl">*</span></label><input type="text" id="ctInforme" placeholder="Ej. 158" autocomplete="off"></div>
+        <div class="ancho"><label class="campo" for="ctReferencia">Referencia <span class="obl">*</span></label><input type="text" id="ctReferencia" autocomplete="off"><div class="ayuda">Se arma sola con el origen y la fecha; se puede corregir.</div></div>
+        <div><label class="campo" for="ctTipoExp">Expediente o carpeta</label><select id="ctTipoExp"><option>Expediente N.°</option><option>Carpeta Fiscal N.°</option></select></div>
+        <div><label class="campo" for="ctExp">Número</label><input type="text" id="ctExp" class="may" placeholder="Ej. 328-2025" autocomplete="off"></div>
+        <div class="ancho"><label class="campo" for="ctDelito">Presunto delito</label><input type="text" id="ctDelito" placeholder="Ej. contra la Administración Pública – omisión, rehusamiento o demora de actos funcionales" autocomplete="off"></div>
+        <div class="ancho"><label class="campo" for="ctAnte">Tramitado ante</label><input type="text" id="ctAnte" placeholder="Ej. el Primer Juzgado de Investigación Preparatoria de Santiago de Surco – Lima" autocomplete="off"></div>
+        <div><label class="campo" for="ctNumeral">Numeral del artículo 9-A</label><input type="text" id="ctNumeral" value="1" autocomplete="off"></div>
+        <div><label class="campo" for="ctIniciales">Iniciales (pie de página)</label><input type="text" id="ctIniciales" autocomplete="off"></div>
+      </div>
+    </div>
+    <div class="caja-confirmar" id="ctAvisoCfg" hidden></div>
+    <div class="error-form" id="ctError" hidden></div>
+    <div class="acciones-modal">
+      <button class="btn-cancelar" data-cerrar-modal>Cerrar</button>
+      <button class="btn-principal" id="ctDescargar">⬇ Carta (Word)</button>
+    </div>
   </div>
 </div>
 
@@ -1255,7 +1303,7 @@ function pintar(){
       <td>${esc(r.origen) || (r.turno ? '<span class="falta">Falta el medio</span>' : '')}${r.turno ? `<span class="chico">${esc(r.turno)}</span>` : ''}</td>
       <td>${esc(r.codigo)}${tipo}</td>
       <td>${esc(r.numDoc)}</td>
-      <td>${esc(r.usuario) || (r.porCompletar ? '<span class="falta">Falta</span>' : '')}</td>
+      <td>${esc(r.usuario) || (r.porCompletar ? '<span class="falta">Falta</span>' : '')}${cartaNoProcedeDe(r) ? `<span class="chip-no-procede" title="${esc(cartaNoProcedeDe(r))}">NO PROCEDE</span>` : ''}</td>
       <td>${r.abogadoActualNombre ? esc(r.abogadoActualNombre) + `<span class="chico">Antes: ${esc(r.abogadoNombre)}</span>` : esc(r.abogadoNombre)}${r.apoyoNombre ? ` <span class="apoya">(Le apoya: ${esc(r.apoyoNombre)})</span>` : ''}</td>
       <td>${esc(r.apoyoNombre ? r.apoyoCelular : r.abogadoActualNombre ? r.abogadoActualCelular : r.abogadoCelular)}</td>
       <td>${esc(r.apoyoNombre ? r.apoyoCorreo : r.abogadoActualNombre ? r.abogadoActualCorreo : r.abogadoCorreo)}</td>
@@ -1265,7 +1313,7 @@ function pintar(){
       <td>${estado}</td>
       <td class="verde">${esc(r.proveido)}</td>
       <td class="verde celda-num-doc">${celdaMemo}${proyecta}<button type="button" class="mini-accion" data-copiar-memo="${r.id}" title="Copia los datos ordenados como el memo de asignación de caso">📋 Copiar para memo</button></td>
-      <td class="verde celda-num-doc">${celdaOficio}</td>
+      <td class="verde celda-num-doc">${celdaOficio}${r.area === AREA_CARTA ? `<button type="button" class="mini-accion solo-proyecta" data-carta-fila="${r.id}" title="Carta al ciudadano: no procede la asignación de un Defensor Público (Word)">✉ Carta: No procede</button>` : ''}</td>
       <td>${esc(r.dirigidoA)}</td>
       <td>${plazo}</td>
       <td>${sup}</td>
@@ -1286,6 +1334,7 @@ $('cuerpo').addEventListener('click', e => {
   if (t.dataset.editar){ abrirForm({ editarId: t.dataset.editar }); return; }
   if (t.dataset.antecedente){ abrirForm({ padreId: t.dataset.antecedente }); return; }
   if (t.dataset.copiarMemo){ copiarParaMemo(t.dataset.copiarMemo); return; }
+  if (t.dataset.cartaFila){ abrirCarta(t.dataset.cartaFila).catch(e => { console.error(e); avisar('No se pudo abrir la carta.'); }); return; }
   if (t.dataset.borrar){ idPorBorrar = t.dataset.borrar; pintar(); return; }
   if (t.dataset.borrarNo !== undefined){ idPorBorrar = null; pintar(); return; }
   if (t.dataset.borrarSi){ borrar(t.dataset.borrarSi); return; }
@@ -1302,23 +1351,24 @@ $('cuerpo').addEventListener('click', e => {
 });
 $('cuerpo').addEventListener('change', e => {
   const t = e.target;
-  if (t.dataset.campo){
-    const valor = may(t.value);
-    const r = cache.get(t.dataset.id) || {};
-    const cambios = { [t.dataset.campo]: valor, [t.dataset.campo + 'Fecha']: valor ? hoyIso() : '', [t.dataset.campo + 'Por']: usuario.correo };
-    cambios.pendienteProyectar = tienePendiente({ ...r, ...cambios });
-    // Felicitación: el asistente asignado termina lo que le faltaba dentro de sus 4 días hábiles
-    const cumpleATiempo = valor && !cambios.pendienteProyectar && tienePendiente(r) && r.asistenteCorreo === usuario.correo && !estadoProyeccion(r).atraso;
-    const diaCumplido = cumpleATiempo ? estadoProyeccion(r).dia : 0;
-    updateDoc(doc(db, COL, t.dataset.id), cambios).then(() => {
-      avisar(valor ? 'Guardado: ' + valor : 'Número borrado');
-      if (cumpleATiempo) felicitar(r, diaCumplido);
-    }).catch(errorAlGuardar);
-  }
+  if (t.dataset.campo) guardarNumDoc(t.dataset.id, t.dataset.campo, t.value).catch(errorAlGuardar);
   if (t.dataset.ocultar){
     updateDoc(doc(db, COL, t.dataset.ocultar), { ocultarPublico: t.checked }).catch(errorAlGuardar);
   }
 });
+// N° de memo u oficio/carta de una fila (casilla de la tabla o carta "No procede"): lo pueden anotar también los asistentes
+async function guardarNumDoc(id, campo, texto){
+  const valor = may(texto);
+  const r = cache.get(id) || {};
+  const cambios = { [campo]: valor, [campo + 'Fecha']: valor ? hoyIso() : '', [campo + 'Por']: usuario.correo };
+  cambios.pendienteProyectar = tienePendiente({ ...r, ...cambios });
+  // Felicitación: el asistente asignado termina lo que le faltaba dentro de sus 4 días hábiles
+  const cumpleATiempo = valor && !cambios.pendienteProyectar && tienePendiente(r) && r.asistenteCorreo === usuario.correo && !estadoProyeccion(r).atraso;
+  const diaCumplido = cumpleATiempo ? estadoProyeccion(r).dia : 0;
+  await updateDoc(doc(db, COL, id), cambios);
+  avisar(valor ? 'Guardado: ' + valor : 'Número borrado');
+  if (cumpleATiempo) felicitar(r, diaCumplido);
+}
 // ---------- "📋 Copiar para memo": datos ordenados como el memo de ASIGNACIÓN DE CASO ----------
 // Solo lee (no guarda nada): lo pueden usar todos los que ven el Drive 1, también los asistentes. Lo que falte queda en blanco.
 const CONECTORES = new Set(['de', 'del', 'la', 'las', 'los', 'y', 'da', 'van', 'von']);
@@ -3926,6 +3976,249 @@ onAuthStateChanged(auth, async user => {
     $('cargandoSesion').hidden = true; $('cajaLogin').hidden = false;
   }
 });
+
+// ================= Carta "No procede la asignación de un Defensor Público" (Word, mismo membrete que el Drive 3) =================
+// Redacción y formato de la carta modelo (CARTA N° 442-2026). Firmante, números fijos y enlace vienen de
+// "configuracion/cartaNoProcede" (Personal y permisos); las frases del año, de "configuracion/documentosFono".
+// Los datos del usuario (nombre, DNI, celular, correo) NO se guardan: solo se usan para armar el Word.
+const CARTA_POR_DEFECTO = {
+  fraseAnio: 'Año de la Esperanza y el Fortalecimiento de la Democracia',
+  fraseDecenio: 'Decenio de la igualdad de oportunidades para mujeres y hombres',
+  recuadros: ['Despacho Viceministerial de Derechos Humanos y Acceso a la Justicia', 'Dirección General de Defensa Pública y Acceso a la Justicia', 'Direcciones Distritales de Defensa Pública y Acceso a la Justicia'],
+  firmanteNombre: '', firmanteCargo: '', sufijoCarta: '', sufijoInforme: '', coordinadorNombre: '', inicialesFijas: '', enlaceMesaPartes: '',
+  pie: ['Jr. Carabaya N° 831, Oficina N° 501 - Cercado de Lima', 'Teléfono: 428-5769', 'www.minjus.gob.pe']
+};
+async function leerConfigCarta(){
+  const leer = async id => { try { const s = await getDoc(doc(db, 'configuracion', id)); return s.exists() ? s.data() : {}; } catch (e){ console.warn(e); return {}; } };
+  const [fono, carta] = await Promise.all([leer('documentosFono'), leer('cartaNoProcede')]);
+  const c = { ...CARTA_POR_DEFECTO, ...carta };
+  if (fono.fraseAnio) c.fraseAnio = fono.fraseAnio;
+  if (fono.fraseDecenio) c.fraseDecenio = fono.fraseDecenio;
+  if (!(c.recuadros || []).filter(Boolean).length) c.recuadros = CARTA_POR_DEFECTO.recuadros;
+  if (!(c.pie || []).filter(Boolean).length) c.pie = CARTA_POR_DEFECTO.pie;
+  return c;
+}
+const MESES_CARTA = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'setiembre', 'octubre', 'noviembre', 'diciembre'];
+const xe = s => String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+const CM = 567, EMU_CM = 360000; // twips y EMU por centímetro
+function wRun(t, o = {}){
+  return '<w:r><w:rPr>' + (o.b ? '<w:b/>' : '') + (o.i ? '<w:i/>' : '') + (o.u ? '<w:u w:val="single"/>' : '') + (o.color ? '<w:color w:val="' + o.color + '"/>' : '') +
+    (o.sz ? '<w:sz w:val="' + o.sz + '"/><w:szCs w:val="' + o.sz + '"/>' : '') + '</w:rPr><w:t xml:space="preserve">' + xe(t) + '</w:t></w:r>';
+}
+const wTab = '<w:r><w:tab/></w:r>';
+function wPar(contenido, o = {}){
+  return '<w:p><w:pPr>' + (o.juntos ? '<w:keepNext/><w:keepLines/>' : '') +
+    (o.tabs ? '<w:tabs>' + o.tabs.map(t => '<w:tab w:val="left" w:pos="' + t + '"/>').join('') + '</w:tabs>' : '') +
+    '<w:spacing w:before="' + (o.antes || 0) + '" w:after="' + (o.despues ?? 120) + '"/>' +
+    (o.ind ? '<w:ind w:left="' + (o.ind.izq || 0) + '"' + (o.ind.der ? ' w:right="' + o.ind.der + '"' : '') + (o.ind.colgante ? ' w:hanging="' + o.ind.colgante + '"' : '') + '/>' : '') +
+    '<w:jc w:val="' + (o.jc || 'both') + '"/></w:pPr>' + contenido + '</w:p>';
+}
+function wImg(rid, ancho, alto, id, nombre){
+  const cx = Math.round(ancho * EMU_CM), cy = Math.round(alto * EMU_CM);
+  return '<w:r><w:drawing><wp:inline distT="0" distB="0" distL="0" distR="0"><wp:extent cx="' + cx + '" cy="' + cy + '"/><wp:docPr id="' + id + '" name="' + nombre + '"/>' +
+    '<a:graphic xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main"><a:graphicData uri="http://schemas.openxmlformats.org/drawingml/2006/picture">' +
+    '<pic:pic xmlns:pic="http://schemas.openxmlformats.org/drawingml/2006/picture"><pic:nvPicPr><pic:cNvPr id="' + id + '" name="' + nombre + '"/><pic:cNvPicPr/></pic:nvPicPr>' +
+    '<pic:blipFill><a:blip r:embed="' + rid + '"/><a:stretch><a:fillRect/></a:stretch></pic:blipFill><pic:spPr><a:xfrm><a:off x="0" y="0"/><a:ext cx="' + cx + '" cy="' + cy + '"/></a:xfrm><a:prstGeom prst="rect"><a:avLst/></a:prstGeom></pic:spPr></pic:pic>' +
+    '</a:graphicData></a:graphic></wp:inline></w:drawing></w:r>';
+}
+// Enlace azul subrayado (correo del usuario y "Mesa de Partes Virtual")
+const wEnlace = (rid, t) => '<w:hyperlink r:id="' + rid + '"><w:r><w:rPr><w:color w:val="0563C1"/><w:u w:val="single"/></w:rPr><w:t xml:space="preserve">' + xe(t) + '</w:t></w:r></w:hyperlink>';
+const NS_W = 'xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" xmlns:wp="http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing"';
+// Encabezado de la carta: logo del Ministerio + recuadros grises + logo de los 200 años a la derecha; debajo, las dos frases en cursiva (primero el decenio)
+function encabezadoCarta(recuadros, cfg){
+  const anchoTexto = 17, logo = 4.2, l200 = 3.4;
+  const ancho = Math.min(2.9, (anchoTexto - logo - l200 - 0.3) / recuadros.length);
+  const espacio = Math.max(0.2, anchoTexto - logo - l200 - ancho * recuadros.length);
+  const borde = '<w:tcBorders><w:top w:val="nil"/><w:bottom w:val="nil"/><w:left w:val="single" w:sz="18" w:color="FFFFFF"/><w:right w:val="nil"/></w:tcBorders>';
+  const celda = (w, contenido, extra = '') => '<w:tc><w:tcPr><w:tcW w:w="' + Math.round(w * CM) + '" w:type="dxa"/>' + extra + '<w:vAlign w:val="center"/></w:tcPr>' + contenido + '</w:tc>';
+  const textoRec = (t, i) => wPar(wRun(t, { sz: 12, b: i === 1, color: i === 0 ? 'FFFFFF' : '333333' }), { despues: 0, jc: 'left' });
+  const fila = '<w:tr><w:trPr><w:trHeight w:val="' + Math.round(0.95 * CM) + '"/></w:trPr>' +
+    celda(logo, wPar(wImg('rIdLogo', logo, logo * 83 / 385, 1, 'Ministerio'), { despues: 0, jc: 'left' })) +
+    recuadros.map((t, i) => celda(ancho, textoRec(t, i), borde + '<w:shd w:val="clear" w:color="auto" w:fill="' + (i === 0 ? '95949C' : 'BDBCC2') + '"/><w:tcMar><w:left w:w="80" w:type="dxa"/><w:right w:w="60" w:type="dxa"/></w:tcMar>')).join('') +
+    celda(espacio, wPar('', { despues: 0 })) +
+    celda(l200, wPar(wImg('rId200', l200, l200 * 133 / 272, 2, '200 anios'), { despues: 0, jc: 'right' })) + '</w:tr>';
+  // El membrete (17 cm) sobresale 1 cm a cada lado del texto, como en el modelo
+  const tabla = '<w:tbl><w:tblPr><w:tblW w:w="' + Math.round(anchoTexto * CM) + '" w:type="dxa"/><w:tblInd w:w="-' + CM + '" w:type="dxa"/><w:tblLayout w:type="fixed"/><w:tblBorders><w:top w:val="nil"/><w:left w:val="nil"/><w:bottom w:val="nil"/><w:right w:val="nil"/><w:insideH w:val="nil"/><w:insideV w:val="nil"/></w:tblBorders><w:tblCellMar><w:left w:w="0" w:type="dxa"/><w:right w:w="0" w:type="dxa"/></w:tblCellMar></w:tblPr><w:tblGrid>' +
+    [logo, ...recuadros.map(() => ancho), espacio, l200].map(w => '<w:gridCol w:w="' + Math.round(w * CM) + '"/>').join('') + '</w:tblGrid>' + fila + '</w:tbl>';
+  const frases = [cfg.fraseDecenio, cfg.fraseAnio].filter(Boolean).map((f, i) => wPar(wRun('“' + f + '”', { i: true, sz: 18 }), { jc: 'center', antes: i ? 0 : 120, despues: 0 })).join('');
+  return '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><w:hdr ' + NS_W + '>' + tabla + frases + '</w:hdr>';
+}
+// Pie: iniciales en cursiva y la dirección del Ministerio (sin "copia auténtica": eso lo pone el sistema de trámite al firmar)
+function pieCarta(iniciales, cfg){
+  return '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><w:ftr ' + NS_W + '>' +
+    (iniciales ? wPar(wRun(iniciales, { i: true, sz: 14 }), { jc: 'left', despues: 120 }) : '') +
+    cfg.pie.filter(Boolean).map(l => wPar(wRun(l, { sz: 16 }), { jc: 'left', despues: 0 })).join('') + '</w:ftr>';
+}
+// Como el modelo: Arial 10 e interlineado sencillo
+const ESTILOS_W = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><w:styles xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:docDefaults><w:rPrDefault><w:rPr><w:rFonts w:ascii="Arial" w:hAnsi="Arial" w:eastAsia="Arial" w:cs="Arial"/><w:sz w:val="20"/><w:szCs w:val="20"/><w:lang w:val="es-PE"/></w:rPr></w:rPrDefault><w:pPrDefault><w:pPr><w:spacing w:after="120" w:line="240" w:lineRule="auto"/></w:pPr></w:pPrDefault></w:docDefaults><w:style w:type="paragraph" w:default="1" w:styleId="Normal"><w:name w:val="Normal"/></w:style></w:styles>';
+async function armarCartaDocx(cuerpo, enlaces, cfg, iniciales, nombre){
+  const zip = new JSZip();
+  const imagenes = await Promise.all(['membrete/logo_ministerio.png', 'membrete/logo_200.png'].map(u => fetch(u).then(r => { if (!r.ok) throw new Error('No se pudo cargar ' + u); return r.arrayBuffer(); })));
+  zip.file('[Content_Types].xml', '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Default Extension="png" ContentType="image/png"/><Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/><Override PartName="/word/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.styles+xml"/><Override PartName="/word/header1.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.header+xml"/><Override PartName="/word/footer1.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.footer+xml"/></Types>');
+  zip.file('_rels/.rels', '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="word/document.xml"/></Relationships>');
+  zip.file('word/_rels/document.xml.rels', '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rIdEstilos" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/><Relationship Id="rIdEnc" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/header" Target="header1.xml"/><Relationship Id="rIdPie" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/footer" Target="footer1.xml"/>' +
+    enlaces.map(([id, url]) => '<Relationship Id="' + id + '" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/hyperlink" Target="' + xe(url) + '" TargetMode="External"/>').join('') + '</Relationships>');
+  zip.file('word/_rels/header1.xml.rels', '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rIdLogo" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/image" Target="media/logo_ministerio.png"/><Relationship Id="rId200" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/image" Target="media/logo_200.png"/></Relationships>');
+  zip.file('word/media/logo_ministerio.png', imagenes[0]); zip.file('word/media/logo_200.png', imagenes[1]);
+  zip.file('word/styles.xml', ESTILOS_W);
+  zip.file('word/header1.xml', encabezadoCarta(cfg.recuadros.filter(Boolean), cfg));
+  zip.file('word/footer1.xml', pieCarta(iniciales, cfg));
+  // A4, márgenes de 3 cm a los lados (como el modelo)
+  const sect = '<w:sectPr><w:headerReference w:type="default" r:id="rIdEnc"/><w:footerReference w:type="default" r:id="rIdPie"/><w:pgSz w:w="11906" w:h="16838"/><w:pgMar w:top="2381" w:right="' + 3 * CM + '" w:bottom="1701" w:left="' + 3 * CM + '" w:header="567" w:footer="454" w:gutter="0"/></w:sectPr>';
+  zip.file('word/document.xml', '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><w:document ' + NS_W + '><w:body>' + cuerpo + sect + '</w:body></w:document>');
+  const blob = await zip.generateAsync({ type: 'blob', mimeType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' });
+  await entregarArchivo(blob, nombre);
+}
+// N°: si ya trae el año ("442-2026") se respeta; si no, se le agrega el de la carta
+const numConAnio = (n, anio) => /-\s*\d{4}$/.test(n) ? n.replace(/\s+/g, '') : n + '-' + anio;
+function faltaEnCarta(cfg){
+  const f = [];
+  if (!cfg.firmanteNombre) f.push('quién firma');
+  if (!cfg.sufijoCarta) f.push('parte fija del N° de carta');
+  if (!cfg.sufijoInforme) f.push('parte fija del N° de informe');
+  if (!cfg.coordinadorNombre) f.push('nombre del Coordinador');
+  if (!cfg.enlaceMesaPartes) f.push('enlace de la Mesa de Partes Virtual');
+  return f;
+}
+// Por ahora solo hay carta modelo de Defensa de Víctimas (Asistencia Legal: cuando llegue su modelo)
+const AREA_CARTA = 'Defensa de Víctimas';
+// Fila del Drive 1 desde la que se abrió la carta (null = botón de arriba, sin fila)
+let cartaDescargada = false, cartaFila = null;
+// La fila ya tiene carta "No procede" si su casilla Oficio / Carta lo dice (así lo anotan también los asistentes, sin cambiar reglas)
+function cartaNoProcedeDe(r){ const m = String(r.oficioNum || '').match(/CARTA NO PROCEDE N° [^|]+/); return m ? m[0].trim() : ''; }
+// Referencia según el origen del documento recibido (dd.mm.aaaa como en el modelo)
+function textoReferencia(origen, codigo, iso){
+  if (!iso) return '';
+  const f = iso.slice(8, 10) + '.' + iso.slice(5, 7) + '.' + iso.slice(0, 4);
+  if (origen === 'Mesa de partes virtual') return 'Documento con registro N° ' + (codigo || '____') + ', ingresado por Mesa de Partes Virtual el ' + f;
+  if (origen === 'Presencial (formato)') return 'Solicitud presentada el ' + f;
+  return 'Correo electrónico remitido el ' + f;
+}
+// "EXP. 328-2025" / "CARPETA FISCAL N° 12-2026" → tipo y número
+function partirCarpeta(t){
+  const s = may(t);
+  const tipo = /CARPETA|FISCAL|\bCF\b/.test(s) ? 'Carpeta Fiscal N.°' : 'Expediente N.°';
+  return { tipo, num: s.replace(/^(EXPEDIENTE|EXP\.?|CARPETA\s+FISCAL|CARPETA|C\.?\s*F\.?)\s*(N\.?\s*°|NRO\.?|N\.?)?\s*/, '').trim() };
+}
+function limpiarCarta(){
+  ['ctNum', 'ctUsuario', 'ctDni', 'ctCelular', 'ctCorreo', 'ctFechaCorreo', 'ctReferencia', 'ctInforme', 'ctExp', 'ctDelito', 'ctAnte'].forEach(i => $(i).value = '');
+  $('ctTipoExp').selectedIndex = 0; $('ctNumeral').value = '1'; $('ctFecha').value = hoyIso(); $('ctIniciales').value = '';
+  $('ctArea').value = ''; $('ctArea').disabled = false;
+  cartaDescargada = false;
+}
+async function abrirCarta(idFila){
+  const r = idFila ? cache.get(idFila) : null;
+  if (idFila && !r){ avisar('No se encontró ese caso.'); return; }
+  // Desde una fila: siempre empieza con los datos de esa fila. Desde arriba: en blanco después de descargar o si venía de una fila.
+  if (r || cartaFila || cartaDescargada || !$('ctFecha').value) limpiarCarta();
+  cartaFila = r ? r.id : null;
+  $('ctDeFila').hidden = !r;
+  if (r){
+    $('ctDeFila').innerHTML = 'Carta para la fila de <b>' + esc(r.usuario || r.padreUsuario || '') + '</b> (' + esc(fechaCorta(r.fecha)) + ' · ' + esc(r.origen || '') + '). Al descargar, queda anotada en su casilla Oficio / Carta.' +
+      (cartaNoProcedeDe(r) ? '<br>⚠ Esta fila ya tiene ' + esc(cartaNoProcedeDe(r)) + '.' : '');
+    $('ctArea').value = AREA_CARTA; $('ctArea').disabled = true;
+    $('ctUsuario').value = may(r.usuario || r.padreUsuario);
+    $('ctFechaCorreo').value = r.fecha || '';
+    $('ctReferencia').value = textoReferencia(r.origen, r.codigo, r.fecha);
+    const c = partirCarpeta(r.carpeta || '');
+    $('ctTipoExp').value = c.tipo; $('ctExp').value = c.num;
+    const materia = String(r.materia || '').trim();
+    if (materia) $('ctDelito').value = /^(de|del|contra)\s/i.test(materia) ? materia.toLowerCase() : 'de ' + materia.toLowerCase();
+  }
+  $('ctError').hidden = true;
+  $('fondoCarta').hidden = false;
+  // Contacto: solo existe en el Drive 3 (casos de Fono Alegra) y solo lo lee quien tiene Ver o Editar en el Drive 3. No se guarda en el Drive 1.
+  if (r && r.origen === ORIGEN_FONO && puedeLeerFono()){
+    for (const id of [r.id, r.padreId].filter(Boolean)){
+      try {
+        const s = await getDoc(doc(db, COL_FONO, id));
+        if (s.exists()){ const f = s.data(); $('ctDni').value = f.dni || ''; $('ctCelular').value = f.telefono || ''; $('ctCorreo').value = f.correo || ''; break; }
+      } catch (e){ console.warn(e); break; }
+    }
+  }
+  const cfg = await leerConfigCarta();
+  if (!$('ctIniciales').value) $('ctIniciales').value = [cfg.inicialesFijas, inicialesDe(usuario.nombre || '')].filter(Boolean).join('/');
+  const falta = faltaEnCarta(cfg);
+  $('ctAvisoCfg').hidden = !falta.length;
+  $('ctAvisoCfg').innerHTML = falta.length ? '⚠ Falta en <b>Personal y permisos → Carta: No procede</b>: ' + falta.join(', ') + '. La carta sale con esos espacios marcados entre corchetes.' : '';
+  $('ctNum').focus();
+}
+async function descargarCarta(){
+  const faltas = [];
+  if ($('ctArea').value !== AREA_CARTA) faltas.push('el área (por ahora solo Defensa de Víctimas)');
+  if (!$('ctNum').value.trim()) faltas.push('el N° de carta');
+  if (!$('ctFecha').value) faltas.push('la fecha de la carta');
+  if (!$('ctUsuario').value.trim()) faltas.push('el nombre del usuario');
+  if (!$('ctReferencia').value.trim()) faltas.push('la referencia (fecha del documento recibido)');
+  if (!$('ctInforme').value.trim()) faltas.push('el N° del informe del Coordinador');
+  if (faltas.length){ $('ctError').textContent = 'Falta ' + faltas.join(', ') + '.'; $('ctError').hidden = false; return; }
+  $('ctError').hidden = true;
+  const cfg = await leerConfigCarta();
+  const fecha = $('ctFecha').value, anio = fecha.slice(0, 4);
+  const [fa, fm, fd] = fecha.split('-');
+  const numCarta = numConAnio($('ctNum').value.trim(), anio), numInforme = numConAnio($('ctInforme').value.trim(), anio);
+  const correo = $('ctCorreo').value.trim(), dni = $('ctDni').value.trim(), cel = $('ctCelular').value.trim();
+  const exp = may($('ctExp').value), delito = $('ctDelito').value.trim().replace(/[.\s]+$/, ''), ante = $('ctAnte').value.trim().replace(/[.\s]+$/, '');
+  const numeral = $('ctNumeral').value.trim() || '1';
+  const enlaces = [];
+  if (correo) enlaces.push(['rIdCorreo', 'mailto:' + correo]);
+  const url = String(cfg.enlaceMesaPartes || '').trim();
+  if (url) enlaces.push(['rIdMesa', /^https?:\/\//i.test(url) ? url : 'https://' + url]);
+  // "…para el patrocinio de su caso, correspondiente al Expediente N.° …, por el presunto delito …, tramitado ante …"
+  const detalle = (exp ? ', correspondiente al ' + $('ctTipoExp').value + ' ' + exp : '') + (delito ? ', por el presunto delito ' + delito : '') + (ante ? ', tramitado ante ' + ante : '');
+  const TABS = [1985];
+  const lineaRef = (rotulo, texto) => wPar(wRun(rotulo) + wTab + wRun(': ') + wRun(texto, { b: true }), { tabs: TABS, ind: { izq: TABS[0] + 113, colgante: TABS[0] + 113 }, despues: 0, jc: 'left' });
+  const cargo = String(cfg.firmanteCargo || '').split('\n').map(x => x.trim()).filter(Boolean);
+  const firma = { ind: { izq: 567 }, jc: 'center', despues: 0, juntos: true };
+  const c = [
+    wPar(wRun('Lima, ' + Number(fd) + ' de ' + MESES_CARTA[Number(fm) - 1] + ' de ' + fa), { jc: 'left', despues: 240 }),
+    wPar(wRun('CARTA N° ' + numCarta + '-' + (cfg.sufijoCarta || '[PARTE FIJA]'), { b: true, u: true }), { jc: 'left', despues: 240 }),
+    wPar(wRun(may($('ctUsuario').value), { b: true, sz: 24 }), { jc: 'left', despues: 0 }),
+    dni ? wPar(wRun('DNI N° ' + dni), { jc: 'left', despues: 0 }) : '',
+    cel ? wPar(wRun('Celular: ' + cel), { jc: 'left', despues: 0 }) : '',
+    correo ? wPar(wRun('Correo: ') + wEnlace('rIdCorreo', correo), { jc: 'left', despues: 0 }) : '',
+    wPar(wRun('Presente:', { b: true, u: true }), { jc: 'left', despues: 240 }),
+    lineaRef('Asunto', 'No procede la asignación de un Defensor Público'),
+    lineaRef('Referencia', $('ctReferencia').value.trim()),
+    wPar('', { despues: 0 }),
+    wPar(wRun('De mi consideración:'), { jc: 'left', despues: 240 }),
+    wPar(wRun('Me dirijo a usted en atención al documento de la referencia, mediante el cual solicita el cambio y/o asignación de un Defensor Público para el patrocinio de su caso' + detalle + '.'), { despues: 240 }),
+    wPar(wRun('Al respecto, mediante Informe N.° ' + numInforme + '-' + (cfg.sufijoInforme || '[PARTE FIJA]') + ', emitido por el Coordinador ' + (cfg.coordinadorNombre || '[COORDINADOR]') + ', ha señalado que el delito no se encuentra en las competencias del Servicio de Defensa Pública de Víctimas, conforme a lo establecido en el artículo 9-A, numeral ' + numeral + ', del Reglamento de la Ley del Servicio de Defensa Pública, aprobado por Decreto Supremo N.° 009-2019-JUS.'), { despues: 240 }),
+    wPar(wRun('En consecuencia, no procede la asignación de un Defensor Público, debido a que el caso no se encuentra dentro del ámbito de atención del Servicio de Defensa Pública de Víctimas.'), { despues: 240 }),
+    wPar(wRun('Sin perjuicio de ello, podrá comunicarse con la Línea de Orientación Legal Gratuita 1884 para orientación legal, o acercarse a las oficinas de Defensa Pública. Asimismo, cualquier solicitud relacionada con su caso deberá ser presentada a través de la Mesa de Partes Virtual del Ministerio ') +
+      wRun('de Justicia y Derechos Humanos', { b: true }) + wRun(', en el siguiente enlace: ') + (url ? wEnlace('rIdMesa', 'Mesa de Partes Virtual') : wRun('Mesa de Partes Virtual [ENLACE]')) + wRun('.'), { despues: 360 }),
+    // Firma: queda espacio para la firma digital; el bloque no se separa de "Atentamente,"
+    wPar(wRun('Atentamente,'), { jc: 'left', despues: 1400, juntos: true }),
+    wPar(wRun('_______________________________________'), firma),
+    wPar(wRun(cfg.firmanteNombre ? cfg.firmanteNombre.toLocaleUpperCase('es-PE') : '[FIRMANTE]', { b: true }), firma),
+    ...cargo.map((l, i) => wPar(wRun(l, { b: true }), { ...firma, juntos: i < cargo.length - 1 }))
+  ].join('');
+  await armarCartaDocx(c, enlaces, cfg, $('ctIniciales').value.trim(), 'CARTA N° ' + numCarta + ' - NO PROCEDE.docx');
+  cartaDescargada = true;
+  // La fila queda marcada en su casilla Oficio / Carta (si ya tenía un N° de oficio, se agrega al lado). Sigue contando en la Agenda.
+  const marca = 'CARTA NO PROCEDE N° ' + numCarta;
+  if (cartaFila){
+    const r = cache.get(cartaFila) || {};
+    const previo = String(r.oficioNum || '').trim();
+    if (!previo.includes(marca)){
+      try { await guardarNumDoc(cartaFila, 'oficioNum', previo ? previo + ' | ' + marca : marca); }
+      catch (e){ errorAlGuardar(e); avisar('El Word se descargó, pero no se pudo anotar la carta en la fila. Escríbela a mano en Oficio / Carta.', 8000); }
+    }
+  }
+  // En el Registro de cambios solo el N°, la fecha, el área y la fila (nunca el nombre ni el contacto del usuario)
+  registrarCambio('Generó la carta "No procede la asignación de un Defensor Público"', cartaFila ? COL : 'cartas', cartaFila || 'CARTA N° ' + numCarta, {}, { carta: 'N° ' + numCarta, fecha, area: AREA_CARTA });
+}
+$('btnCarta').onclick = () => abrirCarta().catch(e => { console.error(e); avisar('No se pudo abrir la carta.'); });
+// Al cambiar la fecha del documento recibido, la referencia se vuelve a armar (con el origen de la fila, si viene de una)
+$('ctFechaCorreo').addEventListener('change', () => {
+  const r = cartaFila ? cache.get(cartaFila) || {} : {};
+  $('ctReferencia').value = textoReferencia(r.origen, r.codigo, $('ctFechaCorreo').value);
+});
+$('ctDescargar').onclick = async () => {
+  $('ctDescargar').disabled = true;
+  try { await descargarCarta(); } catch (e){ console.error(e); avisar('No se pudo armar el Word (' + (e.message || e) + ').', 7000); }
+  finally { $('ctDescargar').disabled = false; }
+};
 
 // Cualquier ✕ cierra la ventana en la que está
 document.addEventListener('click', e => {

@@ -184,6 +184,27 @@
       <div class="fila-form"><button class="btn" id="btnGuardarDocs">Guardar</button></div>
     </div>
     <div class="caja solo-admin">
+      <h3>Carta: No procede (Word del Drive 1)</h3>
+      <p class="ayuda">Se usa en el Drive 1 › "✉ Carta: No procede". No queda en el código de la página. Las frases en cursiva son las mismas de "Documentos de Fono Alegra". El nombre de quien firma sale siempre en MAYÚSCULAS.</p>
+      <div class="fila-form docs-config">
+        <label>Quién firma · Nombre<input type="text" id="cfgCtFirmante" placeholder="Director/a Distrital"></label>
+        <label>Quién firma · Cargo y dependencia (una línea por renglón)<textarea id="cfgCtCargo" rows="3" placeholder="Director Distrital&#10;Defensa Pública y Acceso a la Justicia de Lima&#10;Ministerio de Justicia y Derechos Humanos"></textarea></label>
+        <label>Parte fija del N° de carta (después del año)<input type="text" id="cfgCtSufCarta" placeholder="JUS/DGDPAJ-DDPAJLIMA"></label>
+        <label>Parte fija del N° de informe del Coordinador<input type="text" id="cfgCtSufInf" placeholder="DDLC-COOR…"></label>
+        <label>Coordinador que emite el informe (como sale en el texto)<input type="text" id="cfgCtCoord" placeholder="Nombres y apellidos"></label>
+        <label>Iniciales fijas del pie (se les suman las de quien descarga)<input type="text" id="cfgCtIniciales" placeholder="ABCD/xyz"></label>
+        <label>Enlace de la Mesa de Partes Virtual<input type="text" id="cfgCtEnlace" placeholder="https://…"></label>
+        <label>Recuadros del membrete (uno por renglón)<textarea id="cfgCtRecuadros" rows="3"></textarea></label>
+        <label>Pie de página: dirección (una línea por renglón)<textarea id="cfgCtPie" rows="3"></textarea></label>
+      </div>
+      <div class="vista-numeros" aria-live="polite">
+        <div class="chico">Así quedarán los números (ejemplo con 123 y 45; el N° real se escribe en el Drive 1 al descargar):</div>
+        <div id="vistaNumCarta"></div>
+        <div id="vistaNumInfCarta"></div>
+      </div>
+      <div class="fila-form"><button class="btn" id="btnGuardarCarta">Guardar</button></div>
+    </div>
+    <div class="caja solo-admin">
       <h3>Revisar restos sin caso</h3>
       <div class="fila-form"><button class="btn sec" id="btnRevisarRestos">Revisar</button></div>
       <p class="ayuda">Busca datos que quedaron sueltos cuando se borró un caso: llamadas del Drive 3, asignaciones y reasignaciones de la Agenda, opiniones, antecedentes y registros públicos cuyo caso ya no está en el Drive 1. Solo muestra fecha y usuario (nunca DNI, teléfonos, direcciones ni correos). <b>No borra nada hasta que toques "Borrar" en cada grupo.</b></p>
@@ -568,6 +589,43 @@ $('btnGuardarDocs').onclick = async () => {
     await registrarCambio('Cambió los datos del memo e informe de Fono Alegra', 'configuracion', 'documentosFono', antes, nuevo);
     docsFono = nuevo;
     avisar('Guardado. El Drive 3 lo usa en la próxima descarga.');
+  } catch (e){ error(e); }
+};
+
+// ---------- Carta "No procede" del Drive 1 (solo el administrador) ----------
+// Quién firma, partes fijas de los N°, Coordinador, iniciales, enlace y membrete: en configuracion/cartaNoProcede (nunca en el código).
+const CARTA_CAMPOS = [['cfgCtFirmante', 'firmanteNombre'], ['cfgCtCargo', 'firmanteCargo'], ['cfgCtSufCarta', 'sufijoCarta'], ['cfgCtSufInf', 'sufijoInforme'], ['cfgCtCoord', 'coordinadorNombre'], ['cfgCtIniciales', 'inicialesFijas'], ['cfgCtEnlace', 'enlaceMesaPartes']];
+const CARTA_INICIAL = {
+  recuadros: DOCS_INICIALES.recuadrosMemo,
+  pie: ['Jr. Carabaya N° 831, Oficina N° 501 - Cercado de Lima', 'Teléfono: 428-5769', 'www.minjus.gob.pe']
+};
+let cartaCfg = {};
+async function cargarCarta(){
+  try { const s = await getDoc(doc(db, 'configuracion', 'cartaNoProcede')); cartaCfg = s.exists() ? s.data() : {}; }
+  catch (e){ console.error(e); cartaCfg = {}; }
+  const v = { ...CARTA_INICIAL, ...cartaCfg };
+  CARTA_CAMPOS.forEach(([id, k]) => $(id).value = v[k] || '');
+  $('cfgCtRecuadros').value = (v.recuadros || []).join('\n');
+  $('cfgCtPie').value = (v.pie || []).join('\n');
+  vistaNumCarta();
+}
+function vistaNumCarta(){
+  const anio = new Date().getFullYear(), suf = id => $(id).value.trim();
+  $('vistaNumCarta').textContent = 'CARTA N° 123-' + anio + '-' + (suf('cfgCtSufCarta') || '[PARTE FIJA]');
+  $('vistaNumInfCarta').textContent = 'Informe N.° 45-' + anio + '-' + (suf('cfgCtSufInf') || '[PARTE FIJA]') + ', emitido por el Coordinador ' + (suf('cfgCtCoord') || '[COORDINADOR]');
+}
+['cfgCtSufCarta', 'cfgCtSufInf', 'cfgCtCoord'].forEach(id => $(id).addEventListener('input', vistaNumCarta));
+$('btnGuardarCarta').onclick = async () => {
+  const nuevo = {};
+  CARTA_CAMPOS.forEach(([id, k]) => nuevo[k] = $(id).value.trim());
+  const lineas = t => t.split('\n').map(x => x.trim()).filter(Boolean);
+  nuevo.recuadros = lineas($('cfgCtRecuadros').value); nuevo.pie = lineas($('cfgCtPie').value);
+  const antes = {}; Object.keys(nuevo).forEach(k => antes[k] = cartaCfg[k] ?? '');
+  try {
+    await setDoc(doc(db, 'configuracion', 'cartaNoProcede'), { ...nuevo, actualizadoPor: yo.correo, actualizadoEn: new Date().toISOString() });
+    await registrarCambio('Cambió los datos de la carta "No procede"', 'configuracion', 'cartaNoProcede', antes, nuevo);
+    cartaCfg = nuevo;
+    avisar('Guardado. El Drive 1 lo usa en la próxima carta.');
   } catch (e){ error(e); }
 };
 
@@ -1111,7 +1169,7 @@ onAuthStateChanged(auth, async user => {
     if (!esAdmin()) document.querySelectorAll('.solo-admin').forEach(x => x.hidden = true);
     $('subtitulo').textContent = esAdmin() ? 'Quién puede registrar, editar y ver cada sección' : 'Permiso temporal para asistentes';
     await cargarStaff();
-    if (esAdmin()){ await cargarConteos(); await cargarDocsFono(); }
+    if (esAdmin()){ await cargarConteos(); await cargarDocsFono(); await cargarCarta(); }
   } catch (e){ console.error(e); $('msgLogin').textContent = 'No se pudo cargar tu acceso (' + (e.code || e.message) + ').'; $('cargandoSesion').hidden = true; $('cajaLogin').hidden = false; }
 });
 </script>
