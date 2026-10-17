@@ -66,6 +66,8 @@
   tr.inactivo td{background:#F1EEE8;color:var(--gris-claro)}
   td input[type=text], td input[type=date], td select{width:100%;min-width:110px;padding:5px 7px;border:1px solid var(--linea);border-radius:6px;background:#fff;font-size:12.5px}
   td input.cambiado{border-color:var(--dorado);background:#FFF8E8}
+  td select.falta-trato{background:#FFF3B0}
+  td select.cambiado{border-color:var(--dorado);background:#FFF8E8}
   .orden-def{display:flex;align-items:center;gap:3px}
   .orden-def input{width:48px;padding:4px 5px;border:1px solid var(--linea);border-radius:6px;background:#fff;font-size:12.5px;text-align:center}
   .orden-def button{width:26px;height:26px;padding:0;border:1px solid var(--linea);border-radius:6px;background:#fff;color:var(--tinta);font-size:11px;cursor:pointer}
@@ -205,6 +207,39 @@
       <div class="fila-form"><button class="btn" id="btnGuardarCarta">Guardar</button></div>
     </div>
     <div class="caja solo-admin">
+      <h3>Memo de asignación (Word del Drive 1)</h3>
+      <p class="ayuda">Se usa en el Drive 1 › casilla Memo de cada fila › "⬇ Memo (Word)". No queda en el código de la página. Las frases en cursiva son las mismas de "Documentos de Fono Alegra"; el membrete (recuadros) es el de "Carta: No procede". Si quién firma queda vacío, se usa el de la carta.</p>
+      <div class="fila-form docs-config">
+        <label>Parte fija del N° de memorándum (después del año)<input type="text" id="cfgMaSufijo" placeholder="JUS/DGDPAJ-DDPAJLIMA"></label>
+        <label>Cargo del destinatario: defensores (una línea por renglón)<textarea id="cfgMaCargoDef" rows="3"></textarea></label>
+        <label>Cargo del destinatario: Equipo multidisciplinario (una línea por renglón)<textarea id="cfgMaCargoEq" rows="3"></textarea></label>
+        <label>Quién firma · Nombre (como sale en el memo)<input type="text" id="cfgMaFirmante" placeholder="Nombres y apellidos"></label>
+        <label>Quién firma · Cargo y dependencia (una línea por renglón)<textarea id="cfgMaCargo" rows="3" placeholder="Director Distrital&#10;Defensa Pública y Acceso a la Justicia de Lima&#10;Ministerio de Justicia y Derechos Humanos"></textarea></label>
+        <label>Iniciales fijas del pie (se les suman las de quien descarga)<input type="text" id="cfgMaIniciales" placeholder="CMGP"></label>
+        <label>Pie de página: dirección (una línea por renglón)<textarea id="cfgMaPie" rows="3"></textarea></label>
+      </div>
+      <div class="vista-numeros" aria-live="polite">
+        <div class="chico">Así quedará el número (ejemplo con 123; el N° real se escribe en el Drive 1 al descargar):</div>
+        <div id="vistaNumMemoAsig"></div>
+      </div>
+      <div class="fila-form"><button class="btn" id="btnGuardarMemoAsig">Guardar</button></div>
+    </div>
+    <div class="caja solo-admin">
+      <h3>Documentos de asignación (oficio y cartas del Drive 1)</h3>
+      <p class="ayuda">Se usa en el Drive 1 › "📄 Documentos": oficio de asignación, carta de asignación y carta "no procede cambio". Quién firma, el membrete y las frases son los de "Carta: No procede" y "Documentos de Fono Alegra". Sedes: una por renglón, así: <b>Sede | Dirección | Horario</b>. La sede de cada defensor se toma de su casilla "Sede" en Defensores (basta que contenga el nombre de la sede).</p>
+      <div class="fila-form docs-config">
+        <label>Parte fija del N° de oficio (después del año)<input type="text" id="cfgDaSufOficio" placeholder="JUS/DGDPAJ-DDPAJLIMA"></label>
+        <label>Parte fija del N° de carta (después del año)<input type="text" id="cfgDaSufCarta" placeholder="JUS/DGDPAJ-DDPAJLIMA"></label>
+        <label>Iniciales fijas del pie (se les suman las de quien descarga)<input type="text" id="cfgDaIniciales" placeholder="CMGP/adm"></label>
+        <label>Sedes: Sede | Dirección | Horario (una por renglón)<textarea id="cfgDaSedes" rows="4"></textarea></label>
+      </div>
+      <div class="vista-numeros" aria-live="polite">
+        <div class="chico">Así quedarán los números (ejemplo con 123):</div>
+        <div id="vistaNumDocsAsig"></div>
+      </div>
+      <div class="fila-form"><button class="btn" id="btnGuardarDocsAsig">Guardar</button></div>
+    </div>
+    <div class="caja solo-admin">
       <h3>Revisar restos sin caso</h3>
       <div class="fila-form"><button class="btn sec" id="btnRevisarRestos">Revisar</button></div>
       <p class="ayuda">Busca datos que quedaron sueltos cuando se borró un caso: llamadas del Drive 3, asignaciones y reasignaciones de la Agenda, opiniones, antecedentes y registros públicos cuyo caso ya no está en el Drive 1. Solo muestra fecha y usuario (nunca DNI, teléfonos, direcciones ni correos). <b>No borra nada hasta que toques "Borrar" en cada grupo.</b></p>
@@ -257,7 +292,7 @@
     <p class="ayuda">El <b>N°</b> es el orden en que aparece cada defensor en la Agenda dentro de su área: muévelo con ▲ ▼ o escribe el número y presiona Enter (se guarda al instante). Al dar de baja, reactivar o agregar, los números se reacomodan solos sin huecos.</p>
     <p class="ayuda">Cambia lo que necesites en la fila y toca <b>Guardar</b>. Dar de baja no borra su historial: sus casos antiguos siguen mostrando su nombre, pero deja de aparecer en las listas para asignar.</p>
     <div class="tabla-wrap"><table>
-      <thead><tr><th>N°</th><th>Nombre</th><th>Área</th><th>Celular (se muestra)</th><th>Celular personal (privado, solo el administrador)</th><th>Correo</th><th>Sede</th><th>Notas</th><th>Activo</th><th></th></tr></thead>
+      <thead><tr><th>N°</th><th>Nombre</th><th>Área</th><th>Celular (se muestra)</th><th>Celular personal (privado, solo el administrador)</th><th>Correo</th><th>Sede</th><th title="Cómo se le nombra en oficios y cartas: Defensor o Defensora (Servidor/Servidora en el Equipo)">Trato</th><th>Notas</th><th>Activo</th><th></th></tr></thead>
       <tbody id="cuerpoDef"></tbody>
     </table></div>
   </section>
@@ -629,6 +664,80 @@ $('btnGuardarCarta').onclick = async () => {
   } catch (e){ error(e); }
 };
 
+// ---------- Memo de ASIGNACIÓN DE CASO del Drive 1 (solo el administrador) ----------
+// Parte fija del N°, cargo del destinatario, quién firma, iniciales y pie: en configuracion/memoAsignacion (nunca en el código).
+const MEMO_CAMPOS = [['cfgMaSufijo', 'sufijoMemo'], ['cfgMaFirmante', 'firmanteNombre'], ['cfgMaCargo', 'firmanteCargo'], ['cfgMaIniciales', 'inicialesFijas']];
+const MEMO_INICIAL = {
+  sufijoMemo: 'JUS/DGDPAJ-DDPAJLIMA',
+  cargoDefensor: ['Defensor(a) Público(a) del Mega Alegra', 'Dirección Distrital de Lima Centro', 'Defensa Pública y Acceso a la Justicia'],
+  cargoEquipo: ['Servidor(a) del Equipo Multidisciplinario del Mega Alegra', 'Dirección Distrital de Lima Centro', 'Defensa Pública y Acceso a la Justicia'],
+  pie: CARTA_INICIAL.pie
+};
+let memoCfg = {};
+async function cargarMemoAsig(){
+  try { const s = await getDoc(doc(db, 'configuracion', 'memoAsignacion')); memoCfg = s.exists() ? s.data() : {}; }
+  catch (e){ console.error(e); memoCfg = {}; }
+  // Si aún no se guardó, quién firma se copia de la carta "No procede"
+  const v = { ...MEMO_INICIAL, firmanteNombre: cartaCfg.firmanteNombre || '', firmanteCargo: cartaCfg.firmanteCargo || '', ...memoCfg };
+  MEMO_CAMPOS.forEach(([id, k]) => $(id).value = v[k] || '');
+  $('cfgMaCargoDef').value = (v.cargoDefensor || []).join('\n');
+  $('cfgMaCargoEq').value = (v.cargoEquipo || []).join('\n');
+  $('cfgMaPie').value = (v.pie || []).join('\n');
+  vistaNumMemoAsig();
+}
+function vistaNumMemoAsig(){
+  $('vistaNumMemoAsig').textContent = 'MEMORÁNDUM N° 123-' + new Date().getFullYear() + '-' + ($('cfgMaSufijo').value.trim() || '[PARTE FIJA]');
+}
+$('cfgMaSufijo').addEventListener('input', vistaNumMemoAsig);
+$('btnGuardarMemoAsig').onclick = async () => {
+  const nuevo = {};
+  MEMO_CAMPOS.forEach(([id, k]) => nuevo[k] = $(id).value.trim());
+  const lineas = t => t.split('\n').map(x => x.trim()).filter(Boolean);
+  nuevo.cargoDefensor = lineas($('cfgMaCargoDef').value); nuevo.cargoEquipo = lineas($('cfgMaCargoEq').value); nuevo.pie = lineas($('cfgMaPie').value);
+  const antes = {}; Object.keys(nuevo).forEach(k => antes[k] = memoCfg[k] ?? '');
+  try {
+    await setDoc(doc(db, 'configuracion', 'memoAsignacion'), { ...nuevo, actualizadoPor: yo.correo, actualizadoEn: new Date().toISOString() });
+    await registrarCambio('Cambió los datos del memo de asignación', 'configuracion', 'memoAsignacion', antes, nuevo);
+    memoCfg = nuevo;
+    avisar('Guardado. El Drive 1 lo usa en el próximo memo.');
+  } catch (e){ error(e); }
+};
+
+// ---------- Oficio y cartas de asignación del Drive 1 (solo el administrador) ----------
+// Partes fijas de los N°, iniciales y sedes (dirección y horario): en configuracion/documentosAsignacion (nunca en el código).
+const DA_CAMPOS = [['cfgDaSufOficio', 'sufijoOficio'], ['cfgDaSufCarta', 'sufijoCarta'], ['cfgDaIniciales', 'inicialesFijas']];
+const DA_INICIAL = {
+  sufijoOficio: 'JUS/DGDPAJ-DDPAJLIMA', sufijoCarta: 'JUS/DGDPAJ-DDPAJLIMA', inicialesFijas: '',
+  sedes: [{ nombre: 'Mega ALEGRA', direccion: 'Jr. Carabaya N.° 831, 4.° piso, Oficina N.° 401, Cercado de Lima', horario: 'lunes a viernes, de 8:00 a 13:00 horas y de 13:30 a 16:30 horas' }]
+};
+let daCfg = {};
+async function cargarDocsAsig(){
+  try { const s = await getDoc(doc(db, 'configuracion', 'documentosAsignacion')); daCfg = s.exists() ? s.data() : {}; }
+  catch (e){ console.error(e); daCfg = {}; }
+  const v = { ...DA_INICIAL, ...daCfg };
+  DA_CAMPOS.forEach(([id, k]) => $(id).value = v[k] || '');
+  $('cfgDaSedes').value = (v.sedes || []).map(s => [s.nombre, s.direccion, s.horario].join(' | ')).join('\n');
+  vistaNumDocsAsig();
+}
+function vistaNumDocsAsig(){
+  const anio = new Date().getFullYear(), suf = id => $(id).value.trim() || '[PARTE FIJA]';
+  $('vistaNumDocsAsig').textContent = 'OFICIO N° 123-' + anio + '-' + suf('cfgDaSufOficio') + '  ·  CARTA N° 123-' + anio + '-' + suf('cfgDaSufCarta');
+}
+['cfgDaSufOficio', 'cfgDaSufCarta'].forEach(id => $(id).addEventListener('input', vistaNumDocsAsig));
+$('btnGuardarDocsAsig').onclick = async () => {
+  const nuevo = {};
+  DA_CAMPOS.forEach(([id, k]) => nuevo[k] = $(id).value.trim());
+  nuevo.sedes = $('cfgDaSedes').value.split('\n').map(l => l.split('|').map(x => x.trim())).filter(p => p[0])
+    .map(([nombre, direccion = '', horario = '']) => ({ nombre, direccion, horario }));
+  const antes = {}; Object.keys(nuevo).forEach(k => antes[k] = daCfg[k] ?? '');
+  try {
+    await setDoc(doc(db, 'configuracion', 'documentosAsignacion'), { ...nuevo, actualizadoPor: yo.correo, actualizadoEn: new Date().toISOString() });
+    await registrarCambio('Cambió los datos de los documentos de asignación', 'configuracion', 'documentosAsignacion', antes, nuevo);
+    daCfg = nuevo;
+    avisar('Guardado. El Drive 1 lo usa en los próximos documentos.');
+  } catch (e){ error(e); }
+};
+
 // Vista previa del número completo (mismo armado que el Drive 3)
 function vistaNumeros(){
   const anio = new Date().getFullYear(), suf = id => $(id).value.trim();
@@ -981,10 +1090,12 @@ function pintarDefs(){
       ${celdaOrden(d)}
       ${['nombre'].map(c => `<td class="nombre"><input type="text" data-def="${c}" value="${esc(d[c] || '')}"></td>`).join('')}
       <td>${esc(d.area || '')}</td>
-      ${['celular', 'celularPersonal', 'correo', 'sede', 'notas'].map(c => `<td><input type="text" data-def="${c}" value="${esc(c === 'celularPersonal' ? celularPersonalDe(d) : d[c] || '')}" style="min-width:${c === 'sede' ? 260 : 140}px"></td>`).join('')}
+      ${['celular', 'celularPersonal', 'correo', 'sede'].map(c => `<td><input type="text" data-def="${c}" value="${esc(c === 'celularPersonal' ? celularPersonalDe(d) : d[c] || '')}" style="min-width:${c === 'sede' ? 260 : 140}px"></td>`).join('')}
+      <td><select data-def="trato" aria-label="Trato de ${esc(d.nombre || d.id)}" class="${d.trato ? '' : 'falta-trato'}">${['', 'M', 'F'].map(v => `<option value="${v}" ${(d.trato || '') === v ? 'selected' : ''}>${v === 'M' ? 'Defensor / Servidor' : v === 'F' ? 'Defensora / Servidora' : '— elegir —'}</option>`).join('')}</select></td>
+      <td><input type="text" data-def="notas" value="${esc(d.notas || '')}" style="min-width:140px"></td>
       <td><label class="interruptor"><input type="checkbox" data-activo ${d.activo !== false ? 'checked' : ''}> ${d.activo !== false ? 'Sí' : 'De baja'}</label></td>
       <td><button class="btn chico" data-guardar-def disabled>Guardar</button></td>
-    </tr>`).join('') || '<tr><td colspan="10" class="vacio">No hay defensores para mostrar.</td></tr>';
+    </tr>`).join('') || '<tr><td colspan="11" class="vacio">No hay defensores para mostrar.</td></tr>';
 }
 $('filtroAreaDef').onchange = pintarDefs;
 $('verBajas').onchange = pintarDefs;
@@ -1169,7 +1280,7 @@ onAuthStateChanged(auth, async user => {
     if (!esAdmin()) document.querySelectorAll('.solo-admin').forEach(x => x.hidden = true);
     $('subtitulo').textContent = esAdmin() ? 'Quién puede registrar, editar y ver cada sección' : 'Permiso temporal para asistentes';
     await cargarStaff();
-    if (esAdmin()){ await cargarConteos(); await cargarDocsFono(); await cargarCarta(); }
+    if (esAdmin()){ await cargarConteos(); await cargarDocsFono(); await cargarCarta(); await cargarMemoAsig(); await cargarDocsAsig(); }
   } catch (e){ console.error(e); $('msgLogin').textContent = 'No se pudo cargar tu acceso (' + (e.code || e.message) + ').'; $('cargandoSesion').hidden = true; $('cajaLogin').hidden = false; }
 });
 </script>

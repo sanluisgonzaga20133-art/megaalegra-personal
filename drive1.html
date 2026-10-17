@@ -110,6 +110,10 @@
   .ver-mas{display:block;margin:10px auto;padding:8px 16px;border-radius:8px;border:1px solid var(--linea);background:#fff;font-weight:600;cursor:pointer}
   .solo-lectura .solo-abogado{display:none !important}
   .bloqueado .solo-proyecta{display:none !important}
+  .corregido-docs{display:block;margin-top:4px;font-size:11.5px;line-height:1.3;color:#7A4B00;background:#FFF3B0;border:1px solid #C9A227;border-radius:5px;padding:3px 6px}
+  .corregido-docs button{margin-left:6px}
+  #fondoDocs .falta-doc{background:#FFF3B0 !important;border-color:#C9A227 !important}
+  #fondoDocs .doc-bloque h3{margin:0 0 8px;font-size:15px}
   .chip-no-procede{display:inline-block;margin-left:6px;font-size:11px;font-weight:800;color:#fff;background:#6B5E57;border-radius:5px;padding:1px 6px;vertical-align:middle;white-space:nowrap}
   .bloqueado .celda-num-doc input{pointer-events:none;background:#F1EEE8;border-color:#D9D2C5}
 
@@ -654,6 +658,14 @@
         <label><input type="checkbox" id="fHacerCarta"> Hacer carta</label>
         <label><input type="checkbox" id="fNoHacer"> No hacer memo</label>
       </div>
+      <div id="bloqueSentido">
+        <label class="campo" for="fSentido">Los documentos van</label>
+        <select id="fSentido">
+          <option value="otorgando">OTORGANDO (se asigna defensor)</option>
+          <option value="negando">NEGANDO (no procede la asignación)</option>
+        </select>
+        <div class="ayuda">El asistente arma los documentos con "📄 Documentos" en la fila; aquí no hace falta llenar nada más.</div>
+      </div>
       <div id="bloqueAsistente" hidden>
         <label class="campo" for="fAsistente">Asistente que lo proyecta <span class="obl">*</span></label>
         <select id="fAsistente"></select>
@@ -676,8 +688,13 @@
             <option value="24">24 horas</option>
             <option value="48">48 horas</option>
             <option value="72">72 horas</option>
+            <option value="dias">Días hábiles</option>
             <option value="otro">Otro (elegir fecha y hora)</option>
           </select>
+          <div id="bloquePlazoDias" style="margin-top:6px" hidden>
+            <div style="display:flex;gap:6px;align-items:center"><input type="number" id="fPlazoDias" min="1" max="60" value="5" style="width:80px" aria-label="Cantidad de días hábiles"> <span>días hábiles</span></div>
+            <div class="ayuda" id="fPlazoDiasVence"></div>
+          </div>
           <div id="bloquePlazoOtro" style="display:flex;gap:6px;margin-top:6px" hidden>
             <input type="date" id="fPlazoFecha"><input type="time" id="fPlazoHora">
           </div>
@@ -842,6 +859,80 @@
     <div class="acciones-modal">
       <button class="btn-cancelar" data-cerrar-modal>Cerrar</button>
       <button class="btn-principal" id="ctDescargar">⬇ Carta (Word)</button>
+    </div>
+  </div>
+</div>
+
+<!-- "📄 Documentos": una sola ventana para memo, oficio y cartas de la fila. Datos comunes arriba (una sola vez), lo propio de cada documento abajo.
+     Los datos personales del usuario (DNI, celular, correo, edad) solo se usan para el Word: no se guardan. -->
+<div class="fondo-modal" id="fondoDocs" hidden>
+  <div class="modal" role="dialog" aria-labelledby="tituloDocs">
+    <button type="button" class="btn-x" data-cerrar-modal aria-label="Cerrar">✕</button>
+    <h2 id="tituloDocs">Documentos</h2>
+    <div class="caja-confirmar" id="dcDeFila"></div>
+    <div class="bloque">
+      <label class="campo">Datos comunes (se escriben una sola vez)</label>
+      <div class="rejilla">
+        <div><label class="campo" for="dcFecha">Fecha de los documentos <span class="obl">*</span></label><input type="date" id="dcFecha"></div>
+        <div><label class="campo" for="dcIniciales">Tus iniciales (quien verifica) <span class="obl">*</span></label><input type="text" id="dcIniciales" autocomplete="off"><div class="ayuda">Van al pie, después de las iniciales fijas de cada documento.</div></div>
+        <div class="ancho"><label class="campo" for="dcUsuario">Usuario/a <span class="obl">*</span></label><input type="text" id="dcUsuario" class="may" autocomplete="off"><div class="ayuda" id="dcAyudaUsuario"></div></div>
+        <div class="ancho"><label class="campo" for="dcMateria">Materia / delito</label><select id="dcMateria"></select>
+          <input type="text" id="dcMateriaOtra" class="may" placeholder="¿Cuál?" style="margin-top:6px" autocomplete="off" hidden><div class="ayuda">Si corriges el nombre o la materia, vale solo para los documentos: la fila queda marcada para que el abogado corrija el caso con ✎ Editar.</div></div>
+        <div class="ancho"><label class="campo" for="dcAbogado" id="dcAbogadoEtiqueta">Abogado/a asignado/a <span class="obl">*</span></label><input type="text" id="dcAbogado" autocomplete="off"></div>
+        <div><label class="campo" for="dcTrato">Se le nombra como <span class="obl">*</span></label><select id="dcTrato"><option value="">— elegir —</option><option value="M">Defensor (Servidor)</option><option value="F">Defensora (Servidora)</option></select></div>
+        <div><label class="campo" for="dcCelular">Celular del abogado/a</label><input type="text" id="dcCelular" autocomplete="off"></div>
+        <div class="ancho"><label class="campo" for="dcCorreo">Correo del abogado/a</label><input type="text" id="dcCorreo" autocomplete="off"></div>
+        <div class="ancho" id="dcBloqueAnterior" hidden><label class="campo" for="dcAnterior">Abogado/a anterior (quien deja el caso) <span class="obl">*</span></label><input type="text" id="dcAnterior" autocomplete="off">
+          <select id="dcTratoAnterior" style="margin-top:6px" aria-label="Cómo se nombra al abogado/a anterior"><option value="">— Defensor o Defensora —</option><option value="M">Defensor</option><option value="F">Defensora</option></select></div>
+        <div class="ancho"><label class="campo" for="dcReferencia">Referencia (documento recibido)</label><input type="text" id="dcReferencia" class="may" autocomplete="off"></div>
+        <div><label class="campo" for="dcFechaSolicitud">Fecha de la solicitud o del documento recibido</label><input type="date" id="dcFechaSolicitud"></div>
+        <div><label class="campo" for="dcExp">Expediente / carpeta</label><input type="text" id="dcExp" class="may" autocomplete="off"></div>
+        <div class="ancho"><label class="campo" for="dcJuzgado">Juzgado o fiscalía</label><input type="text" id="dcJuzgado" autocomplete="off" placeholder="Ej. 16° Juzgado de Familia de la Corte Superior de Justicia de Lima"></div>
+        <div class="ancho"><label class="campo" for="dcJuez">Juez/a o fiscal a cargo</label><input type="text" id="dcJuez" autocomplete="off" placeholder="Ej. Clara Nathalie Peña Chauca">
+          <select id="dcJuezTrato" style="margin-top:6px" aria-label="Juez o Jueza"><option value="Jueza">Jueza</option><option value="Juez">Juez</option><option value="Fiscal">Fiscal</option></select></div>
+      </div>
+    </div>
+    <div id="dcDocs"></div>
+    <div class="caja-confirmar" id="dcAvisoCfg" hidden></div>
+    <div class="caja-confirmar" id="dcListos" hidden aria-live="polite"></div>
+    <div class="error-form" id="dcError" hidden></div>
+    <div class="acciones-modal">
+      <button class="btn-cancelar" data-cerrar-modal>Cerrar</button>
+      <button class="btn-blanco" id="dcGuardar" title="Guarda juzgado, juez, destinatario y demás datos no personales en la fila, sin descargar">Guardar datos</button>
+      <button class="btn-principal" id="dcDescargar">⬇ Descargar todo</button>
+    </div>
+  </div>
+</div>
+
+<!-- Memo de ASIGNACIÓN DE CASO (Word con el membrete), desde la casilla Memo de cada fila -->
+<div class="fondo-modal" id="fondoMemoAsig" hidden>
+  <div class="modal" role="dialog" aria-labelledby="tituloMemoAsig">
+    <button type="button" class="btn-x" data-cerrar-modal aria-label="Cerrar">✕</button>
+    <h2 id="tituloMemoAsig">Memo: Asignación de caso</h2>
+    <p class="sub">Sale en Word con la redacción del modelo (Memorándum N° 7860-2026). Viene llenado con los datos de la fila; todo se puede corregir.</p>
+    <div class="caja-confirmar" id="maDeFila"></div>
+    <div class="rejilla">
+      <div><label class="campo" for="maNum">N° de memorándum <span class="obl">*</span></label><input type="text" id="maNum" placeholder="Ej. 7860" autocomplete="off"></div>
+      <div><label class="campo" for="maFecha">Fecha del memo <span class="obl">*</span></label><input type="date" id="maFecha"></div>
+    </div>
+    <div class="bloque">
+      <div class="rejilla">
+        <div class="ancho"><label class="campo" for="maNombre">A (nombre) <span class="obl">*</span></label><input type="text" id="maNombre" class="may" autocomplete="off"></div>
+        <div class="ancho"><label class="campo" for="maCargo">Cargo y dependencia (una línea por renglón)</label><textarea id="maCargo" rows="3"></textarea></div>
+        <div class="ancho"><label class="campo" for="maReferencia">Referencia <span class="obl">*</span></label><input type="text" id="maReferencia" class="may" autocomplete="off"></div>
+        <div class="ancho"><label class="campo" for="maUsuario">Usuario/a <span class="obl">*</span></label><input type="text" id="maUsuario" class="may" autocomplete="off"></div>
+        <div class="ancho"><label class="campo" for="maMateria">Materia/Delito</label><input type="text" id="maMateria" class="may" autocomplete="off"></div>
+        <div class="ancho"><label class="campo" for="maCarpeta">N° de caso / carpeta</label><input type="text" id="maCarpeta" class="may" autocomplete="off"></div>
+        <div class="ancho"><label class="campo" for="maPlazo">Plazo de informe</label><input type="text" id="maPlazo" autocomplete="off" placeholder="Ej. 5 (días hábiles)"><div class="ayuda">Si escribes solo el número de días, se completa solo: "5 DÍAS HÁBILES (vence el …)".</div></div>
+        <div class="ancho"><label class="campo" for="maDiligencias">Diligencias (una por renglón)</label><textarea id="maDiligencias" rows="3"></textarea><div class="ayuda">Lo que se deje vacío no sale en el memo. Los enlaces (https://…) salen en azul y se pueden abrir.</div></div>
+        <div><label class="campo" for="maIniciales">Iniciales (pie de página)</label><input type="text" id="maIniciales" autocomplete="off"></div>
+      </div>
+    </div>
+    <div class="caja-confirmar" id="maAvisoCfg" hidden></div>
+    <div class="error-form" id="maError" hidden></div>
+    <div class="acciones-modal">
+      <button class="btn-cancelar" data-cerrar-modal>Cerrar</button>
+      <button class="btn-principal" id="maDescargar">⬇ Memo (Word)</button>
     </div>
   </div>
 </div>
@@ -1263,7 +1354,7 @@ function pintar(){
     const celdaOficio = h.noHacer ? ''
       : `<input data-campo="oficioNum" data-id="${r.id}" value="${esc(r.oficioNum || '')}" placeholder="${h.oficio || h.carta ? 'Pendiente' : ''}" class="${(h.oficio || h.carta) && !r.oficioNum ? 'pendiente' : ''}" aria-label="N° de oficio o carta">${h.oficio || h.carta ? `<span class="chico">${[h.oficio ? 'Oficio' : '', h.carta ? 'Carta' : ''].filter(Boolean).join(' y ')}</span>` : ''}`;
 
-    let plazo = r.plazoVence ? `${fechaCorta(r.plazoVence.slice(0, 10))} ${r.plazoVence.slice(11, 16)}<span class="chico">${r.plazoHoras ? r.plazoHoras + ' h' : 'fecha fija'}</span>` : '';
+    let plazo = r.plazoVence ? `${fechaCorta(r.plazoVence.slice(0, 10))} ${r.plazoVence.slice(11, 16)}<span class="chico">${r.plazoDias ? r.plazoDias + ' días háb.' : r.plazoHoras ? r.plazoHoras + ' h' : 'fecha fija'}</span>` : '';
     if (r.plazoVence){
       if (r.plazoCumplido) plazo += '<span class="insignia ok">✓ Cumplido</span>';
       else {
@@ -1303,7 +1394,7 @@ function pintar(){
       <td>${esc(r.origen) || (r.turno ? '<span class="falta">Falta el medio</span>' : '')}${r.turno ? `<span class="chico">${esc(r.turno)}</span>` : ''}</td>
       <td>${esc(r.codigo)}${tipo}</td>
       <td>${esc(r.numDoc)}</td>
-      <td>${esc(r.usuario) || (r.porCompletar ? '<span class="falta">Falta</span>' : '')}${cartaNoProcedeDe(r) ? `<span class="chip-no-procede" title="${esc(cartaNoProcedeDe(r))}">NO PROCEDE</span>` : ''}</td>
+      <td>${esc(r.usuario) || (r.porCompletar ? '<span class="falta">Falta</span>' : '')}${cartaNoProcedeDe(r) ? `<span class="chip-no-procede" title="${esc(cartaNoProcedeDe(r))}">NO PROCEDE</span>` : ''}${marcaDe(r, 'noCambio') ? `<span class="chip-no-procede" title="${esc(marcaDe(r, 'noCambio'))}">NO PROCEDE CAMBIO · continúa</span>` : ''}${marcaCorreccionDocs(r)}</td>
       <td>${r.abogadoActualNombre ? esc(r.abogadoActualNombre) + `<span class="chico">Antes: ${esc(r.abogadoNombre)}</span>` : esc(r.abogadoNombre)}${r.apoyoNombre ? ` <span class="apoya">(Le apoya: ${esc(r.apoyoNombre)})</span>` : ''}</td>
       <td>${esc(r.apoyoNombre ? r.apoyoCelular : r.abogadoActualNombre ? r.abogadoActualCelular : r.abogadoCelular)}</td>
       <td>${esc(r.apoyoNombre ? r.apoyoCorreo : r.abogadoActualNombre ? r.abogadoActualCorreo : r.abogadoCorreo)}</td>
@@ -1312,8 +1403,8 @@ function pintar(){
       <td>${dilig}</td>
       <td>${estado}</td>
       <td class="verde">${esc(r.proveido)}</td>
-      <td class="verde celda-num-doc">${celdaMemo}${proyecta}<button type="button" class="mini-accion" data-copiar-memo="${r.id}" title="Copia los datos ordenados como el memo de asignación de caso">📋 Copiar para memo</button></td>
-      <td class="verde celda-num-doc">${celdaOficio}${r.area === AREA_CARTA ? `<button type="button" class="mini-accion solo-proyecta" data-carta-fila="${r.id}" title="Carta al ciudadano: no procede la asignación de un Defensor Público (Word)">✉ Carta: No procede</button>` : ''}</td>
+      <td class="verde celda-num-doc">${celdaMemo}${proyecta}${botonDocumentos(r)}</td>
+      <td class="verde celda-num-doc">${celdaOficio}</td>
       <td>${esc(r.dirigidoA)}</td>
       <td>${plazo}</td>
       <td>${sup}</td>
@@ -1334,6 +1425,9 @@ $('cuerpo').addEventListener('click', e => {
   if (t.dataset.editar){ abrirForm({ editarId: t.dataset.editar }); return; }
   if (t.dataset.antecedente){ abrirForm({ padreId: t.dataset.antecedente }); return; }
   if (t.dataset.copiarMemo){ copiarParaMemo(t.dataset.copiarMemo); return; }
+  if (t.dataset.corrRevisada){ marcarCorreccionRevisada(t.dataset.corrRevisada).catch(errorAlGuardar); return; }
+  if (t.dataset.documentos){ abrirDocumentos(t.dataset.documentos).catch(e => { console.error(e); avisar('No se pudo abrir Documentos.'); }); return; }
+  if (t.dataset.memoWord){ abrirMemoAsig(t.dataset.memoWord).catch(e => { console.error(e); avisar('No se pudo abrir el memo.'); }); return; }
   if (t.dataset.cartaFila){ abrirCarta(t.dataset.cartaFila).catch(e => { console.error(e); avisar('No se pudo abrir la carta.'); }); return; }
   if (t.dataset.borrar){ idPorBorrar = t.dataset.borrar; pintar(); return; }
   if (t.dataset.borrarNo !== undefined){ idPorBorrar = null; pintar(); return; }
@@ -1375,13 +1469,29 @@ const CONECTORES = new Set(['de', 'del', 'la', 'las', 'los', 'y', 'da', 'van', '
 function inicialesDe(nombre){
   return norm(nombre).replace(/[^a-z\s]/g, ' ').split(/\s+/).filter(p => p && !CONECTORES.has(p)).map(p => p[0]).join('');
 }
+// Plazo de informe para el memo: "5 DÍAS HÁBILES (vence el 22/10/2026 a las 17:00)", "48 HORAS (vence el …)" o "HASTA EL … A LAS …"
+function textoPlazoMemo(r){
+  if (!r.plazoVence) return '';
+  const f = fechaCorta(r.plazoVence.slice(0, 10)), h = r.plazoVence.slice(11, 16);
+  if (r.plazoDias) return r.plazoDias + (r.plazoDias === 1 ? ' DÍA HÁBIL' : ' DÍAS HÁBILES') + ' (vence el ' + f + ' a las ' + h + ')';
+  if (r.plazoHoras) return r.plazoHoras + ' HORAS (vence el ' + f + ' a las ' + h + ')';
+  return 'HASTA EL ' + f + ' A LAS ' + h;
+}
+// Diligencias para el memo, una por línea: tipo – fecha, hora – 2ª fecha – enlace (el enlace sin mayúsculas)
+function lineasDiligenciasMemo(r){
+  return diligenciasDe(r).map(d => [
+    may(d.tipo) || 'DILIGENCIA',
+    [fechaCorta(d.fecha), d.hora ? d.hora + ' h' : ''].filter(Boolean).join(', '),
+    d.fecha2 ? '2ª fecha: ' + fechaCorta(d.fecha2) : '',
+    d.meet ? 'Enlace: ' + d.meet : ''
+  ].filter(Boolean).join(' – '));
+}
 function textoMemo(r){
   // A quien va: quien apoya (si tiene "Le apoya"); si no, el abogado que tiene el caso hoy
   const id = r.apoyoNombre ? r.apoyoId : r.abogadoActualNombre ? r.abogadoActualId : r.abogadoId;
   const nombre = r.apoyoNombre || r.abogadoActualNombre || r.abogadoNombre || '';
   const area = ((DEFENSORES.find(d => d.id === id) || {}).area) || r.area || '';
-  const plazo = !r.plazoVence ? ''
-    : (r.plazoHoras ? r.plazoHoras + ' HORAS (vence ' : 'HASTA EL ') + fechaCorta(r.plazoVence.slice(0, 10)) + ' ' + r.plazoVence.slice(11, 16) + (r.plazoHoras ? ')' : '');
+  const plazo = textoPlazoMemo(r);
   const dils = diligenciasDe(r).map((d, i) => ' ' + (i + 1) + '. ' + [
     may(d.tipo) || 'DILIGENCIA',
     [fechaCorta(d.fecha), d.hora].filter(Boolean).join(' '),
@@ -1686,7 +1796,31 @@ $('listaDiligencias').addEventListener('click', e => {
   const x = e.target.closest('.quitar-dil'); if (!x) return;
   x.closest('.caja-dil').remove(); numerarDiligencias();
 });
-$('fPlazo').onchange = () => $('bloquePlazoOtro').hidden = $('fPlazo').value !== 'otro';
+$('fPlazo').onchange = () => {
+  $('bloquePlazoOtro').hidden = $('fPlazo').value !== 'otro';
+  $('bloquePlazoDias').hidden = $('fPlazo').value !== 'dias';
+  mostrarVenceDias();
+};
+// Plazo en días hábiles: vence a las 17:00 del N-ésimo día hábil después de hoy (sin sábados, domingos ni feriados)
+const HORA_PLAZO_DIAS = '17:00';
+function venceEnDiasHabiles(n, desde = hoyIso()){
+  const d = new Date(desde + 'T00:00:00');
+  let cuenta = 0;
+  while (cuenta < n){ d.setDate(d.getDate() + 1); if (esHabil(isoDe(d))) cuenta++; }
+  return isoDe(d) + 'T' + HORA_PLAZO_DIAS;
+}
+const DIA_CORTO = ['dom', 'lun', 'mar', 'mié', 'jue', 'vie', 'sáb'];
+// Al editar sin cambiar los días, se conserva el vencimiento guardado (dataset.n / dataset.vence)
+function venceDiasDelForm(){
+  const el = $('fPlazoDias'), n = Math.round(Number(el.value));
+  if (!(n >= 1 && n <= 60)) return '';
+  return el.dataset.vence && Number(el.dataset.n) === n ? el.dataset.vence : venceEnDiasHabiles(n);
+}
+function mostrarVenceDias(){
+  const v = $('fPlazo').value === 'dias' ? venceDiasDelForm() : '';
+  $('fPlazoDiasVence').textContent = v ? 'Vence el ' + DIA_CORTO[new Date(v.slice(0, 10) + 'T00:00:00').getDay()] + ' ' + fechaCorta(v.slice(0, 10)) + ' a las ' + v.slice(11, 16) : 'Escribe de 1 a 60 días.';
+}
+$('fPlazoDias').addEventListener('input', mostrarVenceDias);
 $('fDirigido').onchange = () => $('fDirigidoOtro').hidden = !$('fDirigido').value.startsWith('OTRA');
 $('fMateria').onchange = () => $('fMateriaOtra').hidden = $('fMateria').value !== 'Otra';
 $('fArea').onchange = () => { llenarMaterias(); llenarAbogados(); };
@@ -1695,13 +1829,15 @@ $('fDerivaMotivo').onchange = () => { $('fDerivaMotivoOtro').hidden = $('fDeriva
 $('fNoHacer').onchange = () => { if ($('fNoHacer').checked) ['fHacerMemo', 'fHacerOficio', 'fHacerCarta'].forEach(i => $(i).checked = false); actualizarBloqueAsistente(); };
 ['fHacerMemo', 'fHacerOficio', 'fHacerCarta'].forEach(i => $(i).addEventListener('change', () => { if ($(i).checked) $('fNoHacer').checked = false; actualizarBloqueAsistente(); }));
 
-function llenarMaterias(valor){
-  const area = $('fArea').value;
+// Lista de materias según el área (la usan el registro y la ventana "📄 Documentos")
+function opcionesMaterias(area){
   let html = '<option value="">— Elegir —</option>';
   if (area !== 'Defensa de Víctimas') html += MATERIAS_AL.map(([g, items]) => `<optgroup label="${area === 'Asistencia Legal' ? g : 'Asistencia Legal · ' + g}">${items.map(m => `<option>${m}</option>`).join('')}</optgroup>`).join('');
   if (area !== 'Asistencia Legal') html += `<optgroup label="Víctimas">${DELITOS_V.map(m => `<option>${m}</option>`).join('')}</optgroup>`;
-  html += '<option value="Otra">Otra (escribir)</option>';
-  $('fMateria').innerHTML = html;
+  return html + '<option value="Otra">Otra (escribir)</option>';
+}
+function llenarMaterias(valor){
+  $('fMateria').innerHTML = opcionesMaterias($('fArea').value);
   const existe = valor && [...$('fMateria').options].some(o => o.value === valor);
   $('fMateria').value = !valor ? '' : existe ? valor : 'Otra';
   $('fMateriaOtra').value = valor && !existe ? valor : '';
@@ -1929,6 +2065,7 @@ function ponerModo(m){
   $('bloquePadre').hidden = m !== 'antecedente';
   $('bloqueDatosCaso').hidden = m === 'antecedente';
   $('bloqueUsuario').hidden = m === 'antecedente';
+  $('bloqueSentido').hidden = m === 'antecedente'; // en el cambio de abogado lo dice su "Resultado"
   $('bloqueResumen').hidden = m !== 'antecedente';
   if (m !== 'nuevo') ocultarCoincidencias();
   if (m === 'antecedente' && !padre) mostrarBuscadorPadre();
@@ -2454,6 +2591,7 @@ function limpiarForm(){
   ['fNumDoc', 'fCodigo', 'fUsuario', 'fCarpeta', 'fResumen', 'fDistrital', 'fProveido', 'fSupNota', 'fPlazoFecha', 'fPlazoHora', 'fSupFecha']
     .forEach(i => $(i).value = '');
   ['fHacerMemo', 'fHacerOficio', 'fHacerCarta', 'fNoHacer', 'fOcultar'].forEach(i => $(i).checked = false);
+  $('fSentido').value = 'otorgando';
   $('fFecha').value = hoyIso();
   $('fArea').value = 'Asistencia Legal';
   $('fTipoDoc').value = TIPOS_DOC[0];
@@ -2461,6 +2599,7 @@ function limpiarForm(){
   $('fRespuesta').value = ''; ponerDiligencias([]); $('fPlazo').value = '';
   $('fDerivaTipo').value = ''; $('fDerivaMotivo').value = ''; $('fDerivaMotivoOtro').value = ''; $('fDerivaMotivoOtro').hidden = true;
   $('bloquePlazoOtro').hidden = true;
+  $('bloquePlazoDias').hidden = true; $('fPlazoDias').value = '5'; delete $('fPlazoDias').dataset.n; delete $('fPlazoDias').dataset.vence;
   marcar($('optOrigen'), ''); marcar($('optResultado'), ''); marcar($('optPrioridad'), 'normal');
   llenarMaterias(); llenarAbogados(); llenarDirigido();
   limpiarAgendaForm();
@@ -2513,6 +2652,7 @@ function abrirForm({ editarId = null, padreId = null } = {}){
     prioridad = r.prioridad || 'normal'; marcar($('optPrioridad'), prioridad);
     const h = r.hacer || {};
     $('fHacerMemo').checked = !!h.memo; $('fHacerOficio').checked = !!h.oficio; $('fHacerCarta').checked = !!h.carta; $('fNoHacer').checked = !!h.noHacer;
+    $('fSentido').value = r.sentido === 'negando' ? 'negando' : 'otorgando';
     $('fProveido').value = r.proveido || ''; llenarDirigido(r.dirigidoA);
     // Casos anteriores: si en "Dirigido a" quedó el nombre de un asistente, pasa a "Asistente que lo proyecta"
     let asisCorreo = r.asistenteCorreo || '', asisNombre = r.asistenteNombre || '';
@@ -2522,7 +2662,12 @@ function abrirForm({ editarId = null, padreId = null } = {}){
     asistenteManual = !!asisCorreo;
     $('bloqueAsistente').hidden = !(h.memo || h.oficio || h.carta);
     if (!$('bloqueAsistente').hidden && !asisCorreo) sugerirAsistente();
-    if (r.plazoHoras){ $('fPlazo').value = String(r.plazoHoras); }
+    if (r.plazoDias && r.plazoVence){
+      $('fPlazo').value = 'dias'; $('bloquePlazoDias').hidden = false;
+      $('fPlazoDias').value = String(r.plazoDias); $('fPlazoDias').dataset.n = String(r.plazoDias); $('fPlazoDias').dataset.vence = r.plazoVence;
+      mostrarVenceDias();
+    }
+    else if (r.plazoHoras){ $('fPlazo').value = String(r.plazoHoras); }
     else if (r.plazoVence){ $('fPlazo').value = 'otro'; $('bloquePlazoOtro').hidden = false; $('fPlazoFecha').value = r.plazoVence.slice(0, 10); $('fPlazoHora').value = r.plazoVence.slice(11, 16); }
     $('fSupFecha').value = r.supFecha || ''; $('fSupNota').value = r.supNota || '';
     $('fOcultar').checked = !!r.ocultarPublico;
@@ -3292,16 +3437,21 @@ $('btnCancelarForm').onclick = () => cerrarForm();
 
 function vencimientoPlazo(previo){
   const p = $('fPlazo').value;
-  if (!p) return { plazoHoras: null, plazoVence: '' };
+  if (!p) return { plazoHoras: null, plazoDias: null, plazoVence: '' };
   if (p === 'otro'){
-    if (!$('fPlazoFecha').value) return { plazoHoras: null, plazoVence: '' };
-    return { plazoHoras: null, plazoVence: $('fPlazoFecha').value + 'T' + ($('fPlazoHora').value || '17:00') };
+    if (!$('fPlazoFecha').value) return { plazoHoras: null, plazoDias: null, plazoVence: '' };
+    return { plazoHoras: null, plazoDias: null, plazoVence: $('fPlazoFecha').value + 'T' + ($('fPlazoHora').value || '17:00') };
+  }
+  // N días hábiles: la fecha se calcula sola (sin sábados, domingos ni feriados); al editar sin cambiar los días, se conserva
+  if (p === 'dias'){
+    const v = venceDiasDelForm();
+    return v ? { plazoHoras: null, plazoDias: Math.round(Number($('fPlazoDias').value)), plazoVence: v } : { plazoHoras: null, plazoDias: null, plazoVence: '' };
   }
   // Al editar sin cambiar el plazo, se conserva el vencimiento original (no vuelve a contar desde ahora)
-  if (previo && previo.plazoVence && String(previo.plazoHoras) === p) return { plazoHoras: previo.plazoHoras, plazoVence: previo.plazoVence };
+  if (previo && previo.plazoVence && String(previo.plazoHoras) === p) return { plazoHoras: previo.plazoHoras, plazoDias: null, plazoVence: previo.plazoVence };
   const d = new Date(Date.now() + Number(p) * 3600 * 1000);
   const iso = d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0') + 'T' + String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0');
-  return { plazoHoras: Number(p), plazoVence: iso };
+  return { plazoHoras: Number(p), plazoDias: null, plazoVence: iso };
 }
 
 let editandoIdNuevo = null;
@@ -3447,6 +3597,7 @@ $('btnGuardarForm').onclick = async () => {
   }
   falta(tipoDoc === 'Solicitud de cambio de abogado' && !resultadoCambio, $('optResultado'), 'Falta el resultado de la solicitud de cambio.');
   falta($('fPlazo').value === 'otro' && !$('fPlazoFecha').value, $('fPlazoFecha'), 'Falta la fecha del plazo.');
+  falta($('fPlazo').value === 'dias' && !venceDiasDelForm(), $('fPlazoDias'), 'Escribe de 1 a 60 días hábiles.');
   const conFono = fonoAplica() && puedeEscribirFono();
   falta(!$('bloqueApoyo').hidden && !$('fApoyo').value, $('fApoyo'), 'Falta elegir quién le apoya.');
   // Al editar sin acceso al Drive 3 no se ve lo guardado: lo vacío no cambia, así que no se exige
@@ -3507,7 +3658,8 @@ $('btnGuardarForm').onclick = async () => {
     });
     datos.estadoTexto = textoEstado(datos);
   } else {
-    Object.assign(datos, { padreId: null, usuario: may($('fUsuario').value), area: $('fArea').value, carpeta: may($('fCarpeta').value), materia, ...leerAgendaForm($('fArea').value) });
+    Object.assign(datos, { padreId: null, usuario: may($('fUsuario').value), area: $('fArea').value, carpeta: may($('fCarpeta').value), materia, ...leerAgendaForm($('fArea').value),
+      sentido: $('fSentido').value });
   }
 
   if (esAnt && !editandoId) datos.abogadoAnteriorId = padre.abogadoActualId || padre.abogadoId || '';
@@ -3649,7 +3801,7 @@ function itemsAvisos(){
     const e = estadoPlazo(r);
     items.push({ tipo: 'plazo', r, grave: e.vencido, demora: -(new Date(r.plazoVence) - Date.now()),
       caso: identificarCaso(r, num), abogado: abogadoDe(r),
-      detalle: `Informe (plazo ${r.plazoHoras ? r.plazoHoras + ' h' : 'al ' + fechaCorta(r.plazoVence.slice(0, 10))})`, tiempo: e.texto });
+      detalle: `Informe (plazo ${r.plazoDias ? r.plazoDias + ' días hábiles' : r.plazoHoras ? r.plazoHoras + ' h' : 'al ' + fechaCorta(r.plazoVence.slice(0, 10))})`, tiempo: e.texto });
   });
   pendSup.forEach(r => {
     if (!esMioSeguimiento(r) || !r.supFecha || r.supHecha) return;
@@ -4008,6 +4160,7 @@ function wRun(t, o = {}){
 const wTab = '<w:r><w:tab/></w:r>';
 function wPar(contenido, o = {}){
   return '<w:p><w:pPr>' + (o.juntos ? '<w:keepNext/><w:keepLines/>' : '') +
+    (o.rayaAbajo ? '<w:pBdr><w:bottom w:val="single" w:sz="12" w:space="4" w:color="000000"/></w:pBdr>' : '') +
     (o.tabs ? '<w:tabs>' + o.tabs.map(t => '<w:tab w:val="left" w:pos="' + t + '"/>').join('') + '</w:tabs>' : '') +
     '<w:spacing w:before="' + (o.antes || 0) + '" w:after="' + (o.despues ?? 120) + '"/>' +
     (o.ind ? '<w:ind w:left="' + (o.ind.izq || 0) + '"' + (o.ind.der ? ' w:right="' + o.ind.der + '"' : '') + (o.ind.colgante ? ' w:hanging="' + o.ind.colgante + '"' : '') + '/>' : '') +
@@ -4025,9 +4178,10 @@ function wImg(rid, ancho, alto, id, nombre){
 const wEnlace = (rid, t) => '<w:hyperlink r:id="' + rid + '"><w:r><w:rPr><w:color w:val="0563C1"/><w:u w:val="single"/></w:rPr><w:t xml:space="preserve">' + xe(t) + '</w:t></w:r></w:hyperlink>';
 const NS_W = 'xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" xmlns:wp="http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing"';
 // Encabezado de la carta: logo del Ministerio + recuadros grises + logo de los 200 años a la derecha; debajo, las dos frases en cursiva (primero el decenio)
-function encabezadoCarta(recuadros, cfg){
-  const anchoTexto = 17, logo = 4.2, l200 = 3.4;
-  const ancho = Math.min(2.9, (anchoTexto - logo - l200 - 0.3) / recuadros.length);
+// (o.ancho y o.sobresale: el memo es más ancho que la carta)
+function encabezadoCarta(recuadros, cfg, o = {}){
+  const anchoTexto = o.ancho || 17, sobresale = o.sobresale ?? 1, logo = 4.2, l200 = 3.4;
+  const ancho = Math.min(o.maxRecuadro || 2.9, (anchoTexto - logo - l200 - 0.3) / recuadros.length);
   const espacio = Math.max(0.2, anchoTexto - logo - l200 - ancho * recuadros.length);
   const borde = '<w:tcBorders><w:top w:val="nil"/><w:bottom w:val="nil"/><w:left w:val="single" w:sz="18" w:color="FFFFFF"/><w:right w:val="nil"/></w:tcBorders>';
   const celda = (w, contenido, extra = '') => '<w:tc><w:tcPr><w:tcW w:w="' + Math.round(w * CM) + '" w:type="dxa"/>' + extra + '<w:vAlign w:val="center"/></w:tcPr>' + contenido + '</w:tc>';
@@ -4036,39 +4190,49 @@ function encabezadoCarta(recuadros, cfg){
     celda(logo, wPar(wImg('rIdLogo', logo, logo * 83 / 385, 1, 'Ministerio'), { despues: 0, jc: 'left' })) +
     recuadros.map((t, i) => celda(ancho, textoRec(t, i), borde + '<w:shd w:val="clear" w:color="auto" w:fill="' + (i === 0 ? '95949C' : 'BDBCC2') + '"/><w:tcMar><w:left w:w="80" w:type="dxa"/><w:right w:w="60" w:type="dxa"/></w:tcMar>')).join('') +
     celda(espacio, wPar('', { despues: 0 })) +
-    celda(l200, wPar(wImg('rId200', l200, l200 * 133 / 272, 2, '200 anios'), { despues: 0, jc: 'right' })) + '</w:tr>';
+    // A la derecha: el logo de los 200 años, o "Perú Responde" (carta de asignación; el de 200 años va abajo)
+    celda(l200, o.peruResponde ? wPar(wImg('rIdPeru', l200, l200 * 153 / 372, 2, 'Peru Responde'), { despues: 0, jc: 'right' })
+      : wPar(wImg('rId200', l200, l200 * 133 / 272, 2, '200 anios'), { despues: 0, jc: 'right' })) + '</w:tr>';
   // El membrete (17 cm) sobresale 1 cm a cada lado del texto, como en el modelo
-  const tabla = '<w:tbl><w:tblPr><w:tblW w:w="' + Math.round(anchoTexto * CM) + '" w:type="dxa"/><w:tblInd w:w="-' + CM + '" w:type="dxa"/><w:tblLayout w:type="fixed"/><w:tblBorders><w:top w:val="nil"/><w:left w:val="nil"/><w:bottom w:val="nil"/><w:right w:val="nil"/><w:insideH w:val="nil"/><w:insideV w:val="nil"/></w:tblBorders><w:tblCellMar><w:left w:w="0" w:type="dxa"/><w:right w:w="0" w:type="dxa"/></w:tblCellMar></w:tblPr><w:tblGrid>' +
+  const tabla = '<w:tbl><w:tblPr><w:tblW w:w="' + Math.round(anchoTexto * CM) + '" w:type="dxa"/><w:tblInd w:w="-' + Math.round(sobresale * CM) + '" w:type="dxa"/><w:tblLayout w:type="fixed"/><w:tblBorders><w:top w:val="nil"/><w:left w:val="nil"/><w:bottom w:val="nil"/><w:right w:val="nil"/><w:insideH w:val="nil"/><w:insideV w:val="nil"/></w:tblBorders><w:tblCellMar><w:left w:w="0" w:type="dxa"/><w:right w:w="0" w:type="dxa"/></w:tblCellMar></w:tblPr><w:tblGrid>' +
     [logo, ...recuadros.map(() => ancho), espacio, l200].map(w => '<w:gridCol w:w="' + Math.round(w * CM) + '"/>').join('') + '</w:tblGrid>' + fila + '</w:tbl>';
-  const frases = [cfg.fraseDecenio, cfg.fraseAnio].filter(Boolean).map((f, i) => wPar(wRun('“' + f + '”', { i: true, sz: 18 }), { jc: 'center', antes: i ? 0 : 120, despues: 0 })).join('');
+  // En el memo modelo la frase del año va entre « » (o.comillasAnio)
+  const frases = [[cfg.fraseDecenio, '“', '”'], [cfg.fraseAnio, ...(o.comillasAnio ? ['«', '»'] : ['“', '”'])]].filter(f => f[0])
+    .map(([f, a, c], i) => wPar(wRun(a + f + c, { i: true, sz: 18 }), { jc: 'center', antes: i ? 0 : 120, despues: 0 })).join('');
   return '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><w:hdr ' + NS_W + '>' + tabla + frases + '</w:hdr>';
 }
 // Pie: iniciales en cursiva y la dirección del Ministerio (sin "copia auténtica": eso lo pone el sistema de trámite al firmar)
-function pieCarta(iniciales, cfg){
+function pieCarta(iniciales, cfg, o = {}){
   return '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><w:ftr ' + NS_W + '>' +
     (iniciales ? wPar(wRun(iniciales, { i: true, sz: 14 }), { jc: 'left', despues: 120 }) : '') +
-    cfg.pie.filter(Boolean).map(l => wPar(wRun(l, { sz: 16 }), { jc: 'left', despues: 0 })).join('') + '</w:ftr>';
+    cfg.pie.filter(Boolean).map(l => wPar(wRun(l, { sz: 16 }), { jc: 'left', despues: 0 })).join('') +
+    (o.logo200 ? wPar(wImg('rId200', 3, 3 * 133 / 272, 3, '200 anios'), { jc: 'right', despues: 0 }) : '') + '</w:ftr>';
 }
 // Como el modelo: Arial 10 e interlineado sencillo
 const ESTILOS_W = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><w:styles xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:docDefaults><w:rPrDefault><w:rPr><w:rFonts w:ascii="Arial" w:hAnsi="Arial" w:eastAsia="Arial" w:cs="Arial"/><w:sz w:val="20"/><w:szCs w:val="20"/><w:lang w:val="es-PE"/></w:rPr></w:rPrDefault><w:pPrDefault><w:pPr><w:spacing w:after="120" w:line="240" w:lineRule="auto"/></w:pPr></w:pPrDefault></w:docDefaults><w:style w:type="paragraph" w:default="1" w:styleId="Normal"><w:name w:val="Normal"/></w:style></w:styles>';
-async function armarCartaDocx(cuerpo, enlaces, cfg, iniciales, nombre){
+async function armarCartaDocx(cuerpo, enlaces, cfg, iniciales, nombre, o = {}){
   const zip = new JSZip();
-  const imagenes = await Promise.all(['membrete/logo_ministerio.png', 'membrete/logo_200.png'].map(u => fetch(u).then(r => { if (!r.ok) throw new Error('No se pudo cargar ' + u); return r.arrayBuffer(); })));
+  const imagenes = await Promise.all(['membrete/logo_ministerio.png', 'membrete/logo_200.png', 'membrete/peru_responde.png'].map(u => fetch(u).then(r => { if (!r.ok) throw new Error('No se pudo cargar ' + u); return r.arrayBuffer(); })));
   zip.file('[Content_Types].xml', '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Default Extension="png" ContentType="image/png"/><Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/><Override PartName="/word/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.styles+xml"/><Override PartName="/word/header1.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.header+xml"/><Override PartName="/word/footer1.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.footer+xml"/></Types>');
   zip.file('_rels/.rels', '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="word/document.xml"/></Relationships>');
   zip.file('word/_rels/document.xml.rels', '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rIdEstilos" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/><Relationship Id="rIdEnc" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/header" Target="header1.xml"/><Relationship Id="rIdPie" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/footer" Target="footer1.xml"/>' +
     enlaces.map(([id, url]) => '<Relationship Id="' + id + '" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/hyperlink" Target="' + xe(url) + '" TargetMode="External"/>').join('') + '</Relationships>');
-  zip.file('word/_rels/header1.xml.rels', '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rIdLogo" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/image" Target="media/logo_ministerio.png"/><Relationship Id="rId200" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/image" Target="media/logo_200.png"/></Relationships>');
-  zip.file('word/media/logo_ministerio.png', imagenes[0]); zip.file('word/media/logo_200.png', imagenes[1]);
-  zip.file('word/styles.xml', ESTILOS_W);
-  zip.file('word/header1.xml', encabezadoCarta(cfg.recuadros.filter(Boolean), cfg));
-  zip.file('word/footer1.xml', pieCarta(iniciales, cfg));
-  // A4, márgenes de 3 cm a los lados (como el modelo)
-  const sect = '<w:sectPr><w:headerReference w:type="default" r:id="rIdEnc"/><w:footerReference w:type="default" r:id="rIdPie"/><w:pgSz w:w="11906" w:h="16838"/><w:pgMar w:top="2381" w:right="' + 3 * CM + '" w:bottom="1701" w:left="' + 3 * CM + '" w:header="567" w:footer="454" w:gutter="0"/></w:sectPr>';
+  zip.file('word/_rels/header1.xml.rels', '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rIdLogo" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/image" Target="media/logo_ministerio.png"/><Relationship Id="rId200" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/image" Target="media/logo_200.png"/><Relationship Id="rIdPeru" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/image" Target="media/peru_responde.png"/></Relationships>');
+  zip.file('word/_rels/footer1.xml.rels', '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId200" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/image" Target="media/logo_200.png"/></Relationships>');
+  zip.file('word/media/logo_ministerio.png', imagenes[0]); zip.file('word/media/logo_200.png', imagenes[1]); zip.file('word/media/peru_responde.png', imagenes[2]);
+  zip.file('word/styles.xml', o.estilos || ESTILOS_W);
+  zip.file('word/header1.xml', encabezadoCarta(cfg.recuadros.filter(Boolean), cfg, o.encabezado));
+  zip.file('word/footer1.xml', pieCarta(iniciales, cfg, { logo200: !!(o.encabezado && o.encabezado.peruResponde) }));
+  // A4, márgenes de 3 cm a los lados (como el modelo de la carta; el memo trae los suyos)
+  const m = o.margenes || { izq: 3, der: 3 };
+  const sect = '<w:sectPr><w:headerReference w:type="default" r:id="rIdEnc"/><w:footerReference w:type="default" r:id="rIdPie"/><w:pgSz w:w="11906" w:h="16838"/><w:pgMar w:top="2381" w:right="' + Math.round(m.der * CM) + '" w:bottom="1701" w:left="' + Math.round(m.izq * CM) + '" w:header="567" w:footer="454" w:gutter="0"/></w:sectPr>';
   zip.file('word/document.xml', '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><w:document ' + NS_W + '><w:body>' + cuerpo + sect + '</w:body></w:document>');
   const blob = await zip.generateAsync({ type: 'blob', mimeType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' });
+  // "📄 Documentos" arma todos primero y los entrega juntos (si se entregan uno por uno, el navegador los bloquea)
+  if (docsArmados){ docsArmados.push({ blob, nombre }); return; }
   await entregarArchivo(blob, nombre);
 }
+let docsArmados = null;
 // N°: si ya trae el año ("442-2026") se respeta; si no, se le agrega el de la carta
 const numConAnio = (n, anio) => /-\s*\d{4}$/.test(n) ? n.replace(/\s+/g, '') : n + '-' + anio;
 function faltaEnCarta(cfg){
@@ -4153,19 +4317,28 @@ async function descargarCarta(){
   if (!$('ctInforme').value.trim()) faltas.push('el N° del informe del Coordinador');
   if (faltas.length){ $('ctError').textContent = 'Falta ' + faltas.join(', ') + '.'; $('ctError').hidden = false; return; }
   $('ctError').hidden = true;
+  const fecha = $('ctFecha').value;
+  const numCarta = await wordNoAsig({ num: $('ctNum').value.trim(), fecha, usuario: $('ctUsuario').value, dni: $('ctDni').value, cel: $('ctCelular').value, correo: $('ctCorreo').value,
+    referencia: $('ctReferencia').value, informe: $('ctInforme').value.trim(), tipoExp: $('ctTipoExp').value, exp: $('ctExp').value, delito: $('ctDelito').value, ante: $('ctAnte').value,
+    numeral: $('ctNumeral').value, iniciales: $('ctIniciales').value });
+  cartaDescargada = true;
+  await anotarCartaNoProcede(cartaFila, numCarta, fecha);
+}
+// Arma y baja el Word de la carta "No procede" (lo usan su ventana y "📄 Documentos"). Devuelve el N° completo. No guarda nada.
+async function wordNoAsig(d){
   const cfg = await leerConfigCarta();
-  const fecha = $('ctFecha').value, anio = fecha.slice(0, 4);
+  const fecha = d.fecha, anio = fecha.slice(0, 4);
   const [fa, fm, fd] = fecha.split('-');
-  const numCarta = numConAnio($('ctNum').value.trim(), anio), numInforme = numConAnio($('ctInforme').value.trim(), anio);
-  const correo = $('ctCorreo').value.trim(), dni = $('ctDni').value.trim(), cel = $('ctCelular').value.trim();
-  const exp = may($('ctExp').value), delito = $('ctDelito').value.trim().replace(/[.\s]+$/, ''), ante = $('ctAnte').value.trim().replace(/[.\s]+$/, '');
-  const numeral = $('ctNumeral').value.trim() || '1';
+  const numCarta = numConAnio(String(d.num).trim(), anio), numInforme = numConAnio(String(d.informe).trim(), anio);
+  const correo = String(d.correo || '').trim(), dni = String(d.dni || '').trim(), cel = String(d.cel || '').trim();
+  const exp = may(d.exp), delito = String(d.delito || '').trim().replace(/[.\s]+$/, ''), ante = String(d.ante || '').trim().replace(/[.\s]+$/, '');
+  const numeral = String(d.numeral || '').trim() || '1';
   const enlaces = [];
   if (correo) enlaces.push(['rIdCorreo', 'mailto:' + correo]);
   const url = String(cfg.enlaceMesaPartes || '').trim();
   if (url) enlaces.push(['rIdMesa', /^https?:\/\//i.test(url) ? url : 'https://' + url]);
   // "…para el patrocinio de su caso, correspondiente al Expediente N.° …, por el presunto delito …, tramitado ante …"
-  const detalle = (exp ? ', correspondiente al ' + $('ctTipoExp').value + ' ' + exp : '') + (delito ? ', por el presunto delito ' + delito : '') + (ante ? ', tramitado ante ' + ante : '');
+  const detalle = (exp ? ', correspondiente al ' + (d.tipoExp || 'Expediente N.°') + ' ' + exp : '') + (delito ? ', por el presunto delito ' + delito : '') + (ante ? ', tramitado ante ' + ante : '');
   const TABS = [1985];
   const lineaRef = (rotulo, texto) => wPar(wRun(rotulo) + wTab + wRun(': ') + wRun(texto, { b: true }), { tabs: TABS, ind: { izq: TABS[0] + 113, colgante: TABS[0] + 113 }, despues: 0, jc: 'left' });
   const cargo = String(cfg.firmanteCargo || '').split('\n').map(x => x.trim()).filter(Boolean);
@@ -4173,13 +4346,13 @@ async function descargarCarta(){
   const c = [
     wPar(wRun('Lima, ' + Number(fd) + ' de ' + MESES_CARTA[Number(fm) - 1] + ' de ' + fa), { jc: 'left', despues: 240 }),
     wPar(wRun('CARTA N° ' + numCarta + '-' + (cfg.sufijoCarta || '[PARTE FIJA]'), { b: true, u: true }), { jc: 'left', despues: 240 }),
-    wPar(wRun(may($('ctUsuario').value), { b: true, sz: 24 }), { jc: 'left', despues: 0 }),
+    wPar(wRun(may(d.usuario), { b: true, sz: 24 }), { jc: 'left', despues: 0 }),
     dni ? wPar(wRun('DNI N° ' + dni), { jc: 'left', despues: 0 }) : '',
     cel ? wPar(wRun('Celular: ' + cel), { jc: 'left', despues: 0 }) : '',
     correo ? wPar(wRun('Correo: ') + wEnlace('rIdCorreo', correo), { jc: 'left', despues: 0 }) : '',
     wPar(wRun('Presente:', { b: true, u: true }), { jc: 'left', despues: 240 }),
     lineaRef('Asunto', 'No procede la asignación de un Defensor Público'),
-    lineaRef('Referencia', $('ctReferencia').value.trim()),
+    lineaRef('Referencia', String(d.referencia || '').trim()),
     wPar('', { despues: 0 }),
     wPar(wRun('De mi consideración:'), { jc: 'left', despues: 240 }),
     wPar(wRun('Me dirijo a usted en atención al documento de la referencia, mediante el cual solicita el cambio y/o asignación de un Defensor Público para el patrocinio de su caso' + detalle + '.'), { despues: 240 }),
@@ -4193,9 +4366,11 @@ async function descargarCarta(){
     wPar(wRun(cfg.firmanteNombre ? cfg.firmanteNombre.toLocaleUpperCase('es-PE') : '[FIRMANTE]', { b: true }), firma),
     ...cargo.map((l, i) => wPar(wRun(l, { b: true }), { ...firma, juntos: i < cargo.length - 1 }))
   ].join('');
-  await armarCartaDocx(c, enlaces, cfg, $('ctIniciales').value.trim(), 'CARTA N° ' + numCarta + ' - NO PROCEDE.docx');
-  cartaDescargada = true;
-  // La fila queda marcada en su casilla Oficio / Carta (si ya tenía un N° de oficio, se agrega al lado). Sigue contando en la Agenda.
+  await armarCartaDocx(c, enlaces, cfg, String(d.iniciales || '').trim(), 'CARTA N° ' + numCarta + ' - NO PROCEDE.docx');
+  return numCarta;
+}
+// La fila queda marcada en su casilla Oficio / Carta (si ya tenía un N° de oficio, se agrega al lado). Sigue contando en la Agenda.
+async function anotarCartaNoProcede(cartaFila, numCarta, fecha){
   const marca = 'CARTA NO PROCEDE N° ' + numCarta;
   if (cartaFila){
     const r = cache.get(cartaFila) || {};
@@ -4218,6 +4393,711 @@ $('ctDescargar').onclick = async () => {
   $('ctDescargar').disabled = true;
   try { await descargarCarta(); } catch (e){ console.error(e); avisar('No se pudo armar el Word (' + (e.message || e) + ').', 7000); }
   finally { $('ctDescargar').disabled = false; }
+};
+
+// ================= Memo de ASIGNACIÓN DE CASO (Word, mismo membrete que la carta) =================
+// Redacción y formato del memo modelo (MEMORÁNDUM N° 7860-2026), con "brindar la asesoría técnica legal idónea" corregido.
+// Parte fija del N°, cargo del destinatario, quién firma, iniciales y pie: "configuracion/memoAsignacion" (Personal y permisos);
+// membrete y frases del año: los de la carta. Desde la casilla Memo de cada fila; al descargar, el N° queda en esa casilla.
+const MEMO_ASIG_POR_DEFECTO = {
+  sufijoMemo: '',
+  cargoDefensor: ['Defensor(a) Público(a) del Mega Alegra', 'Dirección Distrital de Lima Centro', 'Defensa Pública y Acceso a la Justicia'],
+  cargoEquipo: ['Servidor(a) del Equipo Multidisciplinario del Mega Alegra', 'Dirección Distrital de Lima Centro', 'Defensa Pública y Acceso a la Justicia']
+};
+async function leerConfigMemoAsig(){
+  const base = await leerConfigCarta();
+  let m = {};
+  try { const s = await getDoc(doc(db, 'configuracion', 'memoAsignacion')); m = s.exists() ? s.data() : {}; } catch (e){ console.warn(e); }
+  const c = { ...base, ...MEMO_ASIG_POR_DEFECTO };
+  ['sufijoMemo', 'inicialesFijas', 'firmanteNombre', 'firmanteCargo'].forEach(k => { if (m[k]) c[k] = m[k]; });
+  ['cargoDefensor', 'cargoEquipo', 'pie'].forEach(k => { if ((m[k] || []).filter(Boolean).length) c[k] = m[k]; });
+  if (!m.inicialesFijas) c.inicialesFijas = ''; // las iniciales fijas de la carta no se usan en el memo
+  return c;
+}
+// "GALINDO SARAS, Liliana" → "LILIANA GALINDO SARAS" (como en el modelo)
+function nombreParaMemo(n){
+  const [ap, no] = String(n || '').split(',').map(x => x.trim());
+  return (no ? no + ' ' + ap : ap || '').toLocaleUpperCase('es-PE');
+}
+let memoAsigFila = null;
+async function abrirMemoAsig(id){
+  // Se lee la fila tal como está guardada (no lo que la página tenga en memoria); si no se puede, lo de la tabla
+  let r = cache.get(id);
+  try { const s = await getDoc(doc(db, COL, id)); if (s.exists()) r = { id, ...s.data() }; } catch (e){ console.warn(e); }
+  if (!r){ avisar('No se encontró ese caso.'); return; }
+  memoAsigFila = r.id;
+  // A quien va: quien apoya (si tiene "Le apoya"); si no, el abogado que tiene el caso hoy (misma regla de "Copiar para memo")
+  const idAbog = r.apoyoNombre ? r.apoyoId : r.abogadoActualNombre ? r.abogadoActualId : r.abogadoId;
+  const area = ((DEFENSORES.find(d => d.id === idAbog) || {}).area) || r.area || '';
+  const cfg = await leerConfigMemoAsig();
+  $('maDeFila').innerHTML = 'Memo para la fila de <b>' + esc(r.usuario || r.padreUsuario || '') + '</b> (' + esc(fechaCorta(r.fecha)) + ' · ' + esc(r.origen || '') + '). Al descargar, el N° queda en su casilla Memo.' +
+    (r.memoNum ? '<br>⚠ Esta fila ya tiene el memo N° ' + esc(r.memoNum) + '.' : '');
+  $('maNum').value = String(r.memoNum || '').replace(/^MEMOR[AÁ]NDUM\s*N[°º.]*\s*/i, '');
+  $('maFecha').value = hoyIso();
+  $('maNombre').value = nombreParaMemo(r.apoyoNombre || r.abogadoActualNombre || r.abogadoNombre);
+  $('maCargo').value = (area === 'Equipo multidisciplinario' ? cfg.cargoEquipo : cfg.cargoDefensor).join('\n');
+  $('maReferencia').value = may(r.numDoc || r.codigo || '');
+  $('maUsuario').value = may(r.usuario || r.padreUsuario);
+  $('maMateria').value = may(r.materia);
+  $('maCarpeta').value = may(r.carpeta);
+  $('maPlazo').value = textoPlazoMemo(r);
+  $('maDiligencias').value = lineasDiligenciasMemo(r).join('\n');
+  $('maIniciales').value = [cfg.inicialesFijas, inicialesDe(usuario.nombre || '')].filter(Boolean).join('/');
+  const falta = [];
+  if (!cfg.sufijoMemo) falta.push('parte fija del N° de memorándum');
+  if (!cfg.firmanteNombre) falta.push('quién firma');
+  $('maAvisoCfg').hidden = !falta.length;
+  $('maAvisoCfg').innerHTML = falta.length ? '⚠ Falta en <b>Personal y permisos → Memo de asignación</b>: ' + falta.join(', ') + '. El memo sale con esos espacios marcados entre corchetes.' : '';
+  $('maError').hidden = true;
+  $('fondoMemoAsig').hidden = false;
+  $('maNum').focus();
+}
+async function descargarMemoAsig(){
+  const faltas = [];
+  if (!$('maNum').value.trim()) faltas.push('el N° de memorándum');
+  if (!$('maFecha').value) faltas.push('la fecha');
+  if (!$('maNombre').value.trim()) faltas.push('a quién va (A)');
+  if (!$('maReferencia').value.trim()) faltas.push('la referencia');
+  if (!$('maUsuario').value.trim()) faltas.push('el usuario');
+  if (faltas.length){ $('maError').textContent = 'Falta ' + faltas.join(', ') + '.'; $('maError').hidden = false; return; }
+  $('maError').hidden = true;
+  const fecha = $('maFecha').value;
+  const d = { num: numConAnio($('maNum').value.trim(), fecha.slice(0, 4)), fecha, nombre: $('maNombre').value, cargo: $('maCargo').value, referencia: $('maReferencia').value,
+    usuario: $('maUsuario').value, materia: $('maMateria').value, carpeta: $('maCarpeta').value, plazo: $('maPlazo').value, diligencias: $('maDiligencias').value, iniciales: $('maIniciales').value };
+  await wordMemoAsig(d);
+  await anotarMemoAsig(memoAsigFila, d.num, fecha);
+}
+// Arma y baja el Word del memo (lo usan la ventana del memo y "📄 Documentos"). No guarda nada.
+async function wordMemoAsig(d){
+  const cfg = await leerConfigMemoAsig();
+  const fecha = d.fecha, [fa, fm, fd] = fecha.split('-');
+  const num = d.num;
+  const lineas = t => String(t || '').split('\n').map(x => x.trim()).filter(Boolean);
+  // A / Asunto / Referencia / Fecha: los dos puntos a 2,6 cm y el texto a 3,85 cm, como en el modelo
+  const TABS = [1474, 2183];
+  const sangria = { izq: TABS[1], colgante: TABS[1] };
+  const lineaRef = (rotulo, texto, o = {}) => wPar(wRun(rotulo) + wTab + wRun(':') + wTab + wRun(texto, { b: !!o.b }), { tabs: TABS, ind: sangria, despues: o.despues ?? 240, jc: 'left', rayaAbajo: o.raya });
+  const cargoDest = lineas(d.cargo);
+  // Cuadro USUARIO/A | MATERIA/DELITO (cabecera azul grisácea, todo centrado); 3.ª columna N° DE CASO / CARPETA solo si hay
+  const carpeta = may(d.carpeta);
+  const cols = [['USUARIO/A', wRun(may(d.usuario), { b: true })], ['MATERIA/DELITO', wRun(may(d.materia))]];
+  if (carpeta) cols.push(['N° DE CASO / CARPETA', wRun(carpeta)]);
+  const anchos = (carpeta ? [6, 5, 5] : [8, 8]).map(w => Math.round(w * CM));
+  const celda = (contenido, ancho, fondo) => '<w:tc><w:tcPr><w:tcW w:w="' + ancho + '" w:type="dxa"/>' + (fondo ? '<w:shd w:val="clear" w:color="auto" w:fill="' + fondo + '"/>' : '') + '<w:vAlign w:val="center"/></w:tcPr>' +
+    wPar(contenido, { jc: 'center', antes: 40, despues: 40 }) + '</w:tc>';
+  const linea = '<w:top w:val="single" w:sz="4" w:color="000000"/><w:left w:val="single" w:sz="4" w:color="000000"/><w:bottom w:val="single" w:sz="4" w:color="000000"/><w:right w:val="single" w:sz="4" w:color="000000"/><w:insideH w:val="single" w:sz="4" w:color="000000"/><w:insideV w:val="single" w:sz="4" w:color="000000"/>';
+  const cuadro = '<w:tbl><w:tblPr><w:tblW w:w="' + anchos.reduce((a, b) => a + b, 0) + '" w:type="dxa"/><w:jc w:val="center"/><w:tblLayout w:type="fixed"/><w:tblBorders>' + linea + '</w:tblBorders></w:tblPr><w:tblGrid>' +
+    anchos.map(w => '<w:gridCol w:w="' + w + '"/>').join('') + '</w:tblGrid>' +
+    '<w:tr><w:trPr><w:tblHeader/></w:trPr>' + cols.map(([t], i) => celda(wRun(t, { b: true }), anchos[i], '8EAADB')).join('') + '</w:tr>' +
+    '<w:tr>' + cols.map(([, v], i) => celda(v, anchos[i])).join('') + '</w:tr></w:tbl>';
+  // Plazo de informe y Diligencias debajo del cuadro, solo si hay; los dos puntos alineados (3,3 cm) y el texto a 3,85 cm
+  const enlaces = [];
+  const conEnlaces = t => String(t).split(/(https?:\/\/\S+)/i).map((p, i) => {
+    if (!p) return '';
+    if (i % 2 === 0) return wRun(p);
+    const rid = 'rIdMeet' + (enlaces.length + 1); enlaces.push([rid, p]); return wEnlace(rid, p);
+  }).join('');
+  const TABS2 = [1871, TABS[1]];
+  const filaDato = (rotulo, contenido, despues) => wPar(wRun(rotulo, { b: true }) + wTab + wRun(':', { b: true }) + wTab + contenido, { tabs: TABS2, ind: sangria, despues, jc: 'left' });
+  const plazo = plazoEscritoAMano(String(d.plazo || '').trim(), fecha);
+  const dils = lineas(d.diligencias);
+  const extras = [
+    plazo ? filaDato('Plazo de informe', wRun(plazo), dils.length ? 120 : 0) : '',
+    ...dils.map((d, i) => i === 0
+      ? filaDato('Diligencias', conEnlaces((dils.length > 1 ? '1. ' : '') + d), 0)
+      : wPar(conEnlaces((i + 1) + '. ' + d), { ind: { izq: TABS2[1] }, despues: 0, jc: 'left' }))
+  ].filter(Boolean);
+  const firma = { jc: 'center', despues: 0, juntos: true };
+  const cargoFirma = lineas(cfg.firmanteCargo);
+  const c = [
+    wPar(wRun('MEMORÁNDUM N° ' + num + '-' + (cfg.sufijoMemo || '[PARTE FIJA]'), { b: true, u: true }), { jc: 'center', antes: 120, despues: 360 }),
+    // A: nombre en negrita y debajo el cargo, alineados con el texto de Asunto
+    wPar(wRun('A') + wTab + wRun(may(d.nombre), { b: true }), { tabs: [TABS[1]], ind: sangria, despues: 0, jc: 'left' }),
+    ...cargoDest.map((l, i) => wPar(wRun(l), { ind: { izq: TABS[1] }, despues: i === cargoDest.length - 1 ? 240 : 0, jc: 'left' })),
+    lineaRef('Asunto', 'ASIGNACIÓN DE CASO', { b: true }),
+    lineaRef('Referencia', may(d.referencia)),
+    lineaRef('Fecha', 'Lima, ' + Number(fd) + ' de ' + MESES_CARTA[Number(fm) - 1] + ' de ' + fa, { despues: 0 }),
+    // Raya gruesa de lado a lado debajo de la Fecha (párrafo vacío, sin sangría)
+    wPar(wRun('', { sz: 8 }), { rayaAbajo: true, despues: 160, jc: 'left' }),
+    wPar(wRun('Me dirijo a usted, en mérito al documento de la referencia, para comunicarle que esta Dirección Distrital ha dispuesto asignarle el caso detallado en el cuadro adjunto. Para tal efecto, deberá apersonarse formalmente, en el término de la distancia, ante la entidad que corresponda, a fin de asumir la defensa técnica de su patrocinado/a y/o brindar la asesoría técnica legal idónea, eficaz y de calidad, conforme a lo establecido en la Ley N.° 29360, Ley del Servicio de Defensa Pública; su Reglamento, aprobado por Decreto Supremo N.° 013-2009-JUS; el Decreto Legislativo N.° 1407, que fortalece el Servicio de Defensa Pública; y el Decreto Supremo N.° 009-2019-JUS, que adecúa el Reglamento de la Ley N.° 29360.'), { despues: 240 }),
+    cuadro,
+    wPar('', { despues: 0 }),
+    ...(extras.length ? [...extras, wPar('', { despues: 0 })] : []),
+    wPar(wRun('Asimismo, de acuerdo a la ') + wRun('Resolución Directoral N° 165-2020-JUS/DGDPAJ', { b: true }) + wRun(', que aprueba los ') +
+      wRun('“Lineamientos que Regulan el Procedimiento para el Registro Individual de Pago de Aranceles por la Pérdida del Beneficio de Gratuidad del Servicio de Defensa Pública - RIPA”,', { b: true, i: true, u: true }) +
+      wRun(' deberá recabar la Declaración Jurada de Evaluación Socioeconómica de manera ') + wRun('FISICA', { b: true, u: true }) +
+      wRun(', debidamente llenada y firmada por el (la) usuario(a) para luego ser presentada en un plazo no mayor de 03 días hábiles de emitido el presente documento, de corresponder.'), { despues: 360 }),
+    // Firma: espacio para la firma digital; el bloque no se separa de "Atentamente,"
+    wPar(wRun('Atentamente,'), { jc: 'left', despues: 800, juntos: true }),
+    wPar(wRun('________________________________________'), firma),
+    wPar(wRun(cfg.firmanteNombre || '[FIRMANTE]', { b: true, sz: 18 }), firma),
+    ...cargoFirma.map((l, i) => wPar(wRun(l, { b: true, sz: 18 }), { ...firma, juntos: i < cargoFirma.length - 1 }))
+  ].join('');
+  // Como el modelo: Arial 10 con interlineado 1,15; texto de 3 cm a la izquierda y 2 cm a la derecha (el membrete sobresale)
+  await armarCartaDocx(c, enlaces, cfg, String(d.iniciales || '').trim(), 'MEMORÁNDUM N° ' + num + ' - ASIGNACIÓN DE CASO.docx', {
+    estilos: ESTILOS_W.replace('w:line="240"', 'w:line="264"'),
+    margenes: { izq: 3, der: 2 },
+    encabezado: { ancho: 19, sobresale: 1.7, maxRecuadro: 3.3, comillasAnio: true }
+  });
+}
+// El N° queda en la casilla Memo de la fila (cierra el pendiente y felicita, como al escribirlo a mano)
+async function anotarMemoAsig(filaId, num, fecha){
+  const r = cache.get(filaId) || {};
+  if (filaId && may(r.memoNum || '') !== may(num)){
+    try { await guardarNumDoc(filaId, 'memoNum', num); }
+    catch (e){ errorAlGuardar(e); avisar('El Word se descargó, pero no se pudo anotar el N° en la fila. Escríbelo a mano en Memo.', 8000); }
+  }
+  // En el Registro de cambios solo el N°, la fecha, el área y la fila (nunca el nombre del usuario)
+  registrarCambio('Generó el memo de asignación de caso', COL, filaId, {}, { memo: 'N° ' + num, fecha, area: r.area || '' });
+}
+// En "Plazo de informe" basta escribir el número (ej. 6): sale "6 DÍAS HÁBILES (vence el …)", contado desde la fecha del memo
+// sin sábados, domingos ni feriados (misma cuenta que el plazo en días hábiles del formulario)
+function plazoEscritoAMano(t, desde){
+  const m = String(t || '').trim().match(/^(\d{1,2})$/);
+  if (!m || Number(m[1]) < 1 || Number(m[1]) > 60) return String(t || '').trim();
+  const v = venceEnDiasHabiles(Number(m[1]), desde || hoyIso());
+  return textoPlazoMemo({ plazoDias: Number(m[1]), plazoVence: v });
+}
+$('maPlazo').addEventListener('change', () => { $('maPlazo').value = plazoEscritoAMano($('maPlazo').value, $('maFecha').value); });
+$('maDescargar').onclick = async () => {
+  $('maDescargar').disabled = true;
+  try { await descargarMemoAsig(); } catch (e){ console.error(e); avisar('No se pudo armar el Word (' + (e.message || e) + ').', 7000); }
+  finally { $('maDescargar').disabled = false; }
+};
+
+// ================= "📄 Documentos": memo, oficio y cartas de asignación en UNA ventana =================
+// La app elige los modelos según la fila: caso nuevo OTORGANDO (memo / oficio / carta "caso nuevo" según lo marcado),
+// caso nuevo NEGANDO (carta "no procede asignación", la ventana que ya existe), solicitud de cambio que PROCEDE
+// (memo / oficio / carta "cambio") y que NO PROCEDE (carta "no procede cambio").
+// Datos no personales (juzgado, juez, destinatario, análisis…) se guardan en la fila (campo docDatos).
+// DNI, celular, correo y edad del usuario solo se usan para el Word: no se guardan.
+const TIPO_CAMBIO = 'Solicitud de cambio de abogado';
+const NOMBRE_DOC = { memo: 'Memo de asignación', oficio: 'Oficio de asignación', carta: 'Carta de asignación', noCambio: 'Carta: no procede cambio de abogado', noAsig: 'Carta: no procede la asignación' };
+// Solo lo marcado al registrar (Hacer memo / oficio / carta): si solo es oficio, solo oficio
+function docsDeFila(r){
+  const h = r.hacer || {};
+  if (h.noHacer) return [];
+  const otorgando = variante => [h.memo && { tipo: 'memo' }, h.oficio && { tipo: 'oficio' }, h.carta && { tipo: 'carta', variante }].filter(Boolean);
+  if (r.padreId && r.tipoDoc === TIPO_CAMBIO){
+    if (r.resultadoCambio === 'Procede (reasignado)') return otorgando('cambio');
+    if (r.resultadoCambio === 'No procede (continúa)') return h.carta ? [{ tipo: 'noCambio' }] : [];
+    return []; // en evaluación: todavía no se sabe qué documento va
+  }
+  // Otros antecedentes (nueva opinión, informe…) con "Hacer memo": el memo de asignación (como el botón suelto de antes)
+  if (r.padreId && r.tipoDoc !== TIPO_MISMO_ABOGADO) return h.memo ? [{ tipo: 'memo' }] : [];
+  if (r.sentido === 'negando') return h.carta ? [{ tipo: 'noAsig' }] : [];
+  return otorgando('nuevo');
+}
+// Marca en la fila cuando el asistente corrigió en Documentos el nombre o la materia (valen solo para los documentos):
+// se ve hasta que el caso se corrija con ✎ Editar o alguien que edita toque "✓ Revisado"
+function correccionesDocs(r){
+  const dd = r.docDatos || {}, rev = dd.revisado || {}, cambios = [];
+  const usuarioCaso = may(r.usuario || r.padreUsuario), materiaCaso = may(r.materia);
+  if (dd.usuarioDoc && may(dd.usuarioDoc) !== usuarioCaso && rev.usuario !== may(dd.usuarioDoc)) cambios.push(['Usuario', usuarioCaso, may(dd.usuarioDoc)]);
+  if (dd.materiaDoc && may(dd.materiaDoc) !== materiaCaso && rev.materia !== may(dd.materiaDoc)) cambios.push(['Materia/delito', materiaCaso, may(dd.materiaDoc)]);
+  return cambios;
+}
+function marcaCorreccionDocs(r){
+  const c = correccionesDocs(r);
+  if (!c.length) return '';
+  return `<span class="corregido-docs">✎ Corregido en documentos: ${c.map(([k, a, b]) => esc(k) + ' «' + esc(a || '—') + '» → «' + esc(b) + '»').join(' · ')}. Si corresponde, corrige el caso con ✎ Editar.` +
+    `<button type="button" class="mini-accion solo-abogado" data-corr-revisada="${r.id}" title="El caso está bien así: quitar la marca">✓ Revisado</button></span>`;
+}
+async function marcarCorreccionRevisada(id){
+  const r = cache.get(id); if (!r) return;
+  const dd = r.docDatos || {};
+  const revisado = { usuario: dd.usuarioDoc ? may(dd.usuarioDoc) : '', materia: dd.materiaDoc ? may(dd.materiaDoc) : '' };
+  await updateDoc(doc(db, COL, id), { docDatos: { ...dd, revisado } });
+  r.docDatos = { ...dd, revisado }; pintar();
+  registrarCambio('Revisó la corrección hecha en Documentos (el caso queda como está)', COL, id, {}, { revisado: 'sí' });
+}
+// Lo anotado en la casilla Oficio / Carta: "OFICIO N° 2016-2026 | CARTA N° 456-2026 | CARTA NO PROCEDE CAMBIO N° 418-2026"
+const PREFIJO_DOC = { oficio: 'OFICIO N° ', carta: 'CARTA N° ', noCambio: 'CARTA NO PROCEDE CAMBIO N° ' };
+function partesOficio(r){ return String(r.oficioNum || '').split('|').map(x => x.trim()).filter(Boolean); }
+function marcaDe(r, tipo){ return PREFIJO_DOC[tipo] ? partesOficio(r).find(p => p.startsWith(PREFIJO_DOC[tipo])) || '' : ''; }
+function docHecho(r, d){
+  if (d.tipo === 'memo') return !!r.memoNum;
+  if (d.tipo === 'noAsig') return !!cartaNoProcedeDe(r);
+  if (marcaDe(r, d.tipo)) return true;
+  // N° escrito a mano en la casilla (sin "OFICIO N°" ni "CARTA N°"): cuenta como hecho
+  return partesOficio(r).length > 0 && !partesOficio(r).some(p => /^(OFICIO|CARTA)\b/.test(p));
+}
+function botonDocumentos(r){
+  const docs = docsDeFila(r);
+  if (!docs.length) return '';
+  const n = docs.filter(d => !docHecho(r, d)).length;
+  return `<button type="button" class="mini-accion solo-proyecta" data-documentos="${r.id}" title="${esc(docs.map(d => NOMBRE_DOC[d.tipo]).join(' · '))}">📄 Documentos ${n ? '(' + n + ')' : '✓'}</button>`;
+}
+// "ROJAS VALDEZ, Lesly Catherine" → "Lesly Catherine Rojas Valdez"
+function nombreNatural(n){
+  const [ap, no] = String(n || '').split(',').map(x => x.trim());
+  const titulo = s => s.toLocaleLowerCase('es-PE').split(/\s+/).filter(Boolean).map(p => CONECTORES.has(p) ? p : p[0].toLocaleUpperCase('es-PE') + p.slice(1)).join(' ');
+  return no ? no + ' ' + titulo(ap) : titulo(ap || '');
+}
+// Palabras según el trato (lo elige el administrador en Personal y permisos › Defensores; en la ventana se puede cambiar)
+function palabrasTrato(t, area){
+  const f = t === 'F', eq = area === 'Equipo multidisciplinario';
+  return {
+    cargo: eq ? (f ? 'Servidora' : 'Servidor') : (f ? 'Defensora Pública' : 'Defensor Público'),
+    del: f ? 'de la' : 'del', al: f ? 'a la' : 'al', la: f ? 'la' : 'el',
+    citada: f ? 'la citada ' + (eq ? 'servidora' : 'defensora') : 'el citado ' + (eq ? 'servidor' : 'defensor'),
+    asignada: f ? 'asignada' : 'asignado', subrogada: f ? 'subrogada' : 'subrogado', apartada: f ? 'apartada' : 'apartado'
+  };
+}
+// "05 de octubre de 2026" (con "del" si el modelo lo usa)
+function fechaLarga(iso, conDel){
+  if (!iso) return '';
+  const [a, m, d] = iso.split('-');
+  return d + ' de ' + MESES_CARTA[Number(m) - 1] + (conDel ? ' del ' : ' de ') + a;
+}
+// Iniciales del agraviado: "ANA ROSA RAMOS" → "A.R.R."
+const inicialesAgraviado = n => inicialesDe(n).toUpperCase().split('').map(c => c + '.').join('');
+// "ante el 16° Juzgado…" sin repetir el artículo si ya lo escribieron
+const conArticulo = t => /^(el|la|los|las)\s/i.test(t) ? t : 'el ' + t;
+async function leerConfigDocsAsig(){
+  const base = await leerConfigMemoAsig();
+  let m = {};
+  try { const s = await getDoc(doc(db, 'configuracion', 'documentosAsignacion')); m = s.exists() ? s.data() : {}; } catch (e){ console.warn(e); }
+  return { ...base, inicialesMemo: base.inicialesFijas || '', sufijoOficio: m.sufijoOficio || '', sufijoCarta: m.sufijoCarta || '', inicialesFijas: m.inicialesFijas || '', sedes: m.sedes || [] };
+}
+// Sede del defensor: su casilla "Sede" se compara sin espacios, tildes ni signos ("MEGAALEGRA" = "Mega ALEGRA"), en los dos sentidos.
+// Si no coincide ninguna, la primera sede guardada (en la ventana se puede elegir otra de la lista).
+function sedeDe(def, cfg){
+  const limpio = t => norm(t).replace(/[^a-z0-9]/g, '');
+  const s = limpio((def || {}).sede || '');
+  const sedes = (cfg.sedes || []).filter(x => x.nombre);
+  return (s && sedes.find(x => s.includes(limpio(x.nombre)) || limpio(x.nombre).includes(s))) || sedes[0] || null;
+}
+
+let docsFila = null, docsLista = [], docsCfg = null;
+async function abrirDocumentos(id){
+  // Se lee la fila tal como está guardada
+  let r = cache.get(id);
+  try { const s = await getDoc(doc(db, COL, id)); if (s.exists()) r = { id, ...s.data() }; } catch (e){ console.warn(e); }
+  if (!r){ avisar('No se encontró ese caso.'); return; }
+  const docs = docsDeFila(r);
+  if (!docs.length){ avisar('Esta fila no tiene documentos por hacer.'); return; }
+  docsFila = r; docsLista = docs;
+  const cfg = docsCfg = await leerConfigDocsAsig();
+  const dd = r.docDatos || {};
+  const padre = r.padreId ? (cache.get(r.padreId) || await (async () => { try { const s = await getDoc(doc(db, COL, r.padreId)); return s.exists() ? { id: s.id, ...s.data() } : null; } catch (e){ return null; } })()) : null;
+  const esCambio = docs.some(d => d.variante === 'cambio'), esNoCambio = docs.some(d => d.tipo === 'noCambio');
+  // Abogado: en el cambio que procede, el nuevo; en el que no procede, quien sigue con el caso; si no, quien apoya o el actual
+  let abogId, abogNombre;
+  if (esCambio){ abogId = r.abogadoId; abogNombre = r.abogadoNombre; }
+  else if (esNoCambio && padre){ abogId = padre.abogadoActualId || padre.abogadoId; abogNombre = padre.abogadoActualNombre || padre.abogadoNombre; }
+  else { abogId = r.apoyoNombre ? r.apoyoId : r.abogadoActualNombre ? r.abogadoActualId : r.abogadoId; abogNombre = r.apoyoNombre || r.abogadoActualNombre || r.abogadoNombre; }
+  const def = DEFENSORES.find(d => d.id === abogId) || {};
+  const area = def.area || r.area || '';
+  docsFila.abogArea = area; docsFila.abogDef = def;
+  $('tituloDocs').textContent = 'Documentos de ' + (r.usuario || r.padreUsuario || '');
+  $('dcDeFila').innerHTML = 'Fila del ' + esc(fechaCorta(r.fecha)) + ' · ' + esc(r.padreId ? r.tipoDoc : 'Caso nuevo · ' + (r.sentido === 'negando' ? 'NEGANDO' : 'OTORGANDO')) +
+    '. Se arman: <b>' + esc(docs.map(d => NOMBRE_DOC[d.tipo] + (d.variante === 'cambio' ? ' (cambio que procede)' : d.variante === 'nuevo' ? ' (caso nuevo)' : '')).join(' · ')) + '</b>. Al descargar, los N° quedan en las casillas Memo y Oficio / Carta.';
+  $('dcFecha').value = hoyIso();
+  // Iniciales de quien descarga (es quien verifica); cada documento les antepone sus iniciales fijas
+  $('dcIniciales').value = inicialesDe(usuario.nombre || '');
+  // Nombre y materia: si ya se corrigieron en Documentos, se usa lo corregido (vale solo para los documentos)
+  $('dcUsuario').value = may(dd.usuarioDoc || r.usuario || r.padreUsuario);
+  ponerMateriaDocs(r.area || (padre && padre.area) || '', dd.materiaDoc || r.materia || (padre && padre.materia) || '');
+  $('dcAyudaUsuario').textContent = dd.usuarioDoc && may(dd.usuarioDoc) !== may(r.usuario || r.padreUsuario) ? 'En el caso dice: ' + may(r.usuario || r.padreUsuario) : '';
+  $('dcAbogado').value = nombreNatural(abogNombre);
+  $('dcAbogado').dataset.id = abogId || '';
+  $('dcAbogadoEtiqueta').innerHTML = (esNoCambio ? 'Abogado/a que continúa con el caso' : 'Abogado/a asignado/a') + ' <span class="obl">*</span>';
+  $('dcTrato').value = def.trato || '';
+  $('dcCelular').value = def.celular || (esCambio ? r.abogadoCelular : '') || '';
+  $('dcCorreo').value = def.correo || (esCambio ? r.abogadoCorreo : '') || '';
+  $('dcBloqueAnterior').hidden = !esCambio;
+  const defAnt = DEFENSORES.find(d => d.id === r.abogadoAnteriorId) || {};
+  $('dcAnterior').value = esCambio ? nombreNatural(defAnt.nombre || (padre ? padre.abogadoNombre : '')) : '';
+  $('dcTratoAnterior').value = defAnt.trato || '';
+  $('dcReferencia').value = may(r.numDoc || dd.referencia || r.codigo || '');
+  $('dcFechaSolicitud').value = dd.fechaSolicitud || r.fecha || '';
+  $('dcExp').value = may(r.carpeta || (padre && padre.carpeta) || dd.expediente || '');
+  $('dcJuzgado').value = dd.juzgado || '';
+  $('dcJuez').value = dd.juez || '';
+  $('dcJuezTrato').value = dd.juezTrato || 'Jueza';
+  // Lo que había, para saber qué corrigió el asistente (y guardarlo en la fila con su Registro de cambios)
+  docsFila.orig = { usuario: may(r.usuario || r.padreUsuario), materia: may(r.materia || (padre && padre.materia) || ''), exp: $('dcExp').value, referencia: $('dcReferencia').value };
+  docsFila.padre = padre;
+  // N° del informe del defensor: del último antecedente "Informe del defensor" del caso
+  const raiz = r.padreId || r.id;
+  const informe = [...cache.values()].filter(x => x.padreId === raiz && x.tipoDoc === 'Informe del defensor').sort((a, b) => (b.fecha || '').localeCompare(a.fecha || ''))[0];
+  const sede = sedeDe(def, cfg) || {};
+  const sinPrefijo = (t, p) => String(t || '').replace(p, '').trim();
+  const bloque = (titulo, cuerpo) => `<div class="bloque doc-bloque"><h3>${titulo}</h3><div class="rejilla">${cuerpo}</div></div>`;
+  const campo = (id, etiqueta, valor, o = {}) => `<div class="${o.ancho ? 'ancho' : ''}"><label class="campo" for="${id}">${etiqueta}${o.obl ? ' <span class="obl">*</span>' : ''}</label>` +
+    (o.area ? `<textarea id="${id}" rows="${o.filas || 3}" placeholder="${esc(o.ph || '')}">${esc(valor || '')}</textarea>` : `<input type="text" id="${id}" value="${esc(valor || '')}" placeholder="${esc(o.ph || '')}" autocomplete="off">`) +
+    (o.ayuda ? `<div class="ayuda">${o.ayuda}</div>` : '') + '</div>';
+  const personales = (p, f) => campo(p + 'Dni', 'DNI del usuario', f.dni) + campo(p + 'Cel', 'Celular del usuario', f.telefono) + campo(p + 'Correo', 'Correo del usuario', f.correo, { ancho: true, ayuda: 'DNI, celular y correo solo van al Word: no se guardan. Lo vacío no sale.' });
+  // Contacto del usuario: solo existe en el Drive 3 (casos de Fono Alegra) y solo lo lee quien tiene Ver o Editar en el Drive 3
+  let fono = {};
+  if ((r.origen === ORIGEN_FONO || (padre && padre.origen === ORIGEN_FONO)) && puedeLeerFono() && docs.some(d => d.tipo === 'carta' || d.tipo === 'noCambio' || d.tipo === 'noAsig')){
+    for (const fid of [r.id, r.padreId].filter(Boolean)){
+      try { const s = await getDoc(doc(db, COL_FONO, fid)); if (s.exists()){ const f = s.data(); fono = { dni: f.dni || '', telefono: f.telefono || '', correo: f.correo || '' }; break; } }
+      catch (e){ console.warn(e); break; }
+    }
+  }
+  $('dcDocs').innerHTML = docs.map(d => {
+    if (d.tipo === 'memo') return bloque('Memo de asignación', campo('dmNum', 'N° de memorándum', sinPrefijo(r.memoNum, /^MEMOR[AÁ]NDUM\s*N[°º.]*\s*/i), { obl: true, ph: 'Ej. 7860' }) +
+      campo('dmPlazo', 'Plazo de informe', textoPlazoMemo(r), { ancho: true, ph: 'Ej. 5 (días hábiles)', ayuda: 'Si escribes solo el número de días, se completa solo.' }) +
+      campo('dmDils', 'Diligencias (una por renglón)', lineasDiligenciasMemo(r).join('\n'), { ancho: true, area: true }) +
+      campo('dmCargo', 'Cargo de quien recibe el memo (una línea por renglón)', (area === 'Equipo multidisciplinario' ? cfg.cargoEquipo : cfg.cargoDefensor).join('\n'), { ancho: true, area: true }));
+    if (d.tipo === 'oficio') return bloque('Oficio de asignación (a la institución que pidió defensor)', campo('doNum', 'N° de oficio', sinPrefijo(marcaDe(r, 'oficio'), PREFIJO_DOC.oficio), { obl: true, ph: 'Ej. 2016' }) +
+      campo('doDest', 'Destinatario: nombre, cargo, unidad y entidad (una línea por renglón)', dd.oficioDest || '', { ancho: true, area: true, filas: 5, obl: true, ph: 'LIZBET MARITZA ZAMORA SÁNCHEZ\nDIRECTORA DE UNIDAD FUNCIONAL\n…' }) +
+      `<div><label class="campo" for="doAgraviado">Agraviado/a</label><select id="doAgraviado"><option value="F" ${dd.agraviadoTrato !== 'M' ? 'selected' : ''}>la agraviada</option><option value="M" ${dd.agraviadoTrato === 'M' ? 'selected' : ''}>el agraviado</option></select></div>` +
+      campo('doIniciales', 'Iniciales del agraviado/a', inicialesAgraviado(r.usuario || r.padreUsuario || '')) +
+      campo('doEdad', 'Edad (solo si es menor; no se guarda)', '', { ph: 'Ej. 05 años' }) +
+      campo('doResol', 'Lo que dispuso el juzgado (opcional)', dd.resolucion || '', { ancho: true, ph: 'mediante Resolución N.° 01 ha programado la audiencia de vista de la causa' }));
+    if (d.tipo === 'carta') return bloque('Carta de asignación (' + (d.variante === 'cambio' ? 'cambio que procede' : 'caso nuevo') + ')',
+      campo('dtNum', 'N° de carta', sinPrefijo(marcaDe(r, 'carta'), PREFIJO_DOC.carta), { obl: true, ph: 'Ej. 456' }) + personales('dt', fono) +
+      `<div><label class="campo" for="dtSede">Sede</label><select id="dtSede">${(cfg.sedes || []).filter(x => x.nombre).map((x, i) => `<option value="${i}" ${x === sede ? 'selected' : ''}>${esc(x.nombre)}</option>`).join('') || '<option value="">(no hay sedes en Personal y permisos)</option>'}</select>` +
+      `<div class="ayuda">${(docsFila.abogDef || {}).sede ? 'Sede del defensor en Personal y permisos: ' + esc(docsFila.abogDef.sede) : 'El defensor no tiene sede en Personal y permisos.'}</div></div>` +
+      campo('dtDir', 'Dirección de la sede', sede.direccion || '', { ancho: true, obl: true }) +
+      campo('dtHorario', 'Horario de atención', sede.horario || '', { ancho: true }));
+    if (d.tipo === 'noAsig'){
+      if (r.area !== AREA_CARTA) return bloque('Carta: no procede la asignación', '<div class="ancho ayuda">⚠ Por ahora esta carta solo existe para Defensa de Víctimas (falta la carta modelo de esta área). No se descarga.</div>');
+      const c = partirCarpeta($('dcExp').value);
+      const materia = materiaDocs().toLowerCase();
+      return bloque('Carta: no procede la asignación de un Defensor Público',
+        campo('naNum', 'N° de carta', sinPrefijo(cartaNoProcedeDe(r), 'CARTA NO PROCEDE N° '), { obl: true, ph: 'Ej. 442' }) +
+        campo('naInforme', 'N° del informe del Coordinador', dd.informeCoord || '', { obl: true, ph: 'Ej. 158' }) + personales('na', fono) +
+        campo('naReferencia', 'Referencia', dd.referenciaCarta || textoReferencia(r.origen, r.codigo, $('dcFechaSolicitud').value), { ancho: true, obl: true, ayuda: 'Se arma sola con el origen y la fecha de la solicitud; se puede corregir.' }) +
+        `<div><label class="campo" for="naTipoExp">Expediente o carpeta</label><select id="naTipoExp"><option ${c.tipo !== 'Carpeta Fiscal N.°' ? 'selected' : ''}>Expediente N.°</option><option ${c.tipo === 'Carpeta Fiscal N.°' ? 'selected' : ''}>Carpeta Fiscal N.°</option></select><div class="ayuda">El número es el de "Expediente / carpeta" de arriba.</div></div>` +
+        campo('naDelito', 'Presunto delito', dd.delito || (materia ? (/^(de|del|contra)\s/.test(materia) ? materia : 'de ' + materia) : ''), { ancho: true }) +
+        campo('naNumeral', 'Numeral del artículo 9-A', dd.numeral || '1'));
+    }
+    if (d.tipo === 'noCambio') return bloque('Carta: no procede cambio de abogado',
+      campo('dnNum', 'N° de carta', sinPrefijo(marcaDe(r, 'noCambio'), PREFIJO_DOC.noCambio), { obl: true, ph: 'Ej. 418' }) + personales('dn', fono) +
+      campo('dnMotivo', 'Motivo del pedido', dd.motivo || '', { ancho: true, ph: 'por falta de atención a su caso' }) +
+      campo('dnInforme', 'N° del informe del defensor', dd.informe || (informe ? informe.numDoc || '' : ''), { ancho: true, ph: 'Ej. 5484-2026-JUS/DGDP/LIMA-VÍCTIMAS-LIRB', ayuda: informe ? 'Tomado del antecedente "Informe del defensor" del ' + esc(fechaCorta(informe.fecha)) + '.' : '' }) +
+      campo('dnAnalisis', 'Análisis (texto libre)', dd.analisis || '', { ancho: true, area: true, filas: 4, ph: 'en el cual la referida defensora manifiesta haber realizado las actuaciones legales correspondientes…' }));
+    return '';
+  }).join('');
+  if ($('dmPlazo')) $('dmPlazo').addEventListener('change', () => { $('dmPlazo').value = plazoEscritoAMano($('dmPlazo').value, $('dcFecha').value); });
+  // Al elegir otra sede, se llenan su dirección y su horario
+  if ($('dtSede')) $('dtSede').addEventListener('change', () => {
+    const x = (cfg.sedes || []).filter(s => s.nombre)[Number($('dtSede').value)] || {};
+    $('dtDir').value = x.direccion || ''; $('dtHorario').value = x.horario || ''; resaltarFaltasDocs();
+  });
+  $('dcListos').hidden = true; $('dcListos').innerHTML = '';
+  const falta = [];
+  if (!cfg.firmanteNombre) falta.push('quién firma (Memo de asignación o Carta: No procede)');
+  if (docs.some(d => d.tipo === 'memo') && !cfg.sufijoMemo) falta.push('parte fija del N° de memorándum');
+  if (docs.some(d => d.tipo === 'oficio') && !cfg.sufijoOficio) falta.push('parte fija del N° de oficio');
+  if (docs.some(d => d.tipo === 'carta' || d.tipo === 'noCambio') && !cfg.sufijoCarta) falta.push('parte fija del N° de carta');
+  if (docs.some(d => d.tipo === 'noAsig')) faltaEnCarta(await leerConfigCarta()).forEach(x => falta.push(x + ' (Carta: No procede)'));
+  $('dcAvisoCfg').hidden = !falta.length;
+  $('dcAvisoCfg').innerHTML = falta.length ? '⚠ Falta en <b>Personal y permisos</b>: ' + falta.join(', ') + '. Esos espacios salen entre corchetes.' : '';
+  $('dcError').hidden = true;
+  $('fondoDocs').hidden = false;
+  resaltarFaltasDocs();
+}
+// Lo obligatorio que está vacío se pinta de amarillo (se actualiza al escribir)
+function obligatoriosDocs(){
+  const ids = ['dcFecha', 'dcIniciales', 'dcUsuario', 'dcAbogado', 'dcTrato'];
+  if (docsLista.some(d => d.variante === 'cambio')) ids.push('dcAnterior', 'dcTratoAnterior');
+  if (docsLista.some(d => d.tipo === 'carta' || d.tipo === 'noCambio' || d.tipo === 'noAsig')) ids.push('dcFechaSolicitud');
+  docsLista.forEach(d => ({ memo: ['dmNum', 'dcReferencia'], oficio: ['doNum', 'doDest', 'dcReferencia'], carta: ['dtNum', 'dtDir'], noCambio: ['dnNum'], noAsig: ['naNum', 'naInforme', 'naReferencia'] }[d.tipo] || []).forEach(i => ids.push(i)));
+  return [...new Set(ids)];
+}
+function resaltarFaltasDocs(){
+  const vacios = obligatoriosDocs().filter(i => $(i) && !$(i).value.trim());
+  document.querySelectorAll('#fondoDocs .falta-doc').forEach(e => e.classList.remove('falta-doc'));
+  vacios.forEach(i => $(i).classList.add('falta-doc'));
+  return vacios;
+}
+$('fondoDocs').addEventListener('input', resaltarFaltasDocs);
+// Carta "No procede": el presunto delito sigue a la materia corregida (salvo que ya lo hayan escrito a mano)
+const delitoDeMateria = m => { const t = String(m || '').trim().toLowerCase(); return t ? (/^(de|del|contra)\s/.test(t) ? t : 'de ' + t) : ''; };
+// Materia en Documentos: la misma lista del registro (según el área de la fila) con "Otra (escribir)"
+let materiaAnteriorDocs = '';
+function materiaDocs(){ return ($('dcMateria').value === 'Otra' ? $('dcMateriaOtra').value : $('dcMateria').value).trim(); }
+function ponerMateriaDocs(area, valor){
+  $('dcMateria').innerHTML = opcionesMaterias(area);
+  // La materia del caso puede estar en mayúsculas o escrita a mano: se busca en la lista sin importar mayúsculas ni tildes
+  const op = valor ? [...$('dcMateria').options].find(o => o.value && o.value !== 'Otra' && norm(o.value) === norm(valor)) : null;
+  $('dcMateria').value = !valor ? '' : op ? op.value : 'Otra';
+  $('dcMateriaOtra').value = valor && !op ? may(valor) : '';
+  $('dcMateriaOtra').hidden = $('dcMateria').value !== 'Otra';
+  materiaAnteriorDocs = materiaDocs();
+}
+function alCambiarMateriaDocs(){
+  $('dcMateriaOtra').hidden = $('dcMateria').value !== 'Otra';
+  // El presunto delito de la carta "No procede" sigue a la materia (salvo que ya lo hayan escrito a mano)
+  if ($('naDelito') && $('naDelito').value === delitoDeMateria(materiaAnteriorDocs)) $('naDelito').value = delitoDeMateria(materiaDocs());
+  materiaAnteriorDocs = materiaDocs();
+  resaltarFaltasDocs();
+}
+$('dcMateria').addEventListener('change', () => { if ($('dcMateria').value === 'Otra') $('dcMateriaOtra').focus(); alCambiarMateriaDocs(); });
+$('dcMateriaOtra').addEventListener('input', alCambiarMateriaDocs);
+// Carta "No procede": al cambiar la fecha de la solicitud, la referencia se vuelve a armar (como en su ventana)
+$('dcFechaSolicitud').addEventListener('change', () => {
+  if ($('naReferencia') && docsFila) $('naReferencia').value = textoReferencia(docsFila.origen, docsFila.codigo, $('dcFechaSolicitud').value);
+});
+$('fondoDocs').addEventListener('change', resaltarFaltasDocs);
+
+// Datos no personales que se guardan en la fila para la próxima vez
+function datosDocsNoPersonales(){
+  const v = id => $(id) ? $(id).value.trim() : undefined;
+  const d = { referencia: v('dcReferencia'), fechaSolicitud: v('dcFechaSolicitud'), expediente: v('dcExp'), juzgado: v('dcJuzgado'), juez: v('dcJuez'), juezTrato: v('dcJuezTrato'),
+    oficioDest: v('doDest'), agraviadoTrato: v('doAgraviado'), resolucion: v('doResol'), motivo: v('dnMotivo'), informe: v('dnInforme'), analisis: v('dnAnalisis'),
+    informeCoord: v('naInforme'), referenciaCarta: v('naReferencia'), delito: v('naDelito'), numeral: v('naNumeral') };
+  Object.keys(d).forEach(k => d[k] === undefined && delete d[k]);
+  // Nombre y materia: si son distintos de los del caso, se guardan aparte (valen solo para los documentos y marcan la fila)
+  const o = docsFila.orig || {};
+  d.usuarioDoc = may($('dcUsuario').value) !== o.usuario ? may($('dcUsuario').value) : '';
+  d.materiaDoc = norm(materiaDocs()) !== norm(o.materia) ? materiaDocs() : '';
+  return { ...(docsFila.docDatos || {}), ...d };
+}
+async function guardarDatosDocs(){
+  const r = docsFila, o = r.orig || {}, antesDd = r.docDatos || {};
+  const datos = datosDocsNoPersonales();
+  const cambiosFila = { docDatos: datos };
+  // Expediente / carpeta y referencia son datos del caso: si se corrigieron, van a la fila (y el expediente también al caso principal)
+  const exp = may($('dcExp').value), ref = may($('dcReferencia').value);
+  const cambiaExp = exp !== o.exp, cambiaRef = ref !== o.referencia;
+  if (cambiaExp) cambiosFila.carpeta = exp;
+  if (cambiaRef) cambiosFila.numDoc = ref;
+  await updateDoc(doc(db, COL, r.id), cambiosFila);
+  if (cambiaExp && r.padreId) await updateDoc(doc(db, COL, r.padreId), { carpeta: exp });
+  r.docDatos = datos; r.orig = { ...o, exp, referencia: ref, usuario: o.usuario, materia: o.materia };
+  const c = cache.get(r.id); if (c) Object.assign(c, cambiosFila);
+  if (cambiaExp && r.padreId && cache.get(r.padreId)) cache.get(r.padreId).carpeta = exp;
+  // Registro de cambios: lo que cambió (el nombre del usuario nunca: solo "(corregido)")
+  const antes = {}, despues = {};
+  if (cambiaExp){ antes['Expediente / carpeta'] = o.exp; despues['Expediente / carpeta'] = exp; }
+  if (cambiaRef){ antes['Referencia'] = o.referencia; despues['Referencia'] = ref; }
+  const NOMBRES = { juzgado: 'Juzgado', juez: 'Juez/a', oficioDest: 'Destinatario del oficio', resolucion: 'Lo que dispuso el juzgado', motivo: 'Motivo del pedido', informe: 'Informe del defensor',
+    analisis: 'Análisis', informeCoord: 'Informe del Coordinador', delito: 'Presunto delito', materiaDoc: 'Materia para documentos' };
+  Object.keys(NOMBRES).forEach(k => { if ((datos[k] || '') !== (antesDd[k] || '')){ antes[NOMBRES[k]] = antesDd[k] || ''; despues[NOMBRES[k]] = datos[k] || ''; } });
+  if ((datos.usuarioDoc || '') !== (antesDd.usuarioDoc || '')){ antes['Nombre para documentos'] = ''; despues['Nombre para documentos'] = datos.usuarioDoc ? '(corregido)' : '(como en el caso)'; }
+  if (Object.keys(despues).length) registrarCambio('Corrigió datos en Documentos', COL, r.id, antes, despues);
+  pintar();
+}
+
+// ---------- Word: oficio de asignación, carta de asignación y carta "no procede cambio" ----------
+// Redacción y formato de los modelos (OFICIO N° 2016-2026, CARTA N° 456-2026, CARTA N° 418-2026), con las correcciones aprobadas.
+const ESTILOS_DOCS = ESTILOS_W.replace('w:line="240"', 'w:line="264"');
+// "Asunto     : texto" con el texto que, si se alarga, sigue alineado
+function lineaDosPuntos(rotulo, texto, o = {}){
+  const tab = o.tab || 1417;
+  return wPar(wRun(rotulo, { b: !!o.bRotulo }) + wTab + wRun(': ', { b: !!o.bRotulo }) + wRun(texto, { b: !!o.bTexto }), { tabs: [tab], ind: { izq: tab + 170, colgante: tab + 170 }, despues: o.despues ?? 240, jc: 'left' });
+}
+function firmaDocs(cfg, mayus){
+  const firma = { jc: 'center', despues: 0, juntos: true };
+  const cargo = String(cfg.firmanteCargo || '').split('\n').map(x => x.trim()).filter(Boolean);
+  const nombre = cfg.firmanteNombre ? (mayus ? cfg.firmanteNombre.toLocaleUpperCase('es-PE') : cfg.firmanteNombre) : '[FIRMANTE]';
+  return [
+    wPar(wRun('Atentamente,'), { jc: 'left', despues: 900, juntos: true }),
+    wPar(wRun('_______________________________________'), firma),
+    wPar(wRun(nombre, { b: true }), firma),
+    ...cargo.map((l, i) => wPar(wRun(l, { b: true }), { ...firma, juntos: i < cargo.length - 1 }))
+  ].join('');
+}
+// Datos del usuario debajo del nombre (lo vacío no sale)
+function contactoUsuario(p, enlaces, rotuloCorreo, conEnlace){
+  const v = id => ($(p + id) ? $(p + id).value.trim() : '');
+  const correo = v('Correo');
+  if (correo && conEnlace) enlaces.push(['rIdCorreoUsu', 'mailto:' + correo]);
+  return [
+    v('Dni') ? wPar(wRun('DNI N° ' + v('Dni')), { jc: 'left', despues: 0 }) : '',
+    v('Cel') ? wPar(wRun('Celular: ' + v('Cel')), { jc: 'left', despues: 0 }) : '',
+    correo ? wPar(wRun(rotuloCorreo + ': ') + (conEnlace ? wEnlace('rIdCorreoUsu', correo) : wRun(correo)), { jc: 'left', despues: 0 }) : ''
+  ].join('');
+}
+async function wordOficio(c, cfg){
+  const t = palabrasTrato(c.trato, c.area), enlaces = [];
+  if (c.correo) enlaces.push(['rIdCorreoAbog', 'mailto:' + c.correo]);
+  const dest = String($('doDest').value || '').split('\n').map(x => x.trim()).filter(Boolean);
+  const edad = $('doEdad').value.trim(), ini = $('doIniciales').value.trim(), resol = $('doResol').value.trim().replace(/[.\s]+$/, '');
+  // Corregido: "para la agraviada de iniciales …, en el Expediente …, tramitado ante …, a cargo de …, autoridad que …"
+  const detalle = (c.exp ? ', en el Expediente Judicial N° ' + c.exp : '') + (c.juzgado ? ', tramitado ante ' + conArticulo(c.juzgado) : '') +
+    (c.juez ? ', a cargo ' + (c.juezTrato === 'Juez' ? 'del Juez ' : c.juezTrato === 'Fiscal' ? 'del/de la Fiscal ' : 'de la Jueza ') + c.juez : '') + (resol ? ', autoridad que ' + resol : '');
+  const cuerpo = [
+    wPar(wRun('Lima, ' + fechaLarga(c.fecha, true)), { jc: 'left', despues: 240 }),
+    wPar(wRun('OFICIO N° ' + c.num + '-' + (cfg.sufijoOficio || '[PARTE FIJA]'), { b: true, u: true }), { jc: 'left', despues: 240 }),
+    ...dest.map((l, i) => wPar(wRun(l.toLocaleUpperCase('es-PE'), { b: true }), { jc: 'left', despues: i === dest.length - 1 ? 240 : 0 })),
+    lineaDosPuntos('Asunto', 'Se comunica asignación de Defensa Pública.', { bRotulo: true }),
+    lineaDosPuntos('Referencia', c.referencia, { bRotulo: true, bTexto: true }),
+    wPar(wRun('De mi mayor consideración:'), { jc: 'left', despues: 240 }),
+    wPar(wRun('Es grato dirigirme a usted, para hacerle llegar mis cordiales saludos y a la vez atender el oficio de la referencia, mediante el cual solicitan defensor público para ' +
+      ($('doAgraviado').value === 'M' ? 'el agraviado' : 'la agraviada') + (ini ? ' de iniciales ' + ini : '') + (edad ? ' (' + edad + ')' : '') + detalle + '. En tal sentido ') +
+      wRun('SE COMUNICA', { b: true }) + wRun(' a vuestro Despacho que se ha dispuesto asignar ' + t.al + ' ' + t.cargo + ' Abog. ' + c.abogado.toLocaleUpperCase('es-PE') +
+      (c.celular ? ' con número de celular ' + c.celular : '') + (c.correo ? (c.celular ? ' y' : ' con') + ' correo electrónico ' : '')) +
+      (c.correo ? wEnlace('rIdCorreoAbog', c.correo) : '') +
+      wRun('; quien ejercerá la defensa técnica necesaria durante toda la investigación y/o proceso penal hasta que sea ' + t.subrogada + ' y/o ' + t.apartada + ' de la defensa por alguna de las causales establecidas en las normas vigentes; por lo que solicito se le otorgue las prerrogativas de ley y se le remita los actuados correspondientes, para ejercer la defensa técnica correspondiente.'), { despues: 240 }),
+    wPar(wRun('Sin otro particular, aprovecho la oportunidad para expresarle los sentimientos de mi especial consideración y estima personal.'), { despues: 360 }),
+    firmaDocs(cfg, false)
+  ].join('');
+  await armarCartaDocx(cuerpo, enlaces, cfg, c.iniciales, 'OFICIO N° ' + c.num + ' - ASIGNACIÓN.docx',
+    { estilos: ESTILOS_DOCS, margenes: { izq: 2.5, der: 2 }, encabezado: { ancho: 18, sobresale: 0.75, maxRecuadro: 3.3 } });
+}
+async function wordCartaAsig(c, cfg, variante){
+  const t = palabrasTrato(c.trato, c.area), enlaces = [];
+  if (c.correo) enlaces.push(['rIdCorreoAbog', 'mailto:' + c.correo]);
+  const exp = (c.exp ? ', correspondiente al Expediente N.° ' + c.exp : '') + (c.juzgado ? ', tramitado ante ' + conArticulo(c.juzgado) : '');
+  let p1;
+  if (variante === 'cambio'){
+    const ta = palabrasTrato($('dcTratoAnterior').value, c.area);
+    // Modelo (corregido: "…el cambio de Defensor/a Público/a, asignando a la Abg. …")
+    p1 = 'Me dirijo a usted, en atención al documento de la referencia, mediante el cual solicita el cambio ' + ta.del + ' ' + ta.cargo + ', Abg. ' + $('dcAnterior').value.trim() +
+      ', quien viene ejerciendo el patrocinio' + (c.exp ? ' en el Expediente N.° ' + c.exp : '') + (c.juzgado ? ', tramitado ante ' + conArticulo(c.juzgado) : '') +
+      '. Al respecto, esta Dirección Distrital ha dispuesto el cambio de Defensor/a Público/a, asignando ' + t.al + ' Abg. ' + c.abogado + ', quien continuará a cargo de su defensa.';
+  } else {
+    p1 = 'Me dirijo a usted, en atención al documento de la referencia, mediante el cual solicita la asignación de un Defensor Público para el patrocinio de su caso' + exp +
+      '. Al respecto, esta Dirección Distrital ha dispuesto asignarle ' + t.al + ' ' + t.cargo + ' Abg. ' + c.abogado + ', quien estará a cargo de su defensa.';
+  }
+  const contacto = (c.celular || c.correo) ? ' Para las coordinaciones correspondientes, podrá comunicarse con ' + t.citada + (c.celular ? ' al número ' + c.celular : '') + (c.correo ? (c.celular ? ' o' : '') + ' al correo electrónico ' : '') : '';
+  const sede = (($('dtSede').selectedOptions[0] || {}).textContent || '').replace(/^\(.*\)$/, '').trim(), dir = $('dtDir').value.trim(), hor = $('dtHorario').value.trim();
+  const cuerpo = [
+    wPar(wRun('Lima, ' + fechaLarga(c.fecha)), { jc: 'left', despues: 240 }),
+    wPar(wRun('CARTA N° ' + c.numCarta + '-' + (cfg.sufijoCarta || '[PARTE FIJA]'), { b: true, u: true }), { jc: 'left', despues: 240 }),
+    wPar(wRun(c.usuario, { b: true }), { jc: 'left', despues: 0 }),
+    contactoUsuario('dt', enlaces, 'Email', false),
+    wPar(wRun('Presente:', { b: true, u: true }), { jc: 'left', despues: 240 }),
+    lineaDosPuntos('Asunto', 'Asignación de Defensa Pública', { tab: 1871 }),
+    lineaDosPuntos('Referencia', 'Solicitud de fecha ' + fechaLarga(c.fechaSolicitud), { tab: 1871 }),
+    wPar(wRun('De mi consideración:'), { jc: 'left', despues: 240 }),
+    wPar(wRun(p1 + contacto) + (c.correo && contacto ? wEnlace('rIdCorreoAbog', c.correo) : '') + wRun(contacto ? '.' : ''), { despues: 240 }),
+    dir ? wPar(wRun('Asimismo, se informa que ' + t.la + ' ' + t.cargo + ' ' + t.asignada + ' brinda atención presencial' + (sede ? ' en la sede ' + sede : '') + ', ubicada en ' + dir +
+      (hor ? ', en el horario de ' + hor : '') + '. Se recomienda apersonarse o comunicarse previamente para realizar las coordinaciones correspondientes.'), { despues: 360 }) : '',
+    firmaDocs(cfg, true)
+  ].join('');
+  // Como el modelo: Perú Responde arriba, el logo de los 200 años abajo y sin la dirección del Ministerio en el pie
+  await armarCartaDocx(cuerpo, enlaces, { ...cfg, pie: [] }, c.iniciales, 'CARTA N° ' + c.numCarta + ' - ASIGNACIÓN.docx',
+    { estilos: ESTILOS_DOCS, margenes: { izq: 3.5, der: 2 }, encabezado: { ancho: 19, sobresale: 1.65, maxRecuadro: 3.3, peruResponde: true } });
+}
+async function wordNoCambio(c, cfg){
+  const t = palabrasTrato(c.trato, c.area), enlaces = [];
+  const areaTxt = c.area === 'Equipo multidisciplinario' ? 'del Equipo Multidisciplinario' : 'del Área de ' + c.area;
+  const quien = t.del + ' ' + t.cargo + ' ' + areaTxt + ', Abg. ' + c.abogado;
+  const motivo = $('dnMotivo').value.trim().replace(/[.\s]+$/, ''), inf = $('dnInforme').value.trim(), analisis = $('dnAnalisis').value.trim().replace(/[.\s]+$/, '');
+  const cuerpo = [
+    wPar(wRun('Lima, ' + fechaLarga(c.fecha)), { jc: 'left', despues: 240 }),
+    wPar(wRun('CARTA N° ' + c.numCarta + '-' + (cfg.sufijoCarta || '[PARTE FIJA]'), { b: true, u: true }), { jc: 'left', despues: 240 }),
+    wPar(wRun(c.usuario), { jc: 'left', despues: 0 }),
+    contactoUsuario('dn', enlaces, 'Correo', true),
+    wPar(wRun('Presente. –', { u: true }), { jc: 'left', despues: 240 }),
+    // Corregido: "Se desestima la solicitud…" y un solo ":" en Referencia
+    lineaDosPuntos('Asunto', 'Se desestima la solicitud de cambio y/o reasignación de Defensor Público.', { tab: 1871 }),
+    lineaDosPuntos('Referencia', 'Solicitud de usuario, de fecha ' + fechaLarga(c.fechaSolicitud, true) + '.', { tab: 1871 }),
+    wPar(wRun('De nuestra mayor consideración:'), { jc: 'left', despues: 240 }),
+    // Una sola fecha de solicitud (la de la Referencia)
+    wPar(wRun('Me dirijo a usted, en atención al documento de la referencia, mediante el cual solicita el cambio ' + quien + (motivo ? ', ' + motivo : '') +
+      '. Al respecto, se informa que su requerimiento ha sido evaluado por esta Dirección Distrital y, tras el análisis de su solicitud presentada con fecha ' + fechaLarga(c.fechaSolicitud) +
+      (inf ? ', así como de lo señalado en el Informe N.° ' + inf : '') + (analisis ? ', ' + analisis : '') +
+      ', se ha determinado que los hechos expuestos no configuran una causal objetiva ni se encuentran sustentados con elementos suficientes que justifiquen el apartamiento o la abstención ' + t.del + ' ' + t.cargo + ' en el ejercicio de la defensa técnica a su favor.'), { despues: 240 }),
+    wPar(wRun('En ese sentido, de conformidad con lo establecido en el Reglamento de la Ley N.° 29360, Ley del Servicio de Defensa Pública, ') + wRun('NO PROCEDE', { b: true }) +
+      wRun(' su solicitud de cambio y/o reasignación ' + quien + '.'), { despues: 240 }),
+    wPar(wRun('No obstante, esta Dirección Distrital permanece atenta a cualquier situación que pudiera afectar el adecuado ejercicio de la defensa técnica, por lo que se le recuerda que podrá comunicar cualquier hecho concreto y debidamente sustentado que considere pertinente, a efectos de que sea evaluado conforme a la normativa vigente.'), { despues: 360 }),
+    firmaDocs(cfg, false)
+  ].join('');
+  await armarCartaDocx(cuerpo, enlaces, cfg, c.iniciales, 'CARTA N° ' + c.numCarta + ' - NO PROCEDE CAMBIO.docx',
+    { estilos: ESTILOS_DOCS, margenes: { izq: 2.5, der: 2 }, encabezado: { ancho: 18, sobresale: 0.75, maxRecuadro: 3.3 } });
+}
+
+async function descargarTodoDocs(){
+  const vacios = resaltarFaltasDocs();
+  if (vacios.length){
+    const nombres = vacios.map(i => (document.querySelector('label[for="' + i + '"]') || {}).textContent || i).map(x => x.replace(/\*/g, '').trim());
+    $('dcError').textContent = 'Falta (en amarillo): ' + [...new Set(nombres)].join(', ') + '.'; $('dcError').hidden = false; return;
+  }
+  $('dcError').hidden = true;
+  const r = docsFila, cfg = docsCfg || await leerConfigDocsAsig();
+  const fecha = $('dcFecha').value, anio = fecha.slice(0, 4);
+  const c = {
+    fecha, anio, usuario: may($('dcUsuario').value), abogado: $('dcAbogado').value.trim(), trato: $('dcTrato').value, area: r.abogArea,
+    celular: $('dcCelular').value.trim(), correo: $('dcCorreo').value.trim().toLowerCase(), referencia: may($('dcReferencia').value),
+    fechaSolicitud: $('dcFechaSolicitud').value, exp: may($('dcExp').value), juzgado: $('dcJuzgado').value.trim(), juez: $('dcJuez').value.trim(), juezTrato: $('dcJuezTrato').value,
+    iniciales: [cfg.inicialesFijas, $('dcIniciales').value.trim()].filter(Boolean).join('/')
+  };
+  const misIniciales = $('dcIniciales').value.trim();
+  let noAsigNum = '';
+  const hechos = [], marcas = [];
+  docsArmados = []; // se arman todos primero; se entregan juntos al final
+  try {
+  for (const d of docsLista){
+    if (d.tipo === 'memo'){
+      const num = numConAnio($('dmNum').value.trim(), anio);
+      await wordMemoAsig({ num, fecha, nombre: may(c.abogado), cargo: $('dmCargo').value, referencia: c.referencia, usuario: c.usuario, materia: may(materiaDocs()), carpeta: c.exp,
+        plazo: $('dmPlazo').value, diligencias: $('dmDils').value, iniciales: [cfg.inicialesMemo, misIniciales].filter(Boolean).join('/') });
+      hechos.push({ tipo: 'memo', num });
+    }
+    if (d.tipo === 'oficio'){
+      const num = numConAnio($('doNum').value.trim(), anio);
+      await wordOficio({ ...c, num }, cfg);
+      hechos.push({ tipo: 'oficio', num }); marcas.push(PREFIJO_DOC.oficio + num);
+    }
+    if (d.tipo === 'carta'){
+      const numCarta = numConAnio($('dtNum').value.trim(), anio);
+      await wordCartaAsig({ ...c, numCarta }, cfg, d.variante);
+      hechos.push({ tipo: 'carta', num: numCarta }); marcas.push(PREFIJO_DOC.carta + numCarta);
+    }
+    if (d.tipo === 'noCambio'){
+      const numCarta = numConAnio($('dnNum').value.trim(), anio);
+      await wordNoCambio({ ...c, numCarta }, cfg);
+      hechos.push({ tipo: 'noCambio', num: numCarta }); marcas.push(PREFIJO_DOC.noCambio + numCarta);
+    }
+    if (d.tipo === 'noAsig' && $('naNum')){
+      const cfgCarta = await leerConfigCarta();
+      noAsigNum = await wordNoAsig({ num: $('naNum').value.trim(), fecha, usuario: c.usuario, dni: $('naDni').value, cel: $('naCel').value, correo: $('naCorreo').value,
+        referencia: $('naReferencia').value, informe: $('naInforme').value.trim(), tipoExp: $('naTipoExp').value, exp: partirCarpeta($('dcExp').value).num, delito: $('naDelito').value,
+        ante: $('dcJuzgado').value, numeral: $('naNumeral').value, iniciales: [cfgCarta.inicialesFijas, misIniciales].filter(Boolean).join('/') });
+      hechos.push({ tipo: 'noAsig', num: noAsigNum });
+    }
+  }
+  } finally { var archivos = docsArmados || []; docsArmados = null; }
+  entregarDocsArmados(archivos);
+  // Datos no personales a la fila (si las reglas aún no lo permiten a los asistentes, se avisa y lo demás sigue)
+  try { await guardarDatosDocs(); } catch (e){ console.warn(e); avisar('Los Word se descargaron, pero no se pudieron guardar juzgado, juez y destinatario en la fila' + (e && e.code === 'permission-denied' ? ' (falta publicar la regla nueva).' : '.'), 8000); }
+  // N° en las casillas: Memo y Oficio / Carta ("OFICIO N° … | CARTA N° …"; se cambia el N° de un documento si ya estaba)
+  const memo = hechos.find(h => h.tipo === 'memo');
+  if (memo) await anotarMemoAsig(r.id, memo.num, fecha);
+  if (noAsigNum) await anotarCartaNoProcede(r.id, noAsigNum, fecha);
+  if (marcas.length){
+    const actual = cache.get(r.id) || r;
+    const tipos = Object.values(PREFIJO_DOC);
+    const prefijoDe = p => tipos.filter(x => p.startsWith(x)).sort((a, b) => b.length - a.length)[0];
+    const nuevos = marcas.map(prefijoDe);
+    // Lo que había: se quitan los N° de los mismos documentos (se reemplazan) y los N° escritos a mano sin "OFICIO N°/CARTA N°"
+    const quedan = partesOficio(actual).filter(p => { const pre = prefijoDe(p); return pre ? !nuevos.includes(pre) : /CARTA NO PROCEDE N°/.test(p); });
+    const valor = [...quedan, ...marcas].join(' | ');
+    if (valor !== String(actual.oficioNum || '')){
+      try { await guardarNumDoc(r.id, 'oficioNum', valor); }
+      catch (e){ errorAlGuardar(e); avisar('Los Word se descargaron, pero no se pudo anotar el N° en Oficio / Carta. Escríbelo a mano.', 8000); }
+    }
+  }
+  // Registro de cambios: solo tipos y N° (nunca el nombre ni el contacto del usuario)
+  const resumen = {}; hechos.filter(h => h.tipo !== 'memo' && h.tipo !== 'noAsig').forEach(h => resumen[NOMBRE_DOC[h.tipo]] = 'N° ' + h.num);
+  if (Object.keys(resumen).length) registrarCambio('Generó documentos de la fila', COL, r.id, {}, { ...resumen, fecha, area: r.area || '' });
+}
+// Entrega los Word armados: en la computadora se bajan todos seguidos; además (y siempre en iPhone) quedan botones,
+// uno por documento: un toque directo nunca lo bloquea el navegador. Explica cómo permitir las descargas múltiples.
+let docsListos = [];
+function entregarDocsArmados(archivos){
+  docsListos = archivos;
+  if (!esIOS()) archivos.forEach(a => descargarDirecto(a.blob, a.nombre));
+  $('dcListos').innerHTML = '<b>✓ ' + archivos.length + (archivos.length === 1 ? ' documento listo' : ' documentos listos') + '</b> y anotados en la fila. ' +
+    (esIOS() ? 'Toca cada uno para guardarlo o compartirlo:' : 'Si alguno no se bajó, tócalo aquí:') +
+    '<div style="display:flex;flex-wrap:wrap;gap:6px;margin:8px 0">' + archivos.map((a, i) => `<button type="button" class="btn-blanco" data-doc-listo="${i}">⬇ ${esc(a.nombre)}</button>`).join('') + '</div>' +
+    (esIOS() ? '' : '<div class="ayuda"><b>Si el navegador bloqueó las descargas</b> (sale "Este sitio intentó descargar varios archivos" o un ícono de descarga tachado a la derecha de la barra de direcciones): toca ese ícono y elige <b>"Permitir siempre"</b>. ' +
+      'También: Chrome o Edge › Configuración › Privacidad y seguridad › Configuración de sitios › Descargas automáticas › agrega este sitio en "Permitido". La próxima vez se bajarán todos juntos.</div>');
+  $('dcListos').hidden = false;
+  $('dcListos').scrollIntoView({ block: 'nearest' });
+}
+$('dcListos').addEventListener('click', e => {
+  const b = e.target.closest('[data-doc-listo]'); if (!b) return;
+  const a = docsListos[Number(b.dataset.docListo)];
+  if (a) entregarArchivo(a.blob, a.nombre);
+});
+$('dcDescargar').onclick = async () => {
+  $('dcDescargar').disabled = true;
+  try { await descargarTodoDocs(); } catch (e){ console.error(e); avisar('No se pudo armar el Word (' + (e.message || e) + ').', 7000); }
+  finally { $('dcDescargar').disabled = false; }
+};
+$('dcGuardar').onclick = async () => {
+  try { await guardarDatosDocs(); avisar('Datos guardados en la fila.'); }
+  catch (e){ errorAlGuardar(e); }
 };
 
 // Cualquier ✕ cierra la ventana en la que está
