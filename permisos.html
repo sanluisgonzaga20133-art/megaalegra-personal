@@ -285,6 +285,14 @@
       <button class="btn" id="btnCorregirNombres">Corregir los marcados</button>
       <div id="confirmarNombres" class="ayuda" hidden style="margin-top:8px;background:#FFF3D6;border:1.5px solid #E8C872;border-radius:10px;padding:10px 12px;color:var(--tinta)"></div>
     </div>
+    <!-- Completar Trato: solo los activos que aún no lo tienen; un toque guarda al instante -->
+    <div class="caja solo-admin" id="cajaTrato" hidden style="border-color:var(--dorado)">
+      <details id="detTrato">
+        <summary style="cursor:pointer;font-weight:700" id="resumenTrato"></summary>
+        <p class="ayuda">Elige cómo se le nombra en oficios y cartas. Un toque guarda al instante y el nombre sale de la lista. En el Equipo multidisciplinario sale "Servidor / Servidora".</p>
+        <div id="listaTrato"></div>
+      </details>
+    </div>
     <div class="fila-form" style="margin-bottom:8px">
       <label>Área<select id="filtroAreaDef"><option value="">Todas</option><option>Asistencia Legal</option><option>Defensa de Víctimas</option><option>Equipo multidisciplinario</option></select></label>
       <label class="interruptor" style="flex-direction:row;padding-bottom:8px"><input type="checkbox" id="verBajas"> Mostrar también los dados de baja</label>
@@ -839,6 +847,7 @@ async function cargarDefs(){
     avisar('No se pudo leer los celulares personales (' + (e.code || e.message) + '). ¿Ya publicaste las reglas nuevas?', 8000);
   }
   pintarDefs();
+  pintarTrato();
   pintarSeparar();
   pintarNombres();
 }
@@ -1097,6 +1106,37 @@ function pintarDefs(){
       <td><button class="btn chico" data-guardar-def disabled>Guardar</button></td>
     </tr>`).join('') || '<tr><td colspan="11" class="vacio">No hay defensores para mostrar.</td></tr>';
 }
+// ---------- Completar Trato (Defensor / Defensora): solo el administrador, solo los activos que no lo tienen ----------
+// No se adivina por el nombre: lo elige el administrador. Un toque guarda al instante (con Registro de cambios).
+function pintarTrato(){
+  const faltan = DEFS.filter(d => d.activo !== false && !d.trato);
+  $('cajaTrato').hidden = !esAdmin() || !faltan.length;
+  if (!faltan.length) return;
+  $('resumenTrato').textContent = '⚠ ' + (faltan.length === 1 ? 'Falta 1 defensor' : 'Faltan ' + faltan.length + ' defensores') + ' sin Trato (Defensor / Defensora) · Completar';
+  const areas = [...new Set(faltan.map(d => d.area || 'Sin área'))];
+  $('listaTrato').innerHTML = areas.map(a => {
+    const eq = a === 'Equipo multidisciplinario';
+    return `<h4 style="margin:10px 0 6px">${esc(a)}</h4>` + faltan.filter(d => (d.area || 'Sin área') === a).map(d =>
+      `<div style="display:flex;flex-wrap:wrap;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid #eee">
+        <span style="flex:1 1 220px">${esc(d.nombre || d.id)}</span>
+        <button class="btn chico" data-trato-id="${esc(d.id)}" data-trato="M">${eq ? 'Servidor' : 'Defensor'}</button>
+        <button class="btn chico" data-trato-id="${esc(d.id)}" data-trato="F">${eq ? 'Servidora' : 'Defensora'}</button>
+      </div>`).join('');
+  }).join('');
+}
+$('listaTrato').addEventListener('click', async e => {
+  const b = e.target.closest('[data-trato-id]'); if (!b) return;
+  const d = DEFS.find(x => x.id === b.dataset.tratoId); if (!d) return;
+  b.parentElement.querySelectorAll('button').forEach(x => x.disabled = true);
+  try {
+    await updateDoc(doc(db, 'defensores', d.id), { trato: b.dataset.trato, actualizadoEn: new Date().toISOString() });
+    await registrarCambio('Editó defensor ' + (d.nombre || d.id), 'defensores', d.id, { trato: d.trato || '' }, { trato: b.dataset.trato });
+    d.trato = b.dataset.trato;
+    pintarTrato(); pintarDefs();
+    if (!$('cajaTrato').hidden) $('detTrato').open = true;
+    avisar('Guardado: ' + (d.nombre || d.id) + ' · ' + b.textContent);
+  } catch (err){ error(err); b.parentElement.querySelectorAll('button').forEach(x => x.disabled = false); }
+});
 $('filtroAreaDef').onchange = pintarDefs;
 $('verBajas').onchange = pintarDefs;
 $('cuerpoDef').addEventListener('input', e => {
