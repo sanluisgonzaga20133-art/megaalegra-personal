@@ -322,7 +322,7 @@ const nombreMes = mes => MESES[Number(mes.slice(5, 7)) - 1] + ' ' + mes.slice(0,
 const ultimoDia = mes => new Date(Number(mes.slice(0, 4)), Number(mes.slice(5, 7)), 0).getDate();
 const diasDelMes = mes => Array.from({ length: ultimoDia(mes) }, (_, i) => mes + '-' + String(i + 1).padStart(2, '0'));
 const AREAS = ['Asistencia Legal', 'Defensa de Víctimas', 'Equipo multidisciplinario'];
-const AREA_CORTA = { 'Asistencia Legal': 'Asistencia Legal', 'Defensa de Víctimas': 'Víctimas', 'Equipo multidisciplinario': 'Equipo multidisciplinario' };
+const AREA_CORTA = { 'Asistencia Legal': 'Asistencia Legal', 'Defensa de Víctimas': 'Víctimas', 'Equipo multidisciplinario': 'Equipo multidisciplinario', 'Asistente': 'Asistente' };
 function error(err){
   console.error(err);
   avisar(err && err.code === 'permission-denied' ? 'Firebase no dio permiso para este cambio.' : 'No se pudo guardar. Revisa tu conexión.', 6000);
@@ -343,6 +343,7 @@ function nivelSeccion(f, s){
 let yo = null, puedeTurnos = false, nivelLicencias = 'sin';
 const esAdmin = () => yo && yo.esAdmin === true;
 let DEFS = [];           // defensores (también los de baja, para mostrar nombres antiguos)
+let ASIS = [];           // asistentes con su código (colección "asistentes"): sus licencias también están en Licencias
 let LICENCIAS = [];      // colección pública "licencias" (sin motivo)
 let FERIADOS = [];       // [{ docId, fecha, nombre }]
 let TIPOS = [];          // turnos/tipos (o los iniciales)
@@ -436,15 +437,17 @@ function aIso(v){
   return m ? m[3] + '-' + m[2].padStart(2, '0') + '-' + m[1].padStart(2, '0') : '';
 }
 async function cargarBase(){
-  const [sd, sl, sf, st, sp, ss, sda] = await Promise.all([
+  const [sd, sl, sf, st, sp, ss, sda, sa] = await Promise.all([
     getDocs(collection(db, 'defensores')),
     intentar(getDocs(collection(db, 'licencias')), null, 'las licencias'),
     intentar(getDocs(collection(db, 'feriados')), null, 'los feriados'),
     intentar(getDoc(doc(db, 'turnos', 'tipos')), null, 'los tipos de turno'),
     intentar(getDoc(doc(db, 'turnos', 'fonoAlegra')), null, 'el turno presencial'),
     intentar(getDoc(doc(db, 'turnos', 'sedes')), null, 'las sedes'),
-    intentar(getDoc(doc(db, 'configuracion', 'documentosAsignacion')), null, 'las sedes de los documentos de asignación')
+    intentar(getDoc(doc(db, 'configuracion', 'documentosAsignacion')), null, 'las sedes de los documentos de asignación'),
+    intentar(getDocs(collection(db, 'asistentes')), null, 'la lista de asistentes')
   ]);
+  ASIS = sa ? sa.docs.map(d => d.data()).filter(a => a.codigo).map(a => ({ id: a.codigo, nombre: a.nombre || a.correo, area: 'Asistente', esAsistente: true, activo: true })) : [];
   DEFS = sd.docs.map(d => ({ id: d.id, ...d.data() }))
     .sort((a, b) => (a.area || '').localeCompare(b.area || '') || (a.orden ?? 999) - (b.orden ?? 999) || (a.nombre || '').localeCompare(b.nombre || '', 'es'));
   LICENCIAS = sl ? sl.docs.map(d => ({ id: d.id, ...d.data() })).filter(l => l.inicio && l.fin) : [];
@@ -469,7 +472,7 @@ const mesesEntre = (desde, hasta) => { const lista = []; for (let m = desde.slic
 const rolDelMes = (t, mes) => ROLES[t.id + '__' + mes];
 const deTurno = (t, iso) => (((rolDelMes(t, iso.slice(0, 7)) || {}).dias || {})[iso]) || [];
 
-const defPorId = id => DEFS.find(d => d.id === id);
+const defPorId = id => DEFS.find(d => d.id === id) || ASIS.find(a => a.id === id);
 const nombreDe = p => (defPorId(p.id) || {}).nombre || p.nombre || p.id;
 const telDe = cel => String(cel || '').split(/[-\/,;]| y /)[0].replace(/\D/g, ''); // el primer número, para llamar
 const celularHtml = id => { const c = (defPorId(id) || {}).celular, t = telDe(c); return c ? (t.length >= 6 ? `<a href="tel:${esc(t)}">${esc(c)}</a>` : esc(c)) : '<span class="chico">—</span>'; };
@@ -545,7 +548,7 @@ function filasLicencia(l, iso, comoApoyo){
 }
 function personasDelNombre(q){
   const palabras = norm(q).split(/[\s,]+/).filter(Boolean);
-  return palabras.length ? DEFS.filter(d => d.activo !== false && palabras.every(p => norm(d.nombre).includes(p))) : [];
+  return palabras.length ? [...DEFS, ...ASIS].filter(d => d.activo !== false && palabras.every(p => norm(d.nombre).includes(p))) : [];
 }
 async function pintarBuscar(){
   const fecha = $('bFecha').value || hoyIso(), q = $('bNombre').value.trim();
@@ -561,7 +564,7 @@ async function pintarBuscar(){
     if (sinRol.length) ayuda += ` <i>Sin rol cargado de ${esc(nombreMes(fecha.slice(0, 7)))}: ${esc(sinRol.join(', '))}.</i>`;
   } else {
     const personas = personasDelNombre(q), ids = personas.map(p => p.id), hasta = sumarDias(fecha, DIAS_POR_NOMBRE - 1);
-    if (!personas.length){ $('ayudaBuscar').innerHTML = ''; $('tablaBuscar').innerHTML = '<div class="vacio">Nadie con ese nombre en Defensores.</div>'; return; }
+    if (!personas.length){ $('ayudaBuscar').innerHTML = ''; $('tablaBuscar').innerHTML = '<div class="vacio">Nadie con ese nombre en Defensores ni en Asistentes.</div>'; return; }
     await Promise.all(mesesEntre(fecha, hasta).map(cargarRoles));
     if ($('bNombre').value.trim() !== q || ($('bFecha').value || hoyIso()) !== fecha) return;
     for (let iso = fecha; iso <= hasta; iso = sumarDias(iso, 1)) filas.push(...filasDelDia(iso, ids));
@@ -576,7 +579,7 @@ async function pintarBuscar(){
   $('ayudaBuscar').innerHTML = ayuda;
   const hoy = hoyIso();
   $('tablaBuscar').innerHTML = filas.length ? `<div class="tabla-wrap"><table class="tabla-buscar">
-    <thead><tr><th>Tipo</th><th>Defensor</th><th>Fecha</th><th>Horario</th><th>Sede / Lugar</th><th>Celular</th><th>Correo</th></tr></thead>
+    <thead><tr><th>Tipo</th><th>Persona</th><th>Fecha</th><th>Horario</th><th>Sede / Lugar</th><th>Celular</th><th>Correo</th></tr></thead>
     <tbody>${filas.map(f => `<tr class="${f.lic ? 'lic' : ''} ${q && f.iso === hoy && f.orden !== 99 ? 'hoy' : ''}">
       <td class="col-tipo">${f.seguida ? '' : `<i style="background:${esc(f.color)}"></i>${esc(f.tipo)}`}</td>
       <td class="nombre">${esc(f.nombre)}${f.id && !defPorId(f.id) ? '<span class="alerta">No está en Defensores</span>' : ''}${f.nota ? `<span class="${f.alerta ? 'alerta' : 'chico'}">${esc(f.nota)}</span>` : ''}</td>
@@ -621,7 +624,7 @@ function armarRol(){
     const fin = mes + '-' + String(ultimoDia(mes)).padStart(2, '0');
     const lista = LICENCIAS.filter(l => l.inicio <= fin && l.fin >= mes + '-01').sort((a, b) => a.inicio.localeCompare(b.inicio) || (a.defensorNombre || '').localeCompare(b.defensorNombre || '', 'es'));
     return { titulo: 'LICENCIAS – ' + MES, datos: 'Licencias que tocan algún día del mes, con su abogado de apoyo (a quien se llama). Marcadas: vigentes hoy.', color: COLOR_LICENCIA,
-      cab: ['Defensor/a', 'Área', 'Desde', 'Hasta', 'Días', 'Apoyo', 'Celular del apoyo', 'Correo del apoyo'],
+      cab: ['Persona', 'Área', 'Desde', 'Hasta', 'Días', 'Apoyo', 'Celular del apoyo', 'Correo del apoyo'],
       filas: lista.map(l => { const ap = apoyosDe(l);
         return { hoy: l.inicio <= hoy && hoy <= l.fin, celdas: [(defPorId(l.defensorId) || {}).nombre || l.defensorNombre, AREA_CORTA[l.area] || l.area || '', fechaCorta(l.inicio), fechaCorta(l.fin),
           String(Math.round((new Date(l.fin + 'T12:00:00') - new Date(l.inicio + 'T12:00:00')) / 86400000) + 1),
@@ -858,7 +861,7 @@ function unirDefensor(nombre, lista){
   const segura = p.r >= 0.6 && !(s && s.r === p.r && s.m === p.m);
   return { id: p.d.id, segura };
 }
-const idPorNombreOficial = n => (DEFS.find(d => d.activo !== false && norm(d.nombre) === norm(n)) || {}).id || '';
+const idPorNombreOficial = n => ([...DEFS, ...ASIS].find(d => d.activo !== false && norm(d.nombre) === norm(n)) || {}).id || '';
 
 // ================= SUBIR ROL (Excel, Word con tabla o PDF con texto) =================
 const MESES_LEER = { enero: 1, january: 1, febrero: 2, february: 2, marzo: 3, march: 3, abril: 4, april: 4, mayo: 5, may: 5, junio: 6, june: 6, julio: 7, july: 7,
@@ -1016,7 +1019,9 @@ $('fArchivoRol').addEventListener('change', async () => {
     const activos = DEFS.filter(d => d.activo !== false);
     const bloques = tablas.map(t => ({ t, r: interpretar(t) })).filter(x => x.r).map(({ t, r }) => {
       const nombres = {};
-      const unir = texto => { if (!(texto in nombres)) nombres[texto] = unirDefensor(texto, activos); return nombres[texto]; };
+      // En las licencias también se reconoce a los asistentes (Caycho, Mena…)
+      const lista = r.tipo === 'licencias' ? [...activos, ...ASIS] : activos;
+      const unir = texto => { if (!(texto in nombres)) nombres[texto] = unirDefensor(texto, lista); return nombres[texto]; };
       const filas = r.entradas.map(e => {
         const u = unir(e.texto);
         if (r.tipo === 'licencias'){ const a = e.apoyoTexto ? unir(e.apoyoTexto) : { id: '' }; return { ...e, apoyoId: a.id }; }
@@ -1095,7 +1100,7 @@ function previaLicencias(b, i){
     if (f.incluir === undefined) f.incluir = !!id && !ya;
     return { f, k, id, ya, apoyo }; });
   const puede = nivelLicencias === 'editar';
-  return `<p class="ayuda">Solo se cargan las licencias que <b>no están registradas</b> (si el defensor ya tiene una que se cruza con esas fechas, sale desmarcada). El motivo no se toma del archivo. ${puede ? '' : '<b>Para guardarlas necesitas Editar en la columna Licencias de Personal y permisos.</b>'}</p>
+  return `<p class="ayuda">Se reconocen defensores y <b>asistentes</b>. Solo se cargan las licencias que <b>no están registradas</b> (si el defensor ya tiene una que se cruza con esas fechas, sale desmarcada). El motivo no se toma del archivo. ${puede ? '' : '<b>Para guardarlas necesitas Editar en la columna Licencias de Personal y permisos.</b>'}</p>
     ${tablaNombres(b, i, cuenta)}
     <div class="tabla-wrap" style="max-height:420px"><table><thead><tr><th>Cargar</th><th>Defensor/a</th><th>Desde</th><th>Hasta</th><th>Apoyo</th><th>Nota</th></tr></thead><tbody>
     ${filas.map(({ f, k, id, ya, apoyo }) => `<tr class="${!id ? 'lic' : ''}"><td><input type="checkbox" data-lic-bloque="${i}" data-k="${k}" ${f.incluir ? 'checked' : ''} ${id ? '' : 'disabled'}></td>
@@ -1646,7 +1651,7 @@ onAuthStateChanged(auth, async user => {
     $('pantallaLogin').hidden = true; $('app').hidden = false;
     await cargarBase();
     TIPOS_EDIT = copia(TIPOS);
-    $('listaNombres').innerHTML = DEFS.filter(d => d.activo !== false).map(d => `<option value="${esc(d.nombre)}">`).join('');
+    $('listaNombres').innerHTML = [...DEFS, ...ASIS].filter(d => d.activo !== false).map(d => `<option value="${esc(d.nombre)}">`).join('');
     const anio = Number(hoyIso().slice(0, 4));
     $('fAnioFer').innerHTML = [anio - 1, anio, anio + 1].map(a => `<option ${a === anio ? 'selected' : ''}>${a}</option>`).join('');
     $('bFecha').value = hoyIso(); $('rMes').value = hoyIso().slice(0, 7);

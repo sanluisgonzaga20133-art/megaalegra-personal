@@ -360,6 +360,7 @@ const SECCIONES = [
 
 let yo = null;          // mi ficha de staff
 let STAFF = [];
+let LICS = [];          // colección pública "licencias": la licencia de los asistentes se registra en la página Licencias (un solo lugar)
 let DEFS = [];
 const esAdmin = () => yo && yo.esAdmin === true;
 const puedeAutorizar = () => yo && (yo.esAdmin === true || yo.puedeAutorizar === true) && yo.bloqueado !== true;
@@ -388,7 +389,8 @@ async function cargarStaff(){
     const consulta = esAdmin()
       ? collection(db, 'staff')
       : query(collection(db, 'staff'), where('rol', '==', 'asistente'));
-    const snap = await getDocs(consulta);
+    const [snap, sl] = await Promise.all([getDocs(consulta), getDocs(collection(db, 'licencias')).catch(e => { console.error(e); return null; })]);
+    LICS = sl ? sl.docs.map(d => d.data()).filter(l => l.inicio && l.fin) : [];
     STAFF = snap.docs.map(d => ({ id: d.id, ...d.data() }))
       .sort((a, b) => (a.rol || '').localeCompare(b.rol || '') || (a.nombre || a.id).localeCompare(b.nombre || b.id, 'es'));
   } catch (e){
@@ -407,14 +409,28 @@ async function sincronizarAsistentes(){
     const actuales = new Map(snap.docs.map(d => [d.id, d.data()]));
     const deseados = STAFF.filter(p => p.rol === 'asistente');
     const tareas = [];
+    // Código fijo de cada asistente (para su licencia en la página Licencias): se crea una vez y no cambia aunque cambie el nombre
+    const usados = new Set([...STAFF.map(p => p.codigo), ...[...actuales.values()].map(a => a.codigo)].filter(Boolean));
     deseados.forEach(p => {
-      const datos = { correo: p.id, nombre: p.nombre || p.id, licenciaHasta: p.licenciaHasta || '' };
+      // Si la copia del Drive 1 ya tiene código, se guarda también en la ficha
+      if (!p.codigo && (actuales.get(p.id) || {}).codigo){ p.codigo = actuales.get(p.id).codigo; tareas.push(updateDoc(doc(db, 'staff', p.id), { codigo: p.codigo })); }
+      if (!p.codigo){
+        const base = 'ASIS__' + String(p.nombre || p.id).toUpperCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^A-Z0-9]+/g, '_').replace(/^_+|_+$/g, '');
+        let c = base, n = 2; while (usados.has(c)) c = base + '_' + n++;
+        usados.add(c); p.codigo = c;
+        tareas.push(updateDoc(doc(db, 'staff', p.id), { codigo: c }));
+      }
+    });
+    deseados.forEach(p => {
+      // licenciaHasta: el dato antiguo, solo hasta que se pase a la página Licencias (ahí se borra)
+      const datos = { correo: p.id, nombre: p.nombre || p.id, codigo: p.codigo, licenciaHasta: p.licenciaHasta || '' };
       const a = actuales.get(p.id) || {};
-      if (a.correo !== datos.correo || a.nombre !== datos.nombre || (a.licenciaHasta || '') !== datos.licenciaHasta)
+      if (a.correo !== datos.correo || a.nombre !== datos.nombre || a.codigo !== datos.codigo || (a.licenciaHasta || '') !== datos.licenciaHasta)
         tareas.push(setDoc(doc(db, 'asistentes', p.id), datos, { merge: true }));
     });
     actuales.forEach((_, id) => { if (!deseados.some(p => p.id === id)) tareas.push(deleteDoc(doc(db, 'asistentes', id))); });
     await Promise.all(tareas);
+    pintarStaff(); // ya con el código de cada asistente (para mostrar su licencia de la página Licencias)
   } catch (e){
     console.error(e);
     avisar('No se pudo actualizar la lista de asistentes del Drive 1 (' + (e.code || e.message) + '). ¿Ya publicaste las reglas nuevas?', 8000);
@@ -442,13 +458,14 @@ function pintarStaff(){
     ? 'Los cambios con interruptor se guardan al instante. <b>Bloqueado</b>: puede entrar y ver, pero no registrar, editar ni borrar. <b>Permiso temporal</b>: un asistente trabaja como abogado hasta la fecha que elijas y se corta solo. Los <b>Drives están cerrados</b> para todos: en cada columna eliges a quién das <b>Ver</b>, <b>Anotar N° de memos, oficios y cartas</b> (Drive 1) o <b>Editar</b>. El permiso temporal de un asistente le abre Drive 1 y Drive 2 como abogado hasta su fecha. <b>Licencias</b> funciona igual: Sin acceso, Ver o Editar (registrar, cambiar y borrar licencias).'
     : 'Como Responsable de Área puedes dar o retirar el <b>permiso temporal</b> a los asistentes para que trabajen como abogado hasta una fecha.';
   $('encPersonal').innerHTML = admin
-    ? `<th>Nombre</th><th>Rol</th><th>Área</th><th>Bloqueado</th><th>Puede autorizar</th><th>Avisos</th><th>Permiso temporal (asistentes)</th>${DRIVES.map(d => `<th>${d[1]}</th>`).join('')}<th>Puede editar estas pestañas</th><th>De licencia hasta</th><th></th>`
+    ? `<th>Nombre</th><th>Rol</th><th>Área</th><th>Bloqueado</th><th>Puede autorizar</th><th>Avisos</th><th>Permiso temporal (asistentes)</th>${DRIVES.map(d => `<th>${d[1]}</th>`).join('')}<th>Puede editar estas pestañas</th><th>Licencia (de la página Licencias)</th><th></th>`
     : '<th>Nombre</th><th>Rol</th><th>Permiso temporal</th>';
   const lista = admin ? STAFF : STAFF.filter(p => p.rol === 'asistente');
   $('cuerpoPersonal').innerHTML = lista.map(p => {
     const soyYo = p.id === yo.correo;
     const vig = temporalVigente(p);
-    const lic = p.licenciaHasta && p.licenciaHasta >= hoyIso();
+    const licAsis = p.rol === 'asistente' && p.codigo ? LICS.filter(l => l.defensorId === p.codigo && l.fin >= hoyIso()).sort((a, b) => a.inicio.localeCompare(b.inicio))[0] : null;
+    const lic = (licAsis && licAsis.inicio <= hoyIso()) || (p.licenciaHasta && p.licenciaHasta >= hoyIso());
     let temporal = '—';
     if (p.rol === 'asistente'){
       if (abiertoTemporal === p.id){
@@ -481,7 +498,10 @@ function pintarStaff(){
           <option value="">Sin acceso (por defecto)</option>
           ${niveles.filter(n => n !== 'sin').map(n => `<option value="${n}" ${permisos[k] === n ? 'selected' : ''}>${NIVELES[n]}</option>`).join('')}</select></td>`).join('')}
       <td><div class="permisos">${SECCIONES.map(([k, t]) => `<label class="${permisos[k] === 'editar' || p.esAdmin ? 'si' : ''}"><input type="checkbox" data-permiso="${k}" data-id="${esc(p.id)}" ${permisos[k] === 'editar' || p.esAdmin ? 'checked' : ''} ${p.esAdmin ? 'disabled' : ''}>${t}</label>`).join('')}</div></td>
-      <td><input type="date" data-campo="licenciaHasta" data-id="${esc(p.id)}" value="${esc(p.licenciaHasta || '')}"></td>
+      <td>${p.rol !== 'asistente' ? '<span class="chico">En Licencias</span>'
+        : (licAsis ? `${licAsis.inicio <= hoyIso() ? 'Hasta el ' + fechaCorta(licAsis.fin) : 'Del ' + fechaCorta(licAsis.inicio) + ' al ' + fechaCorta(licAsis.fin)}<span class="chico">` : '<span class="chico">Sin licencia · ')
+          + '<a href="licencias.html">Registrar en Licencias ↗</a></span>'
+          + (p.licenciaHasta ? `<span class="chico" style="color:#A10C1A;font-weight:700">Antigua: hasta el ${fechaCorta(p.licenciaHasta)}. Pásala en Licencias.</span>` : '')}</td>
       <td>${soyYo ? '' : `<button class="btn sec chico" data-baja="${esc(p.id)}">Dar de baja</button>`}</td>
     </tr>`;
   }).join('') || '<tr><td colspan="9" class="vacio">No hay personas para mostrar.</td></tr>';

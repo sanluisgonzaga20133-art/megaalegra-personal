@@ -1092,8 +1092,12 @@ async function cargarAsistentes(){
     const snap = await getDocs(collection(db, 'asistentes'));
     const hoy = hoyIso();
     ASISTENTES = snap.docs.map(d => ({ correo: d.id, ...d.data() }))
-      .map(x => ({ correo: x.correo, nombre: x.nombre || x.correo, licenciaHasta: x.licenciaHasta || '',
-        deLicencia: !!x.licenciaHasta && x.licenciaHasta >= hoy, noVinoHoy: x.noVinoFecha === hoy }))
+      // La licencia de cada asistente sale de la página Licencias (por su código), como la de los defensores.
+      // licAntigua = la "De licencia hasta" de Personal y permisos, solo mientras no se pase a Licencias.
+      .map(x => ({ correo: x.correo, nombre: x.nombre || x.correo, codigo: x.codigo || '', licAntigua: x.licenciaHasta || '', noVinoHoy: x.noVinoFecha === hoy,
+        get licencia(){ return this.codigo ? licenciaEn(this.codigo, hoyIso()) : null; },
+        get deLicencia(){ return !!this.licencia || (!!this.licAntigua && this.licAntigua >= hoyIso()); },
+        get licenciaHasta(){ return this.licencia ? this.licencia.fin : this.licAntigua; } }))
       .sort((a, b) => a.nombre.localeCompare(b.nombre, 'es'));
     if (!ASISTENTES.length) avisar('La lista de asistentes está vacía. El administrador debe abrir “Personal y permisos” una vez para crearla.', 8000);
   } catch (e){

@@ -110,7 +110,7 @@
 
   <div id="contenido" hidden>
     <header>
-      <h1>Licencias de defensores</h1>
+      <h1>Licencias de defensores y asistentes</h1>
       <p id="subtitulo">Quién está de licencia y quiénes lo apoyan</p>
     </header>
 
@@ -125,11 +125,23 @@
       <button class="btn" id="btnCargarExcel">Cargar las marcadas</button>
     </section>
 
+    <!-- ===== Pase único de las licencias de asistentes que estaban en Personal y permisos (solo el administrador) ===== -->
+    <section class="caja" id="cajaPase" hidden style="border-color:var(--dorado)">
+      <h3>Pasar las licencias de asistentes a esta página (una sola vez)</h3>
+      <p class="ayuda">Hasta ahora la licencia de los asistentes se anotaba en Personal y permisos ("De licencia hasta"), solo con la fecha de fin. Desde ahora se registra aquí, igual que la de los defensores, y de aquí la toman el reparto de memos del Drive 1, Personal y permisos y Turnos y licencias. Escribe la <b>fecha de inicio real</b> de cada una y toca <b>Pasar a Licencias</b>: se crea la licencia aquí y se quita la fecha de Personal y permisos. Nada se pierde (queda en el Registro de cambios).</p>
+      <div class="tabla-wrap" style="margin-bottom:8px"><table>
+        <thead><tr><th>Asistente</th><th>Hasta (de Personal y permisos)</th><th>Desde (escríbela)</th><th>Nota</th></tr></thead>
+        <tbody id="cuerpoPase"></tbody>
+      </table></div>
+      <div id="msgPase" style="font-size:13px;font-weight:600;color:var(--rojo-oscuro);min-height:18px"></div>
+      <button class="btn" id="btnPase">Pasar a Licencias</button>
+    </section>
+
     <!-- ===== Registrar / editar (solo con permiso Editar) ===== -->
     <section class="caja" id="cajaForm" hidden>
       <h3 id="tituloForm">Registrar licencia</h3>
       <div class="fila-form">
-        <label class="ancho">Defensor que sale de licencia<select id="fDefensor"></select></label>
+        <label class="ancho">Persona que sale de licencia<select id="fDefensor"></select></label>
         <label>Desde<input type="date" id="fInicio"></label>
         <label>Hasta (último día de licencia)<input type="date" id="fFin"></label>
         <label class="ancho">Motivo (opcional, no se publica)<input type="text" id="fMotivo" placeholder="Ej. vacaciones, descanso médico"></label>
@@ -137,7 +149,7 @@
       <div style="margin-top:10px;font-size:12px;font-weight:700">Abogados de apoyo</div>
       <div class="apoyos" id="fApoyos"></div>
       <button type="button" class="btn sec chico" id="btnOtroApoyo">+ Agregar otro apoyo</button>
-      <p class="ayuda">El celular y el correo de cada apoyo se toman de Personal y permisos › Defensores (solo el que se muestra, nunca el personal).</p>
+      <p class="ayuda">El celular y el correo de cada apoyo se toman de Personal y permisos › Defensores (solo el que se muestra, nunca el personal). En la licencia de un <b>asistente</b> el apoyo es opcional: el reparto de memos del Drive 1 ya no se la sugiere mientras dure.</p>
       <div id="advertencias"></div>
       <div id="msgForm"></div>
       <div class="fila-form" style="margin-top:6px">
@@ -148,7 +160,7 @@
 
     <div class="buscar">
       <label for="buscador" style="font-size:13px;font-weight:700">Buscar</label>
-      <input type="search" id="buscador" placeholder="Defensor, apoyo, área o motivo">
+      <input type="search" id="buscador" placeholder="Persona, apoyo, área o motivo">
     </div>
     <section class="grupo" aria-labelledby="hVigentes"><h2 id="hVigentes">Vigentes hoy <span class="cuenta" id="nVigentes">0</span></h2><div id="listaVigentes"></div></section>
     <section class="grupo" aria-labelledby="hProximas"><h2 id="hProximas">Próximas <span class="cuenta" id="nProximas">0</span></h2><div id="listaProximas"></div></section>
@@ -159,7 +171,7 @@
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
 import { getAuth, onAuthStateChanged, signInWithEmailAndPassword, signOut } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
-import { initializeFirestore, collection, doc, getDoc, getDocs, setDoc, writeBatch } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+import { initializeFirestore, collection, doc, getDoc, getDocs, setDoc, writeBatch, deleteField } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 
 const fbApp = initializeApp({
   apiKey: "AIzaSyBHxewV5R3CAj-5i3AzCgfdKvwI5A3jXnA",
@@ -198,6 +210,8 @@ function nivelSeccion(f, s){
 
 let yo = null, nivel = 'sin';
 let DEFS = [];          // todos los defensores (también los de baja, para mostrar nombres antiguos)
+let ASIS = [];          // asistentes con su código (colección "asistentes"): también se registran aquí sus licencias
+let STAFF_ASIS = [];    // fichas de los asistentes (solo el administrador), para pasar la "De licencia hasta" antigua
 let LICENCIAS = [];     // colección "licencias" (pública: sin motivo)
 let PRIVADO = {};       // colección "licenciasPrivado" (motivo y quién registró)
 let editandoId = null;
@@ -224,6 +238,15 @@ async function cargarTodo(){
     .sort((a, b) => (a.area || '').localeCompare(b.area || '') || (a.orden ?? 999) - (b.orden ?? 999) || (a.nombre || '').localeCompare(b.nombre || '', 'es'));
   LICENCIAS = sl.docs.map(d => ({ id: d.id, ...d.data() }));
   try {
+    ASIS = (await getDocs(collection(db, 'asistentes'))).docs.map(d => ({ correo: d.id, ...d.data() })).filter(a => a.codigo)
+      .map(a => ({ id: a.codigo, correo: a.correo, nombre: a.nombre || a.correo, area: 'Asistente', esAsistente: true, activo: true }))
+      .sort((a, b) => a.nombre.localeCompare(b.nombre, 'es'));
+  } catch (e){ console.error('No se pudo leer la lista de asistentes', e); ASIS = []; }
+  if (yo && yo.esAdmin === true){
+    try { STAFF_ASIS = (await getDocs(collection(db, 'staff'))).docs.map(d => ({ id: d.id, ...d.data() })).filter(p => p.rol === 'asistente'); }
+    catch (e){ console.error(e); STAFF_ASIS = []; }
+  }
+  try {
     const sp = await getDocs(collection(db, 'licenciasPrivado'));
     PRIVADO = Object.fromEntries(sp.docs.map(d => [d.id, d.data()]));
   } catch (e){
@@ -232,8 +255,9 @@ async function cargarTodo(){
   }
   pintarLista();
   pintarCarga();
+  pintarPase();
 }
-const defPorId = id => DEFS.find(d => d.id === id);
+const defPorId = id => DEFS.find(d => d.id === id) || ASIS.find(a => a.id === id);
 const activos = () => DEFS.filter(d => d.activo !== false);
 // Contacto del apoyo: siempre el más reciente de Defensores; si ya no está, el que se guardó
 function contacto(a){
@@ -261,13 +285,15 @@ function opcionesDefensores(elegido, sinId, paraApoyo = false){
   const porArea = {};
   activos().filter(d => d.id !== sinId).forEach(d => (porArea[d.area || 'Sin área'] = porArea[d.area || 'Sin área'] || []).push(d));
   // Si el elegido ya está de baja, igual se muestra para no perderlo al editar
-  const baja = elegido && !activos().some(d => d.id === elegido) ? defPorId(elegido) : null;
+  const baja = elegido && !activos().some(d => d.id === elegido) && !ASIS.some(a => a.id === elegido) ? defPorId(elegido) : null;
   return '<option value="">— Elige —</option>' +
     (baja ? `<option value="${esc(baja.id)}" selected>${esc(baja.nombre)} (de baja)</option>` : '') +
     Object.entries(porArea).map(([area, lista]) => `<optgroup label="${esc(area)}">${lista.map(d => {
       const e = paraApoyo ? estadoLicencia(d.id) : null, bloq = e && e.tipo === 'hoy' && !apoyosPrecargados.includes(d.id);
       return `<option value="${esc(d.id)}" ${d.id === elegido ? 'selected' : ''} ${bloq ? 'disabled style="color:#9A938A"' : ''}>${esc(d.nombre + (e ? e.texto : ''))}</option>`;
-    }).join('')}</optgroup>`).join('');
+    }).join('')}</optgroup>`).join('')
+    // Asistentes: solo para quien sale de licencia (no como apoyo)
+    + (paraApoyo || !ASIS.length ? '' : `<optgroup label="Asistentes">${ASIS.filter(a => a.id !== sinId).map(a => `<option value="${esc(a.id)}" ${a.id === elegido ? 'selected' : ''}>${esc(a.nombre)}</option>`).join('')}</optgroup>`);
 }
 function filaApoyo(id = ''){
   const div = document.createElement('div');
@@ -347,12 +373,12 @@ $('btnGuardar').onclick = async () => {
   const defId = $('fDefensor').value, inicio = $('fInicio').value, fin = $('fFin').value, motivo = $('fMotivo').value.trim();
   const apoyos = [...new Set(apoyosElegidos())];
   const falla = (campo, texto) => { $(campo).classList.add('error-campo'); $('msgForm').textContent = texto; $(campo).focus(); };
-  if (!defId) return falla('fDefensor', 'Elige al defensor que sale de licencia.');
+  if (!defId) return falla('fDefensor', 'Elige a la persona que sale de licencia.');
   if (!inicio) return falla('fInicio', 'Elige la fecha de inicio.');
   if (!fin) return falla('fFin', 'Elige la fecha de fin.');
   if (fin < inicio) return falla('fFin', 'La fecha de fin no puede ser antes que la de inicio.');
-  if (!apoyos.length){ $('fApoyos').querySelector('[data-apoyo]').classList.add('error-campo'); $('msgForm').textContent = 'Elige al menos un abogado de apoyo.'; return; }
-  if (apoyos.includes(defId)){ $('msgForm').textContent = 'El defensor no puede ser su propio apoyo.'; return; }
+  if (!apoyos.length && !(defPorId(defId) || {}).esAsistente){ $('fApoyos').querySelector('[data-apoyo]').classList.add('error-campo'); $('msgForm').textContent = 'Elige al menos un abogado de apoyo.'; return; }
+  if (apoyos.includes(defId)){ $('msgForm').textContent = 'La persona no puede ser su propio apoyo.'; return; }
   const nuevos = apoyos.filter(id => !apoyosPrecargados.includes(id)); // solo se revisa a quien se agrega ahora
   const enLicencia = nuevos.filter(id => (estadoLicencia(id) || {}).tipo === 'hoy');
   if (enLicencia.length){ $('msgForm').textContent = enLicencia.map(id => contacto({ id }).nombre + estadoLicencia(id).texto).join('; ') + ': elige a otro apoyo.'; return; }
@@ -411,7 +437,7 @@ function pintarLista(){
   const tabla = (filas, tipo) => {
     if (!filas.length) return `<div class="vacio">${q ? 'Nada coincide con la búsqueda.' : tipo === 'vigente' ? 'Nadie está de licencia hoy.' : tipo === 'proxima' ? 'No hay licencias programadas.' : 'Todavía no hay licencias pasadas.'}</div>`;
     return `<div class="tabla-wrap"><table>
-      <thead><tr><th>Defensor</th><th>Fechas</th><th>Abogados de apoyo</th><th>Motivo</th>${puedeEditar() ? '<th></th>' : ''}</tr></thead>
+      <thead><tr><th>Persona</th><th>Fechas</th><th>Abogados de apoyo</th><th>Motivo</th>${puedeEditar() ? '<th></th>' : ''}</tr></thead>
       <tbody>${filas.map(l => {
         const dias = diasEntre(l.inicio, l.fin) + 1;
         const cuando = tipo === 'vigente' ? `<span class="etiqueta vigente">Vuelve el ${fechaCorta(sumarDia(l.fin))}</span>`
@@ -523,6 +549,54 @@ $('btnCargarExcel').onclick = async () => {
     await cargarTodo();
   } catch (err){ error(err); }
   $('btnCargarExcel').disabled = false;
+};
+
+// ---------- Pase único: "De licencia hasta" de Personal y permisos → licencia aquí ----------
+const codigoAsistente = (nombre, usados) => { const base = 'ASIS__' + sinTildes(nombre).replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '').toUpperCase(); let c = base, n = 2; while (usados.has(c)) c = base + '_' + n++; return c; };
+function pintarPase(){
+  const lista = STAFF_ASIS.filter(p => p.licenciaHasta);
+  $('cajaPase').hidden = !(yo && yo.esAdmin === true) || !lista.length;
+  if ($('cajaPase').hidden) return;
+  const hoy = hoyIso();
+  $('cuerpoPase').innerHTML = lista.map(p => {
+    const yaHay = (p.codigo || (ASIS.find(a => a.correo === p.id) || {}).id) && LICENCIAS.find(l => l.defensorId === (p.codigo || (ASIS.find(a => a.correo === p.id) || {}).id) && l.fin === p.licenciaHasta);
+    return `<tr><td class="nombre">${esc(p.nombre || p.id)}</td>
+      <td style="white-space:nowrap">${fechaCorta(p.licenciaHasta)} <span class="etiqueta ${p.licenciaHasta >= hoy ? 'vigente' : 'pasada'}">${p.licenciaHasta >= hoy ? 'Vigente o próxima' : 'Ya terminó'}</span></td>
+      <td><input type="date" data-pase="${esc(p.id)}" max="${esc(p.licenciaHasta)}" aria-label="Desde, licencia de ${esc(p.nombre || p.id)}"></td>
+      <td>${yaHay ? '<span class="chico">Ya hay aquí una licencia que termina ese día: solo se quitará de Personal y permisos.</span>' : ''}</td></tr>`;
+  }).join('');
+}
+$('btnPase').onclick = async () => {
+  $('msgPase').textContent = '';
+  document.querySelectorAll('#cuerpoPase .error-campo').forEach(x => x.classList.remove('error-campo'));
+  const filas = [...$('cuerpoPase').querySelectorAll('[data-pase]')].map(i => ({ i, p: STAFF_ASIS.find(x => x.id === i.dataset.pase), inicio: i.value }));
+  const mala = filas.find(f => !f.inicio || f.inicio > f.p.licenciaHasta);
+  if (mala){ mala.i.classList.add('error-campo'); mala.i.focus(); $('msgPase').textContent = 'Escribe la fecha de inicio de ' + (mala.p.nombre || mala.p.id) + ' (no puede ser después del ' + fechaCorta(mala.p.licenciaHasta) + ').'; return; }
+  $('btnPase').disabled = true;
+  try {
+    const usados = new Set([...STAFF_ASIS.map(p => p.codigo), ...ASIS.map(a => a.id)].filter(Boolean));
+    const lote = writeBatch(db), ahora = new Date().toISOString(), antes = {}, despues = {};
+    filas.forEach(({ p, inicio }) => {
+      let codigo = p.codigo || (ASIS.find(a => a.correo === p.id) || {}).id;
+      if (!codigo){ codigo = codigoAsistente(p.nombre || p.id, usados); usados.add(codigo); lote.update(doc(db, 'staff', p.id), { codigo }); }
+      const nombre = p.nombre || p.id, ya = LICENCIAS.find(l => l.defensorId === codigo && l.fin === p.licenciaHasta);
+      if (!ya){
+        const ref = doc(collection(db, 'licencias'));
+        lote.set(ref, { defensorId: codigo, defensorNombre: nombre, area: 'Asistente', inicio, fin: p.licenciaHasta, apoyoIds: [], apoyos: [], actualizadoEn: ahora });
+        lote.set(doc(db, 'licenciasPrivado', ref.id), { motivo: '', registradoPor: (yo.nombre || yo.correo) + ' (pasada desde Personal y permisos)', registradoEn: ahora });
+      }
+      // Se quita el dato antiguo (Personal y permisos y su copia para el Drive 1)
+      lote.update(doc(db, 'staff', p.id), { licenciaHasta: deleteField() });
+      lote.set(doc(db, 'asistentes', p.id), { codigo, licenciaHasta: '' }, { merge: true });
+      antes[nombre] = 'hasta ' + fechaCorta(p.licenciaHasta) + ' (Personal y permisos)';
+      despues[nombre] = fechaCorta(inicio) + ' al ' + fechaCorta(p.licenciaHasta) + ' (Licencias)';
+    });
+    await lote.commit();
+    await registrarCambio('Pasó ' + filas.length + ' licencia(s) de asistentes a Licencias', 'pase-asistentes', antes, despues);
+    avisar('Listo: ' + filas.length + ' licencia(s) pasadas a esta página.');
+    await cargarTodo();
+  } catch (err){ error(err); }
+  $('btnPase').disabled = false;
 };
 
 // ---------- Sesión ----------
