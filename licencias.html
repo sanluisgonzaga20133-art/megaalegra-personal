@@ -258,6 +258,8 @@ async function cargarTodo(){
   pintarPase();
 }
 const defPorId = id => DEFS.find(d => d.id === id) || ASIS.find(a => a.id === id);
+// Nombre de quien sale de licencia: siempre el de su lugar único (Defensores o Personal); la copia guardada solo si ya no está
+const nombreLic = l => (defPorId(l.defensorId) || {}).nombre || l.defensorNombre;
 const activos = () => DEFS.filter(d => d.activo !== false);
 // Contacto del apoyo: siempre el más reciente de Defensores; si ya no está, el que se guardó
 function contacto(a){
@@ -323,7 +325,7 @@ function limpiarForm(){
 function abrirEdicion(id){
   const l = LICENCIAS.find(x => x.id === id); if (!l) return;
   editandoId = id; apoyosPrecargados = l.apoyoIds || (l.apoyos || []).map(a => a.id);
-  $('tituloForm').textContent = 'Editar licencia de ' + l.defensorNombre;
+  $('tituloForm').textContent = 'Editar licencia de ' + nombreLic(l);
   $('btnCancelar').hidden = false;
   $('fDefensor').innerHTML = opcionesDefensores(l.defensorId);
   $('fInicio').value = l.inicio; $('fFin').value = l.fin;
@@ -358,7 +360,7 @@ function advertenciasActuales(){
   const rango = { inicio, fin }, otras = LICENCIAS.filter(l => l.id !== editandoId && seCruzan(l, rango));
   const lista = [];
   otras.filter(l => l.defensorId === defId).forEach(l =>
-    lista.push(`${esc(l.defensorNombre)} ya tiene otra licencia del ${fechaCorta(l.inicio)} al ${fechaCorta(l.fin)} que se cruza con estas fechas.`));
+    lista.push(`${esc(nombreLic(l))} ya tiene otra licencia del ${fechaCorta(l.inicio)} al ${fechaCorta(l.fin)} que se cruza con estas fechas.`));
   apoyosElegidos().forEach(id => otras.filter(l => l.defensorId === id).forEach(l =>
     lista.push(`El apoyo ${esc(contacto({ id }).nombre)} también está de licencia del ${fechaCorta(l.inicio)} al ${fechaCorta(l.fin)}.`)));
   return lista;
@@ -419,14 +421,14 @@ $('btnGuardar').onclick = async () => {
 };
 function resumen(l, p){
   if (!l) return {};
-  return { defensor: l.defensorNombre, desde: fechaCorta(l.inicio), hasta: fechaCorta(l.fin),
+  return { defensor: nombreLic(l), desde: fechaCorta(l.inicio), hasta: fechaCorta(l.fin),
     apoyos: (l.apoyos || []).map(a => a.nombre).join(', '), motivo: (p && p.motivo) || '' };
 }
 
 // ---------- Lista ----------
 function pintarLista(){
   const hoy = hoyIso(), q = sinTildes($('buscador').value.trim());
-  const coincide = l => !q || sinTildes([l.defensorNombre, l.area, (PRIVADO[l.id] || {}).motivo,
+  const coincide = l => !q || sinTildes([nombreLic(l), l.area, (PRIVADO[l.id] || {}).motivo,
     ...(l.apoyos || []).map(a => contacto(a).nombre)].join(' ')).includes(q);
   const lista = LICENCIAS.filter(coincide);
   const grupos = {
@@ -446,7 +448,7 @@ function pintarLista(){
         const apoyos = (l.apoyos || []).map(a => { const c = contacto(a);
           return `<li><b>${esc(c.nombre)}</b>${c.area && c.area !== l.area ? ' <span class="chico" style="display:inline">(' + esc(c.area) + ')</span>' : ''}<span class="chico">${[c.celular && 'Cel. ' + esc(c.celular), esc(c.correo)].filter(Boolean).join(' · ') || 'Sin contacto en Defensores'}</span></li>`; }).join('');
         return `<tr>
-          <td class="nombre">${esc(l.defensorNombre)}<span class="chico">${esc(l.area || '')}</span></td>
+          <td class="nombre">${esc(nombreLic(l))}<span class="chico">${esc(l.area || '')}</span></td>
           <td style="white-space:nowrap">${fechaCorta(l.inicio)} al ${fechaCorta(l.fin)}<span class="chico">${dias} día${dias === 1 ? '' : 's'}</span>${cuando}</td>
           <td><ul class="lista-apoyos">${apoyos || '<li class="chico">Sin apoyo registrado</li>'}</ul></td>
           <td>${esc((PRIVADO[l.id] || {}).motivo || '') || '<span class="chico">—</span>'}</td>
@@ -468,13 +470,13 @@ $('contenido').addEventListener('click', async e => {
   const bo = e.target.closest('[data-borrar]');
   if (!bo) return;
   const id = bo.dataset.borrar, l = LICENCIAS.find(x => x.id === id);
-  if (!l || !confirm(`¿Borrar la licencia de ${l.defensorNombre} (${fechaCorta(l.inicio)} al ${fechaCorta(l.fin)})?`)) return;
+  if (!l || !confirm(`¿Borrar la licencia de ${nombreLic(l)} (${fechaCorta(l.inicio)} al ${fechaCorta(l.fin)})?`)) return;
   try {
     const lote = writeBatch(db);
     lote.delete(doc(db, 'licencias', id));
     lote.delete(doc(db, 'licenciasPrivado', id));
     await lote.commit();
-    await registrarCambio('Borró licencia de ' + l.defensorNombre, id, resumen(l, PRIVADO[id]), {});
+    await registrarCambio('Borró licencia de ' + nombreLic(l), id, resumen(l, PRIVADO[id]), {});
     if (editandoId === id) limpiarForm();
     avisar('Licencia borrada');
     await cargarTodo();

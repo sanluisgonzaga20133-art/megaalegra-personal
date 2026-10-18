@@ -390,7 +390,7 @@ async function cargarStaff(){
       ? collection(db, 'staff')
       : query(collection(db, 'staff'), where('rol', '==', 'asistente'));
     const [snap, sl] = await Promise.all([getDocs(consulta), getDocs(collection(db, 'licencias')).catch(e => { console.error(e); return null; })]);
-    LICS = sl ? sl.docs.map(d => d.data()).filter(l => l.inicio && l.fin) : [];
+    LICS = sl ? sl.docs.map(d => ({ id: d.id, ...d.data() })).filter(l => l.inicio && l.fin) : [];
     STAFF = snap.docs.map(d => ({ id: d.id, ...d.data() }))
       .sort((a, b) => (a.rol || '').localeCompare(b.rol || '') || (a.nombre || a.id).localeCompare(b.nombre || b.id, 'es'));
   } catch (e){
@@ -465,7 +465,9 @@ function pintarStaff(){
     const soyYo = p.id === yo.correo;
     const vig = temporalVigente(p);
     const licAsis = p.rol === 'asistente' && p.codigo ? LICS.filter(l => l.defensorId === p.codigo && l.fin >= hoyIso()).sort((a, b) => a.inicio.localeCompare(b.inicio))[0] : null;
-    const lic = (licAsis && licAsis.inicio <= hoyIso()) || (p.licenciaHasta && p.licenciaHasta >= hoyIso());
+    // La fecha antigua de Personal (solo fin, sin inicio) cuenta solo si aún no tiene ninguna licencia en la página Licencias: si la tiene, manda Licencias
+    const tieneEnLicencias = p.rol === 'asistente' && !!p.codigo && LICS.some(l => l.defensorId === p.codigo);
+    const lic = (licAsis && licAsis.inicio <= hoyIso()) || (!tieneEnLicencias && p.licenciaHasta && p.licenciaHasta >= hoyIso());
     let temporal = '—';
     if (p.rol === 'asistente'){
       if (abiertoTemporal === p.id){
@@ -480,7 +482,16 @@ function pintarStaff(){
         temporal = `<button class="btn sec chico" data-temp-abrir="${esc(p.id)}">Autorizar como abogado…</button>`;
       }
     }
-    const nombre = `${esc(p.nombre || p.id)}<span class="chico">${esc(p.id)}</span>${p.esAdmin ? ' <span class="etiqueta admin">Administrador</span>' : ''}${p.bloqueado ? ' <span class="etiqueta bloq">Bloqueado</span>' : ''}${lic ? ' <span class="etiqueta lic">De licencia</span>' : ''}`;
+    // Administrador: "✎ Nombre" corrige el nombre aquí (lugar único) y todas sus copias
+    const editorNombre = admin && editandoNombre === p.id ? `<div style="margin-top:6px;display:flex;flex-direction:column;gap:5px;min-width:260px">
+        <input type="text" id="nuevoNombreStaff" value="${esc(p.nombre || '')}" placeholder="APELLIDOS, Nombres" aria-label="Nombre correcto">
+        <span class="chico">Forma oficial: APELLIDOS, Nombres (con coma). Ej.: DAVAN ZELADA, Milagros</span>
+        <div id="vistaNombreStaff">${revisionNombre && revisionNombre.id === p.id ? revisionNombre.html : ''}</div>
+        <div style="display:flex;gap:6px;flex-wrap:wrap">${revisionNombre && revisionNombre.id === p.id
+          ? `<button class="btn chico" data-nom-ok="${esc(p.id)}">Sí, corregir</button>`
+          : `<button class="btn chico" data-nom-revisar="${esc(p.id)}">Revisar</button>`}<button class="btn sec chico" data-nom-no="1">Cancelar</button></div></div>`
+      : admin ? ` <button class="btn sec chico" data-nom-abrir="${esc(p.id)}" title="Corregir el nombre">✎ Nombre</button>` : '';
+    const nombre = `${esc(p.nombre || p.id)}${editorNombre}<span class="chico">${esc(p.id)}</span>${p.esAdmin ? ' <span class="etiqueta admin">Administrador</span>' : ''}${p.bloqueado ? ' <span class="etiqueta bloq">Bloqueado</span>' : ''}${lic ? ' <span class="etiqueta lic">De licencia</span>' : ''}`;
     if (!admin) return `<tr><td class="nombre">${nombre}</td><td>Asistente</td><td>${temporal}</td></tr>`;
     const permisos = p.permisos || {};
     return `<tr class="${p.bloqueado ? 'bloqueado' : ''}">
@@ -507,6 +518,45 @@ function pintarStaff(){
   }).join('') || '<tr><td colspan="9" class="vacio">No hay personas para mostrar.</td></tr>';
 }
 
+// ---------- Corregir el nombre de una persona del personal (solo administrador) ----------
+// El nombre vive en su ficha (staff). Copias que se corrigen en el mismo paso: la lista "asistentes" del Drive 1,
+// sus licencias (defensorNombre) y los casos del Drive 1 donde proyecta (asistenteNombre). El código del asistente NO cambia.
+let editandoNombre = null, revisionNombre = null;
+async function revisarNombreStaff(id){
+  const p = STAFF.find(x => x.id === id), escrito = ($('nuevoNombreStaff') || {}).value || '';
+  const ahora = nombreOficial(escrito);
+  if (!ahora){ avisar('Escribe el nombre como APELLIDOS, Nombres (con la coma).', 5000); return; }
+  if (ahora === p.nombre){ avisar('Ese ya es su nombre.'); return; }
+  let casos = [];
+  try { casos = (await getDocs(query(collection(db, 'casos'), where('asistenteCorreo', '==', id)))).docs.map(d => d.id); }
+  catch (e){ console.error(e); avisar('No se pudieron revisar los casos del Drive 1 (' + (e.code || e.message) + ').', 6000); return; }
+  const lics = p.codigo ? LICS.filter(l => l.defensorId === p.codigo).map(l => l.id) : [];
+  const partes = ['su ficha del personal', p.rol === 'asistente' ? 'la lista de asistentes del Drive 1' : '',
+    lics.length ? lics.length + (lics.length === 1 ? ' licencia' : ' licencias') : '', casos.length ? casos.length + (casos.length === 1 ? ' caso' : ' casos') + ' del Drive 1 donde proyecta' : ''].filter(Boolean);
+  revisionNombre = { id, antes: p.nombre || '', ahora, lics, casos,
+    html: `<div class="chico" style="background:#FFF3D6;color:#6B4A0E;border-radius:6px;padding:6px 8px;font-weight:600">«${esc(p.nombre || '')}» → «${esc(ahora)}». Se corrige en: ${esc(partes.join(', '))}.</div>` };
+  editandoNombre = id; pintarStaff();
+  const i = $('nuevoNombreStaff'); if (i) i.value = escrito;
+}
+async function corregirNombreStaff(id){
+  const r = revisionNombre, p = STAFF.find(x => x.id === id);
+  if (!r || r.id !== id || !p) return;
+  const escritos = [doc(db, 'staff', id), ...(p.rol === 'asistente' ? [doc(db, 'asistentes', id)] : [])].map(ref => ({ ref, datos: { nombre: r.ahora } }))
+    .concat(r.lics.map(lid => ({ ref: doc(db, 'licencias', lid), datos: { defensorNombre: r.ahora } })))
+    .concat(r.casos.map(cid => ({ ref: doc(db, 'casos', cid), datos: { asistenteNombre: r.ahora } })));
+  try {
+    // En paquetes de 400 (Firebase admite hasta 500 por paquete); la ficha va en el primero
+    for (let i = 0; i < escritos.length; i += 400){
+      const lote = writeBatch(db);
+      escritos.slice(i, i + 400).forEach(x => x.ref.path.startsWith('asistentes/') ? lote.set(x.ref, x.datos, { merge: true }) : lote.update(x.ref, x.datos));
+      await lote.commit();
+    }
+    await registrarCambio('Corrigió el nombre', 'staff', id, { nombre: r.antes }, { nombre: r.ahora, copias: r.lics.length + ' licencia(s), ' + r.casos.length + ' caso(s) del Drive 1' });
+    avisar('Nombre corregido: ' + r.ahora, 5000);
+  } catch (err){ error(err); }
+  editandoNombre = null; revisionNombre = null;
+  await cargarStaff();
+}
 async function cambiarStaff(id, cambios, accion){
   const antes = { ...(STAFF.find(p => p.id === id) || {}) };
   try {
@@ -543,6 +593,10 @@ $('cuerpoPersonal').addEventListener('change', e => {
 });
 $('cuerpoPersonal').addEventListener('click', async e => {
   const t = e.target;
+  if (t.dataset.nomAbrir){ editandoNombre = t.dataset.nomAbrir; revisionNombre = null; pintarStaff(); const i = $('nuevoNombreStaff'); if (i){ i.focus(); i.select(); } return; }
+  if (t.dataset.nomNo){ editandoNombre = null; revisionNombre = null; pintarStaff(); return; }
+  if (t.dataset.nomRevisar){ await revisarNombreStaff(t.dataset.nomRevisar); return; }
+  if (t.dataset.nomOk){ await corregirNombreStaff(t.dataset.nomOk); return; }
   if (t.dataset.tempAbrir){ abiertoTemporal = t.dataset.tempAbrir; pintarStaff(); return; }
   if (t.dataset.tempNo !== undefined){ abiertoTemporal = null; pintarStaff(); return; }
   if (t.dataset.tempOk){

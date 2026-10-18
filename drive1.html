@@ -1096,8 +1096,10 @@ async function cargarAsistentes(){
       // licAntigua = la "De licencia hasta" de Personal y permisos, solo mientras no se pase a Licencias.
       .map(x => ({ correo: x.correo, nombre: x.nombre || x.correo, codigo: x.codigo || '', licAntigua: x.licenciaHasta || '', noVinoHoy: x.noVinoFecha === hoy,
         get licencia(){ return this.codigo ? licenciaEn(this.codigo, hoyIso()) : null; },
-        get deLicencia(){ return !!this.licencia || (!!this.licAntigua && this.licAntigua >= hoyIso()); },
-        get licenciaHasta(){ return this.licencia ? this.licencia.fin : this.licAntigua; } }))
+        // La fecha antigua (solo fin, sin inicio) cuenta solo si aún no tiene ninguna licencia en Licencias: si la tiene, manda Licencias (vigente = ya empezó)
+        get usaAntigua(){ return !!this.licAntigua && this.licAntigua >= hoyIso() && !(this.codigo && LICENCIAS.some(l => l.defensorId === this.codigo)); },
+        get deLicencia(){ return !!this.licencia || this.usaAntigua; },
+        get licenciaHasta(){ return this.licencia ? this.licencia.fin : this.usaAntigua ? this.licAntigua : ''; } }))
       .sort((a, b) => a.nombre.localeCompare(b.nombre, 'es'));
     if (!ASISTENTES.length) avisar('La lista de asistentes está vacía. El administrador debe abrir “Personal y permisos” una vez para crearla.', 8000);
   } catch (e){
