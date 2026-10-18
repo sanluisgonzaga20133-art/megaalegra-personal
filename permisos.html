@@ -114,6 +114,7 @@
     <a href="drive3.html" id="enlaceDrive3" hidden>Drive 3 · Fono Alegra</a>
     <a href="drive4.html" id="enlaceDrive4" hidden>Drive 4 · Consolidación</a>
     <a href="licencias.html" id="enlaceLicencias" hidden>Licencias</a>
+    <a href="turnos.html">Turnos y licencias</a>
     <a href="permisos.html" class="actual" aria-current="page">Personal y permisos</a>
   </nav>
 
@@ -226,12 +227,11 @@
     </div>
     <div class="caja solo-admin">
       <h3>Documentos de asignación (oficio y cartas del Drive 1)</h3>
-      <p class="ayuda">Se usa en el Drive 1 › "📄 Documentos": oficio de asignación, carta de asignación y carta "no procede cambio". Quién firma, el membrete y las frases son los de "Carta: No procede" y "Documentos de Fono Alegra". Sedes: una por renglón, así: <b>Sede | Dirección | Horario</b>. La sede de cada defensor se toma de su casilla "Sede" en Defensores (basta que contenga el nombre de la sede).</p>
+      <p class="ayuda">Se usa en el Drive 1 › "📄 Documentos": oficio de asignación, carta de asignación y carta "no procede cambio". Quién firma, el membrete y las frases son los de "Carta: No procede" y "Documentos de Fono Alegra". Las <b>sedes</b> (nombre, dirección y horario) están en un solo lugar, junto con los turnos: <a href="turnos.html">Turnos y licencias ↗</a> › ⚙ Administrar › Tipos de turno. La sede de cada defensor se toma de su casilla "Sede" en Defensores (basta que contenga el nombre de la sede).</p>
       <div class="fila-form docs-config">
         <label>Parte fija del N° de oficio (después del año)<input type="text" id="cfgDaSufOficio" placeholder="JUS/DGDPAJ-DDPAJLIMA"></label>
         <label>Parte fija del N° de carta (después del año)<input type="text" id="cfgDaSufCarta" placeholder="JUS/DGDPAJ-DDPAJLIMA"></label>
         <label>Iniciales fijas del pie (se les suman las de quien descarga)<input type="text" id="cfgDaIniciales" placeholder="CMGP/adm"></label>
-        <label>Sedes: Sede | Dirección | Horario (una por renglón)<textarea id="cfgDaSedes" rows="4"></textarea></label>
       </div>
       <div class="vista-numeros" aria-live="polite">
         <div class="chico">Así quedarán los números (ejemplo con 123):</div>
@@ -354,8 +354,8 @@ const DRIVES = [
 const NIVELES = { sin: 'Sin acceso', ver: 'Ver', memos: 'Anotar N° de memos, oficios y cartas', editar: 'Editar' };
 function nivelPorRol(p, d){ return 'sin'; } // todo cerrado salvo autorización
 const SECCIONES = [
-  ['turnos', 'Turnos'], ['teletrabajo', 'Teletrabajo'],
-  ['defensoriaPueblo', 'Defensoría'], ['conadis', 'CONADIS'], ['defensores', 'Defensores']
+  // Turnos: edita todos los tipos de turno (página Turnos y licencias) y el turno presencial (Drive 3 › Turno presencial). (Teletrabajo, Defensoría y CONADIS se quitaron: van dentro de Turnos.)
+  ['turnos', 'Turnos'], ['defensores', 'Defensores']
 ];
 
 let yo = null;          // mi ficha de staff
@@ -715,8 +715,7 @@ $('btnGuardarMemoAsig').onclick = async () => {
 // Partes fijas de los N°, iniciales y sedes (dirección y horario): en configuracion/documentosAsignacion (nunca en el código).
 const DA_CAMPOS = [['cfgDaSufOficio', 'sufijoOficio'], ['cfgDaSufCarta', 'sufijoCarta'], ['cfgDaIniciales', 'inicialesFijas']];
 const DA_INICIAL = {
-  sufijoOficio: 'JUS/DGDPAJ-DDPAJLIMA', sufijoCarta: 'JUS/DGDPAJ-DDPAJLIMA', inicialesFijas: '',
-  sedes: [{ nombre: 'Mega ALEGRA', direccion: 'Jr. Carabaya N.° 831, 4.° piso, Oficina N.° 401, Cercado de Lima', horario: 'lunes a viernes, de 8:00 a 13:00 horas y de 13:30 a 16:30 horas' }]
+  sufijoOficio: 'JUS/DGDPAJ-DDPAJLIMA', sufijoCarta: 'JUS/DGDPAJ-DDPAJLIMA', inicialesFijas: ''
 };
 let daCfg = {};
 async function cargarDocsAsig(){
@@ -724,7 +723,6 @@ async function cargarDocsAsig(){
   catch (e){ console.error(e); daCfg = {}; }
   const v = { ...DA_INICIAL, ...daCfg };
   DA_CAMPOS.forEach(([id, k]) => $(id).value = v[k] || '');
-  $('cfgDaSedes').value = (v.sedes || []).map(s => [s.nombre, s.direccion, s.horario].join(' | ')).join('\n');
   vistaNumDocsAsig();
 }
 function vistaNumDocsAsig(){
@@ -735,11 +733,9 @@ function vistaNumDocsAsig(){
 $('btnGuardarDocsAsig').onclick = async () => {
   const nuevo = {};
   DA_CAMPOS.forEach(([id, k]) => nuevo[k] = $(id).value.trim());
-  nuevo.sedes = $('cfgDaSedes').value.split('\n').map(l => l.split('|').map(x => x.trim())).filter(p => p[0])
-    .map(([nombre, direccion = '', horario = '']) => ({ nombre, direccion, horario }));
   const antes = {}; Object.keys(nuevo).forEach(k => antes[k] = daCfg[k] ?? '');
   try {
-    await setDoc(doc(db, 'configuracion', 'documentosAsignacion'), { ...nuevo, actualizadoPor: yo.correo, actualizadoEn: new Date().toISOString() });
+    await setDoc(doc(db, 'configuracion', 'documentosAsignacion'), { ...nuevo, actualizadoPor: yo.correo, actualizadoEn: new Date().toISOString() }, { merge: true });
     await registrarCambio('Cambió los datos de los documentos de asignación', 'configuracion', 'documentosAsignacion', antes, nuevo);
     daCfg = nuevo;
     avisar('Guardado. El Drive 1 lo usa en los próximos documentos.');

@@ -362,6 +362,7 @@
     <a href="drive3.html" id="enlaceDrive3" hidden>Drive 3 · Fono Alegra</a>
     <a href="drive4.html" id="enlaceDrive4" hidden>Drive 4 · Consolidación</a>
     <a href="licencias.html" id="enlaceLicencias" hidden>Licencias</a>
+    <a href="turnos.html">Turnos y licencias</a>
     <a href="permisos.html" id="enlacePermisos" hidden>Personal y permisos</a>
     <span class="separador" aria-hidden="true"></span>
     <span class="rotulo">Hojas de Google (mientras se migran):</span>
@@ -2526,7 +2527,7 @@ async function sugerirAbogadoFono(){
   const previo = $('fAbogado').value;
   abogadoPrecargado = '';
   $('fAbogado').innerHTML = '<option value="">— Elegir —</option>' +
-    `<optgroup label="De turno Fono Alegra · ${esc($('fSubSede').value)} · ${dia}">${posibles.map(opcion).join('')}</optgroup>` +
+    `<optgroup label="Turno presencial · ${esc($('fSubSede').value)} · ${dia}">${posibles.map(opcion).join('')}</optgroup>` +
     `<optgroup label="${esc(area)} · otros">${DEFENSORES.filter(d => d.area === area && !ids.has(d.id)).map(opcion).join('')}</optgroup>` +
     `<optgroup label="Otras áreas">${DEFENSORES.filter(d => d.area !== area).map(d => `<option value="${d.id}" ${deLicenciaHoy(d) ? 'disabled style="color:#9A938A"' : ''}>${esc(d.nombre + textoLicencia(d))}</option>`).join('')}</optgroup>`;
   $('fAbogado').value = abogadoFonoManual && previo ? previo : (sug ? sug.id : '');
@@ -4658,7 +4659,10 @@ async function leerConfigDocsAsig(){
   const base = await leerConfigMemoAsig();
   let m = {};
   try { const s = await getDoc(doc(db, 'configuracion', 'documentosAsignacion')); m = s.exists() ? s.data() : {}; } catch (e){ console.warn(e); }
-  return { ...base, inicialesMemo: base.inicialesFijas || '', sufijoOficio: m.sufijoOficio || '', sufijoCarta: m.sufijoCarta || '', inicialesFijas: m.inicialesFijas || '', sedes: m.sedes || [] };
+  // Sedes: un solo lugar para los turnos y las cartas (turnos/sedes, se cambia en Turnos y licencias › Administrar). Si aún no existe, las antiguas.
+  let sedes = null;
+  try { const s = await getDoc(doc(db, 'turnos', 'sedes')); if (s.exists() && Array.isArray(s.data().lista)) sedes = s.data().lista; } catch (e){ console.warn(e); }
+  return { ...base, inicialesMemo: base.inicialesFijas || '', sufijoOficio: m.sufijoOficio || '', sufijoCarta: m.sufijoCarta || '', inicialesFijas: m.inicialesFijas || '', sedes: sedes || m.sedes || [] };
 }
 // Sede del defensor: su casilla "Sede" se compara sin espacios, tildes ni signos ("MEGAALEGRA" = "Mega ALEGRA"), en los dos sentidos.
 // Si no coincide ninguna, la primera sede guardada (en la ventana se puede elegir otra de la lista).

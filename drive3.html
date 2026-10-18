@@ -160,6 +160,7 @@
     <a href="drive3.html" class="actual" aria-current="page">Drive 3 · Fono Alegra</a>
     <a href="drive4.html" data-seccion="drive4" hidden>Drive 4 · Consolidación</a>
     <a href="licencias.html" data-seccion="licencias" hidden>Licencias</a>
+    <a href="turnos.html">Turnos y licencias</a>
     <a href="permisos.html" id="enlacePermisos" hidden>Personal y permisos</a>
   </nav>
   <div id="sinAcceso" hidden>No tienes acceso al Drive 3 · Fono Alegra. Si lo necesitas, pídeselo al Coordinador.</div>
@@ -177,7 +178,7 @@
     <div class="pestanas" role="tablist">
       <button class="pestana activa" data-pestana="llamadas" role="tab">Llamadas</button>
       <button class="pestana" data-pestana="conteo" role="tab">Conteo</button>
-      <button class="pestana" data-pestana="turnos" role="tab">Turnos</button>
+      <button class="pestana" data-pestana="turnos" role="tab">Turno presencial</button>
     </div>
 
     <!-- ===== Llamadas ===== -->
@@ -983,9 +984,7 @@ function defensorDeTurno(clave){
 const legible = id => String(id).replace(/_+/g, ' ').trim();
 const hayCambiosTurnos = () => JSON.stringify(TURNOS) !== JSON.stringify(TURNOS_GUARDADOS);
 function pintarTurnos(){
-  $('ayudaTurnos').innerHTML = (puedeTurnos
-    ? 'Quién atiende Fono Alegra cada día, por sub sede y área. Con ✕ quitas a alguien y con la lista de abajo agregas; luego toca <b>Guardar turnos</b>. El Drive 1 lo usa para sugerir al de menos carga del mes.'
-    : 'Quién atiende Fono Alegra cada día, por sub sede y área. Solo puede cambiarlo quien tiene la casilla <b>Turnos</b> en Personal y permisos.')
+  $('ayudaTurnos').innerHTML = '<b>Turno presencial</b>: quién atiende cada día, por sub sede y área. El Drive 1 lo usa para sugerir abogado en los casos de Fono Alegra. Se cambia en <a href="turnos.html">Turnos y licencias ↗</a> (pestaña Turno presencial), con la casilla <b>Turnos</b> de Personal y permisos.'
     + (turnosEnFirebase ? '' : ' <i>Todavía es la tabla inicial (copiada de "Datos Matriz").</i>');
   const malos = {}; // nombre → dónde está (sub sede · área: días)
   $('cuerpoTurnos').innerHTML = SEDES.flatMap(sede => AREAS_TURNO.map(area => {
@@ -1028,9 +1027,9 @@ $('btnGuardarTurnos').onclick = async () => {
   $('btnGuardarTurnos').disabled = true;
   try {
     await setDoc(doc(db, 'turnos', 'fonoAlegra'), { tabla: TURNOS, actualizadoPor: yo.correo, actualizadoEn: new Date().toISOString() });
-    await registrarCambio('Cambió los turnos de Fono Alegra', 'turnos', 'fonoAlegra', nombres(TURNOS_GUARDADOS), nombres(TURNOS));
+    await registrarCambio('Cambió el turno presencial', 'turnos', 'fonoAlegra', nombres(TURNOS_GUARDADOS), nombres(TURNOS));
     TURNOS_GUARDADOS = copia(TURNOS); turnosEnFirebase = true;
-    avisar('Turnos guardados. El Drive 1 los usa al recargar.');
+    avisar('Turno presencial guardado. El Drive 1 lo usa al recargar.');
   } catch (err){ error(err); }
   pintarTurnos();
 };
@@ -1062,7 +1061,8 @@ onAuthStateChanged(auth, async user => {
     const f = ficha.data();
     yo = { correo, ...f };
     nivel = nivelSeccion(f, 'drive3');
-    puedeTurnos = f.esAdmin === true || ((f.permisos || {}).turnos === 'editar' && f.bloqueado !== true);
+    // El turno presencial ya no se edita aquí: se cambia en Turnos y licencias (turnos.html). Aquí solo se ve.
+    puedeTurnos = false;
     puedeDrive1 = nivelSeccion(f, 'drive1') !== 'sin';
     document.querySelectorAll('.menu-drives [data-seccion]').forEach(a => a.hidden = nivelSeccion(f, a.dataset.seccion) === 'sin');
     $('enlacePermisos').hidden = !(f.esAdmin === true || f.puedeAutorizar === true);

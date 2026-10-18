@@ -1,0 +1,1659 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Turnos y licencias · MEGA ALEGRA</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Source+Serif+4:opsz,wght@8..60,600&family=Public+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/xlsx-js-style@1.2.0/dist/xlsx.bundle.js"></script>
+<style>
+  :root{
+    --rojo:#D91023; --rojo-oscuro:#A10C1A; --dorado:#B8873A; --tinta:#241E1B; --gris:#6A635C; --gris-claro:#9A938A;
+    --papel:#F7F2EA; --linea:#E6DECF; --celda:#D9D2C5; --verde:#3F6B52; --verde-fondo:#EAF2ED; --azul:#2C6478; --ambar-fondo:#FFF3D6; --ambar:#6B4A0E;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0}
+  body{font-family:'Public Sans',system-ui,sans-serif;background:var(--papel);color:var(--tinta);padding:max(10px, env(safe-area-inset-top,0px)) 12px 30px}
+  [hidden]{display:none !important}
+  button,input,select,textarea{font:inherit}
+  :focus-visible{outline:2px solid var(--azul);outline-offset:2px}
+
+  #pantallaLogin{min-height:100vh;display:flex;align-items:center;justify-content:center;padding:20px}
+  .caja-login{background:#fff;border:1px solid var(--linea);border-radius:14px;padding:28px;max-width:380px;width:100%}
+  .caja-login h2{font-family:'Source Serif 4',Georgia,serif;margin:0 0 12px;color:var(--rojo-oscuro)}
+  .caja-login input{width:100%;padding:10px 12px;border:1px solid var(--linea);border-radius:8px;margin:4px 0 10px}
+  #msgLogin{margin-top:12px;font-size:13px;font-weight:600;color:var(--rojo-oscuro);min-height:18px}
+
+  .barra-sesion{display:flex;justify-content:space-between;align-items:center;gap:10px;margin-bottom:8px;font-size:12.5px;color:var(--gris)}
+  .barra-sesion button{background:#fff;border:1px solid var(--linea);border-radius:8px;padding:4px 12px;cursor:pointer}
+  .menu-drives{display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin:0 0 10px;padding:6px;background:#fff;border:1px solid var(--linea);border-radius:12px}
+  .menu-drives a{padding:7px 12px;border-radius:8px;font-size:13.5px;font-weight:600;color:var(--tinta);text-decoration:none;white-space:nowrap}
+  .menu-drives a:hover{background:var(--papel)}
+  .menu-drives a.actual{background:var(--tinta);color:#fff}
+
+  header{background:var(--rojo);color:#fff;border-radius:14px;padding:12px 18px;margin-bottom:10px}
+  header::after{content:"";display:block;height:3px;background:var(--dorado);margin-top:10px;border-radius:2px}
+  header h1{font-family:'Source Serif 4',Georgia,serif;font-weight:600;font-size:19px;margin:0 0 2px}
+  header p{margin:0;font-size:14px;color:rgba(255,255,255,.9)}
+
+  .caja{background:#fff;border:1px solid var(--linea);border-radius:12px;padding:14px;margin-bottom:10px}
+  .caja h3{margin:0 0 8px;font-size:15px;display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+  .ayuda{font-size:12.5px;color:var(--gris);line-height:1.5;margin:4px 0}
+  .fila-form{display:flex;gap:8px;flex-wrap:wrap;align-items:end}
+  .fila-form label{font-size:12px;font-weight:700;display:flex;flex-direction:column;gap:3px}
+  .fila-form input, .fila-form select{padding:8px 10px;border:1.5px solid var(--linea);border-radius:8px;background:var(--papel);min-width:150px;max-width:100%}
+  .fila-form label.ancho{flex:1 1 260px}
+  .fila-form label.ancho select, .fila-form label.ancho input{width:100%}
+  .fila-form label.casilla{flex-direction:row;align-items:center;gap:6px;font-weight:600;font-size:13px}
+  .fila-form label.casilla input{min-width:0}
+  .btn{padding:8px 14px;border-radius:8px;border:none;background:var(--rojo);color:#fff;font-weight:700;cursor:pointer}
+  .btn:disabled{background:#D8CFC3;cursor:default}
+  .btn.sec{background:#fff;color:var(--tinta);border:1.5px solid var(--linea)}
+  .btn.chico{padding:4px 10px;font-size:12px}
+  .advertencia{background:var(--ambar-fondo);color:var(--ambar);border-radius:8px;padding:8px 10px;font-size:13px;margin-top:8px}
+  .vacio{padding:16px;text-align:center;color:var(--gris)}
+  .error-campo{border-color:var(--rojo) !important}
+
+  /* Pestañas (como en el Drive 3) */
+  .pestanas{display:flex;gap:6px;flex-wrap:wrap;margin:14px 0 10px}
+  .pestana{padding:8px 14px;border-radius:9px;border:1.5px solid var(--linea);background:#fff;font-weight:700;cursor:pointer;color:var(--tinta);font-size:13.5px}
+  .pestana.activa{background:var(--tinta);border-color:var(--tinta);color:#fff}
+  .pestana .punto{display:inline-block;width:9px;height:9px;border-radius:50%;margin-right:6px;vertical-align:0}
+  .pestanas.sub .pestana{font-size:12.5px;padding:6px 12px}
+
+  /* Tablas con líneas (como en el Drive 1 y Licencias) */
+  .tabla-wrap{background:#fff;border:1px solid var(--celda);border-radius:10px;overflow:auto}
+  table{border-collapse:collapse;width:100%}
+  th{background:#EFE9DD;text-align:left;font-size:11.5px;font-weight:700;padding:7px 8px;border:1px solid var(--celda);white-space:nowrap}
+  td{padding:6px 8px;border:1px solid var(--celda);font-size:12.5px;vertical-align:top;background:#fff}
+  td .chico{display:block;font-size:11px;color:var(--gris);font-weight:400}
+  td.nombre{font-weight:600}
+  td .alerta{display:block;font-size:11px;color:var(--rojo-oscuro);font-weight:700}
+  td a{color:var(--azul)}
+  td.col-tipo{white-space:nowrap;font-weight:700}
+  td.col-tipo i{display:inline-block;width:9px;height:9px;border-radius:50%;margin-right:6px}
+  tr.gris td{background:#F6F3EE;color:var(--gris-claro)}
+  tr.lic td{background:#FDF0F1}
+  tr.hoy td{box-shadow:inset 0 2px 0 var(--tinta), inset 0 -2px 0 var(--tinta)}
+  .tabla-buscar{min-width:860px}
+  .tabla-rol{min-width:640px}
+  .etiqueta{display:inline-block;font-size:11px;font-weight:700;padding:2px 7px;border-radius:8px;white-space:nowrap;background:#F1EEE8;color:var(--gris)}
+  .etiqueta.feriado{background:var(--ambar-fondo);color:var(--ambar)}
+  .titulo-tabla{font-size:15px;font-weight:700;margin:10px 0 6px;display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+
+  /* Editor del turno presencial y tipos de turno */
+  .chip{display:flex;align-items:center;justify-content:space-between;gap:4px;background:var(--papel);border:1px solid var(--linea);border-radius:7px;padding:3px 6px;margin-bottom:4px;font-size:12px}
+  .chip.malo{background:var(--ambar-fondo);border-color:#E9CF8F}
+  .chip.lic{background:#FBE3E5;border-color:#F0B9BF}
+  .chip button{border:none;background:none;cursor:pointer;color:var(--rojo-oscuro);font-weight:700;padding:0 3px}
+  .editor-presencial select{width:100%;padding:4px;border:1px dashed var(--celda);border-radius:6px;background:#fff;font-size:12px}
+  .tipo{border:1.5px solid var(--linea);border-left:8px solid var(--gris-claro);border-radius:10px;padding:10px 12px;margin-bottom:10px;background:#fff}
+  .tipo.inactivo{opacity:.65}
+  .tipo .areas{display:flex;gap:10px;flex-wrap:wrap;margin:8px 0}
+  .tipo .area{display:flex;align-items:center;gap:6px;background:var(--papel);border:1px solid var(--linea);border-radius:8px;padding:5px 8px;font-size:13px}
+  .tipo .area input[type=number]{width:58px;padding:5px 6px;border:1.5px solid var(--linea);border-radius:6px}
+  .tipo input[type=color]{width:46px;height:36px;padding:2px;min-width:0}
+  #msgTipos{font-size:13px;font-weight:600;color:var(--rojo-oscuro);min-height:18px;margin-top:6px}
+  .sugeridos label{display:flex;gap:6px;align-items:center;font-size:13px;margin:3px 0}
+
+  #aviso{position:fixed;left:50%;bottom:calc(20px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);background:#222;color:#fff;
+    padding:10px 16px;border-radius:10px;font-size:13.5px;font-weight:600;z-index:99;display:none;max-width:90vw}
+</style>
+</head>
+<body>
+<div id="pantallaLogin">
+  <div id="cargandoSesion" style="text-align:center;color:#6A635C;font-size:15px;font-weight:600">Cargando MEGA ALEGRA…</div>
+  <div class="caja-login" id="cajaLogin" hidden>
+    <h2>MEGA ALEGRA · Turnos y licencias</h2>
+    <label for="loginCorreo" style="font-size:13px;font-weight:700">Correo</label>
+    <input type="email" id="loginCorreo" autocomplete="username">
+    <label for="loginClave" style="font-size:13px;font-weight:700">Contraseña</label>
+    <input type="password" id="loginClave" autocomplete="current-password">
+    <button class="btn" id="btnEntrar" style="width:100%;padding:11px">Entrar</button>
+    <div id="msgLogin"></div>
+  </div>
+</div>
+<div id="aviso" role="status" aria-live="polite"></div>
+
+<div id="app" hidden>
+  <div class="barra-sesion"><span id="usuarioSesion"></span><button id="btnSalir">Salir</button></div>
+  <nav class="menu-drives" aria-label="Drives">
+    <a href="drive1.html" data-seccion="drive1" hidden>Drive 1 · Registro de casos</a>
+    <a href="index.html" data-seccion="drive2" hidden>Drive 2 · Agenda diaria</a>
+    <a href="drive3.html" data-seccion="drive3" hidden>Drive 3 · Fono Alegra</a>
+    <a href="drive4.html" data-seccion="drive4" hidden>Drive 4 · Consolidación</a>
+    <a href="licencias.html" data-seccion="licencias" hidden>Licencias</a>
+    <a href="turnos.html" class="actual" aria-current="page">Turnos y licencias</a>
+    <a href="permisos.html" id="enlacePermisos" hidden>Personal y permisos</a>
+  </nav>
+
+  <header>
+    <h1>Turnos y licencias</h1>
+    <p>Quién está de turno, quién está de licencia y quién lo apoya</p>
+  </header>
+
+  <!-- ===== a) Buscador: por fecha o por nombre, una sola tabla ===== -->
+  <section class="caja">
+    <h3>Buscar</h3>
+    <div class="fila-form">
+      <label>Fecha<input type="date" id="bFecha"></label>
+      <button class="btn sec" id="btnBHoy">Hoy</button>
+      <button class="btn sec" id="btnBManana">Mañana</button>
+      <label class="ancho">Nombre (opcional)<input type="search" id="bNombre" list="listaNombres" placeholder="Escribe un apellido o nombre" autocomplete="off"></label>
+      <button class="btn sec" id="btnBLimpiar" hidden>Quitar nombre</button>
+    </div>
+    <datalist id="listaNombres"></datalist>
+    <p class="ayuda" id="ayudaBuscar"></p>
+    <div id="tablaBuscar"></div>
+  </section>
+
+  <!-- ===== b) Calendario completo por tipo  ·  c) Administrar ===== -->
+  <div class="pestanas" id="pestanasRol" role="tablist"></div>
+
+  <section id="secRol">
+    <div class="caja">
+      <div class="fila-form">
+        <label>Mes<input type="month" id="rMes"></label>
+        <button class="btn sec" id="btnRolAntes" aria-label="Mes anterior">‹</button>
+        <button class="btn sec" id="btnRolDespues" aria-label="Mes siguiente">›</button>
+        <button class="btn" id="btnRolExcel">⬇ Descargar Excel</button>
+        <button class="btn sec" id="btnRolPdf">⬇ Descargar PDF</button>
+      </div>
+      <div class="titulo-tabla" id="tituloRol"></div>
+      <p class="ayuda" id="datosRol"></p>
+      <div id="tablaRol"></div>
+    </div>
+
+    <!-- Editor del turno presencial (solo con la casilla Turnos) -->
+    <div class="caja" id="cajaEditorPresencial" hidden>
+      <h3>Cambiar el turno presencial (se repite cada semana)</h3>
+      <p class="ayuda">Quién atiende cada día, por sub sede y área. Con ✕ quitas a alguien y con la lista de abajo agregas; luego toca <b>Guardar turno presencial</b>. El Drive 1 lo usa para sugerir abogado en los casos de Fono Alegra y el Drive 3 lo muestra.</p>
+      <p class="ayuda">El nombre, la dirección y el horario de cada sede se cambian en <b>⚙ Administrar › Tipos de turno</b>.</p>
+      <div id="avisosPresencial"></div>
+      <div class="tabla-wrap editor-presencial"><table class="tabla-rol">
+        <thead><tr><th>Sub sede · Área</th><th>Lunes</th><th>Martes</th><th>Miércoles</th><th>Jueves</th><th>Viernes</th></tr></thead>
+        <tbody id="cuerpoPresencial"></tbody>
+      </table></div>
+      <div class="fila-form" style="margin-top:10px">
+        <button class="btn" id="btnGuardarPresencial" disabled>Guardar turno presencial</button>
+        <button class="btn sec" id="btnDeshacerPresencial" disabled>Deshacer cambios</button>
+      </div>
+    </div>
+  </section>
+
+  <section id="secAdmin" hidden>
+    <div class="pestanas sub" id="pestanasAdmin">
+      <button class="pestana" data-admin="subir">Subir rol</button>
+      <button class="pestana" data-admin="crear">Crear rol con criterios</button>
+      <button class="pestana" data-admin="onomasticos">Onomásticos</button>
+      <button class="pestana activa" data-admin="tipos">Tipos de turno</button>
+      <button class="pestana" data-admin="feriados">Feriados</button>
+    </div>
+    <div id="adminSubir" hidden>
+      <div class="caja"><h3>Subir rol</h3>
+        <p class="ayuda">Sube el rol de turnos o de licencias en <b>Excel</b> (.xlsx), <b>Word</b> (.docx, con el rol en una tabla) o <b>PDF con texto</b>. Se reconoce solo cada hoja o tabla (flagrancia, peritos, Defensoría, CONADIS, licencias); si no, eliges tú el tipo. Antes de guardar ves todo en una <b>vista previa para corregir</b>: los nombres se unen con Defensores y lo dudoso sale en amarillo.</p>
+        <p class="ayuda">Del archivo solo se toman <b>fechas y nombres</b>: el DNI, los celulares y los correos que traiga NO se guardan (el contacto sale siempre de Defensores). Al guardar, el rol de cada mes elegido <b>reemplaza</b> al que había.</p>
+        <div class="fila-form"><label class="ancho">Archivo<input type="file" id="fArchivoRol" accept=".xlsx,.xls,.docx,.pdf"></label></div>
+        <div id="msgSubir" class="ayuda" style="font-weight:600"></div>
+      </div>
+      <div id="previaSubir"></div>
+    </div>
+    <div id="adminCrear" hidden>
+      <div class="caja"><h3>Crear rol con criterios</h3>
+        <p class="ayuda">Elige el tipo, las fechas y quiénes entran (en su orden). El reparto: <b>nadie de licencia ni en su onomástico</b>, <b>nadie dos días seguidos</b> (en los turnos por semana: no dos semanas seguidas), <b>nadie con otro turno el mismo día</b> y <b>parejo</b> (primero quien tiene menos turnos; si empatan, quien tuvo menos el mes anterior y luego el orden de la lista, que sigue rotando desde donde quedó). Los días que no tocan (fines de semana y feriados, salvo en flagrancia) se saltan solos. Luego ves la vista previa y puedes cambiar a cualquiera día por día antes de guardar.</p>
+        <div class="fila-form">
+          <label class="ancho">Tipo de turno<select id="cTipo"></select></label>
+          <label>Desde<input type="date" id="cDesde"></label>
+          <label>Hasta<input type="date" id="cHasta"></label>
+        </div>
+        <p class="ayuda" id="cDatosTipo"></p>
+        <div id="cPersonas"></div>
+        <div id="cAvisoOnom"></div>
+        <div class="fila-form" style="margin-top:8px"><button class="btn" id="btnGenerar">Generar vista previa</button></div>
+      </div>
+      <div id="cPrevia"></div>
+    </div>
+    <div id="adminOnomasticos" hidden>
+      <div class="caja"><h3>Onomásticos</h3>
+        <p class="ayuda">Día y mes del onomástico de cada servidor (por ejemplo <i>15/08</i>). Al crear un rol, ese día no se le asigna turno. Solo lo ven quienes pueden cambiar turnos (la casilla Turnos); no sale en ninguna otra página.</p>
+        <div id="onomAviso"></div>
+        <div class="buscar" style="margin:6px 0 8px"><input type="search" id="onomBuscar" placeholder="Buscar persona" style="padding:8px 10px;border:1.5px solid var(--linea);border-radius:8px;width:100%;max-width:420px"></div>
+        <div class="tabla-wrap"><table>
+          <thead><tr><th>Persona</th><th>Área</th><th>Onomástico (dd/mm)</th></tr></thead>
+          <tbody id="cuerpoOnom"></tbody>
+        </table></div>
+        <div id="msgOnom" class="ayuda" style="font-weight:600"></div>
+        <div class="fila-form" style="margin-top:8px"><button class="btn" id="btnGuardarOnom" disabled>Guardar onomásticos</button><button class="btn sec" id="btnDeshacerOnom" disabled>Deshacer cambios</button></div>
+      </div>
+    </div>
+
+    <div id="adminTipos">
+      <div class="caja">
+        <h3>Tipos de turno</h3>
+        <p class="ayuda">Cada tipo dice qué áreas cubre, cuántas personas por día, horario, lugar y qué días toca. Se pueden agregar, cambiar o desactivar sin tocar código (los roles ya guardados no se pierden). Cada tipo activo tiene su pestaña arriba. <b>Frecuencia</b>: <i>Todos los días</i> = una persona o grupo distinto cada día; <i>Por semana</i> = el mismo grupo de lunes a viernes; <i>Un día fijo</i> = solo ese día de la semana (por ejemplo, CONADIS los viernes). El turno presencial se cambia en su propia pestaña.</p>
+      </div>
+      <div class="caja">
+        <h3>Resumen</h3>
+        <div class="tabla-wrap"><table>
+          <thead><tr><th>Tipo</th><th>Dirección / lugar</th><th>Horario</th><th>Qué días</th><th>Áreas</th></tr></thead>
+          <tbody id="cuerpoResumenTipos"></tbody>
+        </table></div>
+      </div>
+      <div class="tipo" id="cajaSedesPres" style="border-left-color:#6B4A0E">
+        <h3 style="margin:0 0 4px;font-size:15px">Sedes (turno presencial y cartas de asignación)</h3>
+        <p class="ayuda">Un solo lugar para el nombre, la dirección y el horario de cada sede. Lo usan el <b>turno presencial</b> (Mega Alegra y Miraflores, de lunes a viernes sin feriados) y las <b>cartas de asignación</b> del Drive 1 (párrafo "brinda atención presencial en la sede…"). En la carta, la sede de cada defensor se toma de su casilla "Sede" en Personal y permisos › Defensores (basta que contenga el nombre de la sede). Escribe el horario como debe salir en la carta, por ejemplo: <i>lunes a viernes, de 8:00 a 13:00 horas y de 13:30 a 16:30 horas</i>. Quién atiende cada día se cambia en la pestaña <b>Turno presencial</b>.</p>
+        <div id="avisoSedes"></div>
+        <div id="listaSedesPres"></div>
+        <div class="fila-form" style="margin-top:8px">
+          <button class="btn sec" id="btnAgregarSede">+ Agregar sede</button>
+          <button class="btn" id="btnGuardarSedes" disabled>Guardar sedes</button>
+          <button class="btn sec" id="btnDeshacerSedes" disabled>Deshacer cambios</button>
+        </div>
+      </div>
+      <div id="listaTipos"></div>
+      <div id="msgTipos"></div>
+      <div class="fila-form">
+        <button class="btn sec" id="btnAgregarTipo">+ Agregar tipo de turno</button>
+        <button class="btn" id="btnGuardarTipos" disabled>Guardar tipos</button>
+        <button class="btn sec" id="btnDeshacerTipos" disabled>Deshacer cambios</button>
+      </div>
+    </div>
+
+    <div id="adminFeriados" hidden>
+      <div class="caja">
+        <h3>Feriados <select id="fAnioFer" aria-label="Año"></select></h3>
+        <p class="ayuda">Los usan el Drive 1 (plazos en días hábiles y reparto de memos) y los turnos (para saltar feriados). <span id="ayudaFer"></span></p>
+        <div id="formFer" hidden>
+          <div class="fila-form" style="margin-bottom:10px">
+            <label>Fecha<input type="date" id="fFerFecha"></label>
+            <label class="ancho">Nombre<input type="text" id="fFerNombre" placeholder="Ej. Día no laborable para el sector público"></label>
+            <button class="btn" id="btnAgregarFer">Agregar feriado</button>
+          </div>
+        </div>
+        <div class="tabla-wrap"><table>
+          <thead><tr><th>Fecha</th><th>Día</th><th>Nombre</th><th id="thFerAccion" hidden></th></tr></thead>
+          <tbody id="cuerpoFer"></tbody>
+        </table></div>
+      </div>
+      <div class="caja sugeridos" id="cajaSugeridos" hidden>
+        <h3>Feriados nacionales que faltan</h3>
+        <p class="ayuda">Los feriados fijos del Perú y Semana Santa de este año. Marca los que quieras agregar. Los días no laborables que decrete el Gobierno se agregan arriba, a mano.</p>
+        <div id="listaSugeridos"></div>
+        <button class="btn" id="btnAgregarSugeridos" style="margin-top:8px">Agregar los marcados</button>
+      </div>
+    </div>
+  </section>
+</div>
+
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
+import { getAuth, onAuthStateChanged, signInWithEmailAndPassword, signOut } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
+import { initializeFirestore, collection, doc, getDoc, getDocs, setDoc, deleteDoc, writeBatch } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+
+const fbApp = initializeApp({
+  apiKey: "AIzaSyBHxewV5R3CAj-5i3AzCgfdKvwI5A3jXnA",
+  authDomain: "defensapublica-limacentro.firebaseapp.com",
+  projectId: "defensapublica-limacentro",
+  storageBucket: "defensapublica-limacentro.firebasestorage.app",
+  messagingSenderId: "595677954487",
+  appId: "1:595677954487:web:8a68160c5927bf5cf0a832"
+});
+const auth = getAuth(fbApp);
+const db = initializeFirestore(fbApp, { experimentalForceLongPolling: true });
+
+const $ = id => document.getElementById(id);
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+function avisar(t, ms = 3500){ const a = $('aviso'); a.textContent = t; a.style.display = 'block'; clearTimeout(avisar.t); avisar.t = setTimeout(() => a.style.display = 'none', ms); }
+const isoDe = d => d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+const hoyIso = () => isoDe(new Date());
+const fechaCorta = iso => iso ? iso.slice(8, 10) + '/' + iso.slice(5, 7) + '/' + iso.slice(0, 4) : '';
+const diaMes = iso => iso.slice(8, 10) + '/' + iso.slice(5, 7);
+function sumarDias(iso, n){ const d = new Date(iso + 'T12:00:00'); d.setDate(d.getDate() + n); return isoDe(d); }
+function sumarMes(mes, n){ const d = new Date(mes + '-15T12:00:00'); d.setMonth(d.getMonth() + n); return isoDe(d).slice(0, 7); }
+const diaSemana = iso => new Date(iso + 'T12:00:00').getDay(); // 0 = domingo … 6 = sábado
+const norm = s => String(s || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
+const copia = o => JSON.parse(JSON.stringify(o));
+const DIAS_SEMANA = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado'];
+const MESES = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'setiembre', 'octubre', 'noviembre', 'diciembre'];
+const fechaLarga = iso => DIAS_SEMANA[diaSemana(iso)].toLowerCase() + ' ' + Number(iso.slice(8, 10)) + ' de ' + MESES[Number(iso.slice(5, 7)) - 1] + ' de ' + iso.slice(0, 4);
+const nombreMes = mes => MESES[Number(mes.slice(5, 7)) - 1] + ' ' + mes.slice(0, 4);
+const ultimoDia = mes => new Date(Number(mes.slice(0, 4)), Number(mes.slice(5, 7)), 0).getDate();
+const diasDelMes = mes => Array.from({ length: ultimoDia(mes) }, (_, i) => mes + '-' + String(i + 1).padStart(2, '0'));
+const AREAS = ['Asistencia Legal', 'Defensa de Víctimas', 'Equipo multidisciplinario'];
+const AREA_CORTA = { 'Asistencia Legal': 'Asistencia Legal', 'Defensa de Víctimas': 'Víctimas', 'Equipo multidisciplinario': 'Equipo multidisciplinario' };
+function error(err){
+  console.error(err);
+  avisar(err && err.code === 'permission-denied' ? 'Firebase no dio permiso para este cambio.' : 'No se pudo guardar. Revisa tu conexión.', 6000);
+}
+
+// Mismo cálculo de permisos que en el Drive 1 y la Agenda
+function nivelSeccion(f, s){
+  if (f.esAdmin === true) return 'editar';
+  const temporal = f.rol === 'asistente' && f.permisoTemporalHasta && f.permisoTemporalHasta.toDate && f.permisoTemporalHasta.toDate() > new Date();
+  let n;
+  if (temporal && (s === 'drive1' || s === 'drive2')) n = 'editar';
+  else if ((f.permisos || {})[s]) n = f.permisos[s];
+  else n = 'sin';
+  if (f.bloqueado === true && n !== 'sin') n = 'ver';
+  return n;
+}
+
+let yo = null, puedeTurnos = false, nivelLicencias = 'sin';
+const esAdmin = () => yo && yo.esAdmin === true;
+let DEFS = [];           // defensores (también los de baja, para mostrar nombres antiguos)
+let LICENCIAS = [];      // colección pública "licencias" (sin motivo)
+let FERIADOS = [];       // [{ docId, fecha, nombre }]
+let TIPOS = [];          // turnos/tipos (o los iniciales)
+let tiposEnFirebase = false;
+// TURNO PRESENCIAL = turnos/fonoAlegra: tabla "SEDE|Área" → día 1-5 → códigos. Se edita AQUÍ;
+// el Drive 1 lo lee para sugerir abogado en los casos de Fono Alegra y el Drive 3 solo lo muestra.
+let PRESENCIAL = null, presencialEnFirebase = false;
+// Sedes: UN SOLO lugar (turnos/sedes › lista [{ clave, nombre, direccion, horario }]) para el turno presencial y las cartas de asignación del Drive 1.
+// "LIMA CENTRO" y "MIRAFLORES" son las dos del turno presencial (no se pueden quitar). Mega Alegra: Jr. Contumaza (indicación del Coordinador, 17/10/2026).
+const SEDES_PRES_INICIAL = {
+  'LIMA CENTRO': { clave: 'LIMA CENTRO', nombre: 'Mega Alegra', direccion: 'Jr. Contumaza N.° 846, 4.° piso, oficina 401, Cercado de Lima', horario: '08:00 a 16:30' },
+  'MIRAFLORES': { clave: 'MIRAFLORES', nombre: 'Miraflores', direccion: 'Av. Comandante Espinar N.° 160, Miraflores, Lima', horario: '08:00 a 16:30' }
+};
+let SEDES_LISTA = [], sedesEnFirebase = false;
+let SEDES_PRES = copia(SEDES_PRES_INICIAL);   // las dos del turno presencial, sacadas de SEDES_LISTA
+function aplicarSedes(lista){
+  SEDES_LISTA = lista;
+  SEDES_PRES = Object.fromEntries(Object.keys(SEDES_PRES_INICIAL).map(k => [k, { ...SEDES_PRES_INICIAL[k], ...(lista.find(x => x.clave === k) || {}) }]));
+}
+// Primera vez (todavía no existe turnos/sedes): las del turno presencial + las que ya estaban en "Documentos de asignación"
+// (Personal y permisos). La de Mega Alegra queda siempre en Jr. Contumaza (no la de Jr. Carabaya del modelo).
+const claveSede = nombre => norm(nombre).replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '').toUpperCase() || 'SEDE';
+function sedesIniciales(viejas){
+  const lista = Object.values(copia(SEDES_PRES_INICIAL));
+  (viejas || []).filter(v => v && v.nombre).forEach(v => {
+    const n = norm(v.nombre), clave = /miraflores/.test(n) ? 'MIRAFLORES' : /mega|alegra|lima|centro/.test(n) ? 'LIMA CENTRO' : '';
+    const s = clave && lista.find(x => x.clave === clave);
+    if (s){ if (v.horario) s.horario = v.horario; if (clave === 'MIRAFLORES' && v.direccion) s.direccion = v.direccion; }
+    else if (!lista.some(x => norm(x.nombre) === n)) lista.push({ clave: claveSede(v.nombre), nombre: v.nombre, direccion: v.direccion || '', horario: v.horario || '' });
+  });
+  return lista;
+}
+const ROLES = {};        // "tipo__2026-10" → { dias: { "2026-10-01": [{ id, nombre, area }] } } o null si no hay rol
+
+// ---------- Registro de cambios ----------
+async function registrarCambio(accion, coleccion, id, antes, despues){
+  const txt = v => typeof v === 'object' && v !== null ? JSON.stringify(v) : String(v ?? '');
+  const claves = [...new Set([...Object.keys(antes || {}), ...Object.keys(despues || {})])];
+  const detalle = claves.filter(k => txt((antes || {})[k]) !== txt((despues || {})[k]))
+    .map(k => ({ campo: k, antes: txt((antes || {})[k]), despues: txt((despues || {})[k]) }));
+  try {
+    await setDoc(doc(collection(db, 'cambios')), { cuandoMs: Date.now(), quien: yo.correo, quienNombre: yo.nombre || yo.correo, accion, coleccion, docId: id, detalle });
+  } catch (e){ console.error('No se pudo anotar en el registro de cambios', e); }
+}
+
+// ================= Tipos de turno =================
+// Valores iniciales (tomados de las pestañas del Excel del Drive 1). Se usan hasta que se guarden en turnos/tipos.
+// El código (id) de cada tipo no cambia nunca, aunque cambie el nombre: los roles de cada mes se guardan con él.
+// areas: área → cuántas personas por día. frecuencia: 'diario' | 'semanal' (mismo grupo de lunes a viernes) | 'diaFijo' (diaSemana 1-6, 0 = domingo).
+// drive1: el "Llegó por …" del Drive 1 al que corresponde. corto: nombre de la pestaña.
+const TIPOS_INICIALES = [
+  { id: 'flagrancia', nombre: 'Turno de flagrancia', corto: 'Flagrancia', color: '#A10C1A', activo: true, areas: { 'Defensa de Víctimas': 1 },
+    horario: '08:00 a 16:30', lugar: '', frecuencia: 'diario', diaSemana: 5, finesDeSemana: true, feriados: true, drive1: 'Turno de flagrancia' },
+  { id: 'defensoria', nombre: 'Defensoría del Pueblo', corto: 'Defensoría', color: '#3F6B52', activo: true, areas: { 'Asistencia Legal': 1, 'Defensa de Víctimas': 1 },
+    horario: '08:00 a 16:30', lugar: 'Jr. Ucayali N° 394-398, Cercado de Lima', frecuencia: 'diario', diaSemana: 5, finesDeSemana: false, feriados: false, drive1: '' },
+  { id: 'conadis', nombre: 'CONADIS', corto: 'CONADIS', color: '#B8873A', activo: true, areas: { 'Asistencia Legal': 1, 'Defensa de Víctimas': 1 },
+    horario: '08:00 a 16:30', lugar: 'Av. Arequipa N° 375, Cercado de Lima', frecuencia: 'diaFijo', diaSemana: 5, finesDeSemana: false, feriados: false, drive1: '' },
+  { id: 'peritos', nombre: 'Turno de peritos', corto: 'Peritos', color: '#2C6478', activo: true, areas: { 'Equipo multidisciplinario': 3 },
+    horario: '08:00 a 16:30', lugar: '', frecuencia: 'semanal', diaSemana: 5, finesDeSemana: false, feriados: false, drive1: 'Turno peritos' }
+];
+const DRIVE1_TURNOS = ['Turno de flagrancia', 'Turno peritos'];
+const COLOR_PRESENCIAL = '#6B4A0E', COLOR_LICENCIA = '#241E1B';
+const tiposActivos = () => TIPOS.filter(t => t.activo !== false);
+const cortoDe = t => t.corto || t.nombre.replace(/^Turno de /i, '').replace(/^./, c => c.toUpperCase());
+const esFeriado = iso => FERIADOS.find(f => f.fecha === iso) || null;
+// ¿Le toca turno a este tipo en esta fecha? (según su frecuencia, fines de semana y feriados)
+function tocaElDia(t, iso){
+  const d = diaSemana(iso);
+  if (!t.feriados && esFeriado(iso)) return false;
+  if (t.frecuencia === 'diaFijo') return d === Number(t.diaSemana);
+  if (!t.finesDeSemana && (d === 0 || d === 6)) return false;
+  return true;
+}
+function frecuenciaTexto(t){
+  if (t.frecuencia === 'diaFijo') return 'Los ' + DIAS_SEMANA[Number(t.diaSemana)].toLowerCase() + ([0, 6].includes(Number(t.diaSemana)) ? 's' : '') + (t.feriados ? '' : ' (sin feriados)');
+  const base = t.frecuencia === 'semanal' ? 'Por semana' : 'Todos los días';
+  const sin = [!t.finesDeSemana && 'sin fines de semana', !t.feriados && 'sin feriados'].filter(Boolean);
+  return base + (sin.length ? ' (' + sin.join(', ') + ')' : ' (también fines de semana y feriados)');
+}
+
+// ---------- Datos ----------
+const intentar = async (p, porDefecto, que) => { try { return await p; } catch (e){ console.warn('No se pudo leer ' + que, e); return porDefecto; } };
+// Acepta el feriado como id del documento ("2026-12-25") o en un campo fecha/dia (igual que el Drive 1)
+function aIso(v){
+  if (!v) return '';
+  if (v.toDate) return isoDe(v.toDate());
+  if (typeof v !== 'string') return '';
+  let m = v.match(/^\d{4}-\d{2}-\d{2}/);
+  if (m) return m[0];
+  m = v.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+  return m ? m[3] + '-' + m[2].padStart(2, '0') + '-' + m[1].padStart(2, '0') : '';
+}
+async function cargarBase(){
+  const [sd, sl, sf, st, sp, ss, sda] = await Promise.all([
+    getDocs(collection(db, 'defensores')),
+    intentar(getDocs(collection(db, 'licencias')), null, 'las licencias'),
+    intentar(getDocs(collection(db, 'feriados')), null, 'los feriados'),
+    intentar(getDoc(doc(db, 'turnos', 'tipos')), null, 'los tipos de turno'),
+    intentar(getDoc(doc(db, 'turnos', 'fonoAlegra')), null, 'el turno presencial'),
+    intentar(getDoc(doc(db, 'turnos', 'sedes')), null, 'las sedes'),
+    intentar(getDoc(doc(db, 'configuracion', 'documentosAsignacion')), null, 'las sedes de los documentos de asignación')
+  ]);
+  DEFS = sd.docs.map(d => ({ id: d.id, ...d.data() }))
+    .sort((a, b) => (a.area || '').localeCompare(b.area || '') || (a.orden ?? 999) - (b.orden ?? 999) || (a.nombre || '').localeCompare(b.nombre || '', 'es'));
+  LICENCIAS = sl ? sl.docs.map(d => ({ id: d.id, ...d.data() })).filter(l => l.inicio && l.fin) : [];
+  FERIADOS = sf ? sf.docs.map(d => { const f = d.data(); return { docId: d.id, fecha: aIso(d.id) || aIso(f.fecha) || aIso(f.dia) || aIso(f.date), nombre: f.nombre || f.descripcion || '' }; }).filter(f => f.fecha) : [];
+  tiposEnFirebase = !!(st && st.exists() && Array.isArray(st.data().lista));
+  TIPOS = tiposEnFirebase ? st.data().lista : copia(TIPOS_INICIALES);
+  presencialEnFirebase = !!(sp && sp.exists() && sp.data().tabla);
+  PRESENCIAL = presencialEnFirebase ? sp.data().tabla : copia(TURNOS_FONO_INICIAL);
+  sedesEnFirebase = !!(ss && ss.exists() && Array.isArray(ss.data().lista));
+  aplicarSedes(sedesEnFirebase ? ss.data().lista : sedesIniciales(sda && sda.exists() ? sda.data().sedes : []));
+}
+// Roles del mes: un documento por tipo y mes ("flagrancia__2026-10"); se leen solo cuando hacen falta
+async function cargarRoles(mes){
+  const faltan = TIPOS.filter(t => !((t.id + '__' + mes) in ROLES));
+  await Promise.all(faltan.map(async t => {
+    const k = t.id + '__' + mes;
+    try { const s = await getDoc(doc(db, 'turnos', k)); ROLES[k] = s.exists() ? s.data() : null; }
+    catch (e){ console.warn('No se pudo leer el rol ' + k, e); ROLES[k] = null; }
+  }));
+}
+const mesesEntre = (desde, hasta) => { const lista = []; for (let m = desde.slice(0, 7); m <= hasta.slice(0, 7); m = sumarMes(m, 1)) lista.push(m); return lista; };
+const rolDelMes = (t, mes) => ROLES[t.id + '__' + mes];
+const deTurno = (t, iso) => (((rolDelMes(t, iso.slice(0, 7)) || {}).dias || {})[iso]) || [];
+
+const defPorId = id => DEFS.find(d => d.id === id);
+const nombreDe = p => (defPorId(p.id) || {}).nombre || p.nombre || p.id;
+const telDe = cel => String(cel || '').split(/[-\/,;]| y /)[0].replace(/\D/g, ''); // el primer número, para llamar
+const celularHtml = id => { const c = (defPorId(id) || {}).celular, t = telDe(c); return c ? (t.length >= 6 ? `<a href="tel:${esc(t)}">${esc(c)}</a>` : esc(c)) : '<span class="chico">—</span>'; };
+const correoHtml = id => { const c = (defPorId(id) || {}).correo; return c ? `<a href="mailto:${esc(c)}">${esc(c)}</a>` : '<span class="chico">—</span>'; };
+const licenciasDel = iso => LICENCIAS.filter(l => l.inicio <= iso && iso <= l.fin);
+const licenciaDe = (id, iso) => licenciasDel(iso).filter(l => l.defensorId === id).sort((a, b) => b.fin.localeCompare(a.fin))[0] || null;
+const apoyosDe = l => (l.apoyos || []).map(a => ({ id: a.id, nombre: (defPorId(a.id) || {}).nombre || a.nombre || a.id }));
+const apoyoIdsDe = l => l.apoyoIds || (l.apoyos || []).map(a => a.id);
+
+// ---------- Turno presencial ----------
+// Tabla inicial (pestaña "Datos Matriz" de la hoja de Fono Alegra), la misma del Drive 1 y el Drive 3, por si todavía no existe turnos/fonoAlegra.
+const SEDES = ['LIMA CENTRO', 'MIRAFLORES'];
+const sedeNombre = s => (SEDES_PRES[s] || {}).nombre || s;
+const AREAS_PRESENCIAL = ['Defensa de Víctimas', 'Asistencia Legal'];
+const TURNOS_FONO_INICIAL = {
+  'LIMA CENTRO|Defensa de Víctimas': {
+    1: ['VLADIMIR_TALENAS_QUISPE', 'LEADY_VANNESA_PACO_HUERTA_DE_FLORES', 'LUIS_CARLO_MUENTE_MAURICIO', 'LUIS_MARTIN_CHACALTANA_HUASASQUICHE', 'CARMELA_LUZ_ERAZO_MANRIQUE'],
+    2: ['JOHSSY_LUZ_QUISPE_APONTE', 'MARIANA_BARBOZA_BECERRA', 'ARNOLD_HUAMAN_PAIMA', 'INGRID_DANIELA_RIVERA_MARTINEZ', 'CASTORINA_QUIROZ_VASQUEZ', 'LISSI_INDIRA_TRUJILLO_ROLDAN'],
+    3: ['PERCY_HERMAN_AMPUERO_LINARES', 'MERY_PAJA_OLVEA', 'LUPE_LULY_GOMEZ_HUAMAN', 'MILAGROS_DE_LA_CRUZ_CRISOLO', 'MYRCEA_VASQUEZ_PIZARRO'],
+    4: ['WILBERT_ELI_GUIZADO_SICOS', 'LIZETH_MERCADO_LAGUNA', 'LESLY_KATHERINE_ROJAS_VALDEZ', 'RUTH_GIOVANNA_VARGAS_ANTAURCO', 'JENNY_ROCIO_ORTEGA_OLVEA', 'KATHERINE_HIDALGO_BUSTAMENTE'],
+    5: ['CARMEN_ANTONIA_BERROCAL_GONZALES', 'LAURA_ISABEL_RODRIGUEZ_BELLEZA', 'GUILLEMO_ALEJANDRO_HUAMAN', 'EDUARDO_ALVARO_GUILLEN_RAMOS', 'ESLEYMAN_JOVANY_CORDOVA_DE_LA_ROSA', 'DANNY_ILLACONZA_MORALES']
+  },
+  'LIMA CENTRO|Asistencia Legal': {
+    1: ['CHIRA_PAREDES__LUIS_ENRIQUE', 'COLQUI_GANTO__JOHNY_BERNABE'],
+    2: ['BUSTINZA_ROBLES__MARIA_COQUI', 'DORREGARAY_OVIEDO__PATRICIA'],
+    3: ['QUINTANA_ZAPATA__MYRNA_SORAYA', 'BAO_HERRERA__MARIA_EUGENIA_AMELIA', 'ARCE_VILLAR__CELIA_MARISELA'],
+    4: ['RAMOS_ANDRADE__ANGEL', 'SALAS_MACEDO__SANDRA', 'ZUNIGA_TATAJE__TALIA_ARIADNE'],
+    5: ['PRIETO_GALLARDO__VICKY_ROSALINA', 'SOTO_LUDENA__JAVIER_ANTENOR']
+  },
+  'MIRAFLORES|Defensa de Víctimas': Object.fromEntries([1, 2, 3, 4, 5].map(d => [d, ['LILIANA_MARGOTH_GALINDO_SARAS', 'OSCAR_ARCE_ZAVALA']])),
+  'MIRAFLORES|Asistencia Legal': Object.fromEntries([1, 2, 3, 4, 5].map(d => [d, ['FAUSTOR_LAU__GLORIA_ANTONIA', 'VILCHEZ_CHAVARRI__FERNANDO_ABRAHAM', 'PILARES_FLOREZ__MARITZA_ANGELICA', 'FUERTES_FLORES__JULIA_BEATRIZ']]))
+};
+// Igual que en el Drive 1 y el Drive 3: el código del defensor o, si no coincide, sus apellidos
+function defensorDeTurno(clave){
+  const d = DEFS.find(x => x.id === clave && x.activo !== false);
+  if (d) return d;
+  const ap = norm(clave).split(/[\s,_]+/).filter(Boolean);
+  const hallados = DEFS.filter(x => x.activo !== false && ap.every(p => norm(x.nombre).split(/[\s,_]+/).includes(p)));
+  return hallados.length === 1 ? hallados[0] : null;
+}
+const legible = id => String(id).replace(/_+/g, ' ').trim();
+const personasPresencial = (tabla, sede, area, dia) => (((tabla || {})[sede + '|' + area] || {})[dia] || [])
+  .map(x => { const d = defensorDeTurno(x); return d ? { id: d.id, nombre: d.nombre, area } : { id: '', nombre: legible(x), area }; });
+// El turno presencial no atiende sábados, domingos ni feriados
+const tocaPresencial = iso => { const d = diaSemana(iso); return d >= 1 && d <= 5 && !esFeriado(iso); };
+
+// ================= a) BUSCADOR: por fecha o por nombre → la misma tabla =================
+// Cada fila: { iso, orden, tipo, color, id, nombre, nota, fecha, horario, lugar, contacto (de quien se llama), lic }
+const DIAS_POR_NOMBRE = 60;
+const notaLicencia = lic => 'De licencia hasta el ' + diaMes(lic.fin) + (apoyosDe(lic).length ? ' · Lo apoya: ' + apoyosDe(lic).map(a => a.nombre).join(', ') : '');
+function filasDelDia(iso, soloIds){
+  const filas = [], incluye = id => !soloIds || soloIds.includes(id);
+  tiposActivos().forEach((t, orden) => deTurno(t, iso).filter(p => incluye(p.id)).forEach(p => {
+    const lic = p.id ? licenciaDe(p.id, iso) : null;
+    filas.push({ iso, orden, tipo: t.nombre, color: t.color, id: p.id, nombre: nombreDe(p), nota: lic ? notaLicencia(lic) : '',
+      fecha: fechaCorta(iso), horario: t.horario || '', lugar: t.lugar || (defPorId(p.id) || {}).sede || '', contacto: p.id, alerta: !!lic });
+  }));
+  if (tocaPresencial(iso)) SEDES.forEach(sede => AREAS_PRESENCIAL.forEach(area =>
+    personasPresencial(PRESENCIAL, sede, area, diaSemana(iso)).filter(p => incluye(p.id)).forEach(p => {
+      const lic = p.id ? licenciaDe(p.id, iso) : null;
+      filas.push({ iso, orden: 50, tipo: 'Turno presencial', color: COLOR_PRESENCIAL, id: p.id, nombre: p.nombre, nota: lic ? notaLicencia(lic) : '',
+        fecha: fechaCorta(iso), horario: SEDES_PRES[sede].horario || '', lugar: sedeNombre(sede) + ' · ' + AREA_CORTA[area], lugarChico: SEDES_PRES[sede].direccion || '', contacto: p.id, alerta: !!lic });
+    })));
+  return filas;
+}
+// Licencias: por fecha, las vigentes ese día; por nombre, las suyas y las que apoya. El contacto es el del apoyo (a quien se llama).
+function filasLicencia(l, iso, comoApoyo){
+  const ap = apoyosDe(l), quien = (defPorId(l.defensorId) || {}).nombre || l.defensorNombre;
+  const base = { iso, orden: 99, color: COLOR_LICENCIA, lugar: AREA_CORTA[l.area] || l.area || '', horario: '—', fecha: diaMes(l.inicio) + ' al ' + fechaCorta(l.fin) };
+  if (comoApoyo) return [{ ...base, tipo: 'Apoyo por licencia', id: comoApoyo, nombre: nombreDe({ id: comoApoyo }), nota: 'Reemplaza a ' + quien, contacto: comoApoyo }];
+  if (!ap.length) return [{ ...base, tipo: 'Licencia', id: l.defensorId, nombre: quien, nota: 'Sin apoyo registrado', contacto: '', lic: true }];
+  return ap.map((a, i) => ({ ...base, tipo: 'Licencia', id: l.defensorId, nombre: i ? '' : quien, nota: 'Lo apoya: ' + a.nombre + ' (celular y correo del apoyo →)', contacto: a.id, lic: true, seguida: i > 0 }));
+}
+function personasDelNombre(q){
+  const palabras = norm(q).split(/[\s,]+/).filter(Boolean);
+  return palabras.length ? DEFS.filter(d => d.activo !== false && palabras.every(p => norm(d.nombre).includes(p))) : [];
+}
+async function pintarBuscar(){
+  const fecha = $('bFecha').value || hoyIso(), q = $('bNombre').value.trim();
+  $('btnBLimpiar').hidden = !q;
+  let filas = [], ayuda;
+  if (!q){
+    await cargarRoles(fecha.slice(0, 7));
+    if (($('bFecha').value || hoyIso()) !== fecha || $('bNombre').value.trim()) return;
+    filas = [...filasDelDia(fecha), ...licenciasDel(fecha).sort((a, b) => a.fin.localeCompare(b.fin)).flatMap(l => filasLicencia(l, fecha))];
+    const fer = esFeriado(fecha), d = diaSemana(fecha);
+    ayuda = `Turnos y licencias del <b>${esc(fechaLarga(fecha))}</b>${fer ? ' <span class="etiqueta feriado">Feriado' + (fer.nombre ? ': ' + esc(fer.nombre) : '') + '</span>' : ''}${d === 0 || d === 6 ? ' <span class="etiqueta">Fin de semana</span>' : ''}. Escribe un nombre para ver solo a esa persona.`;
+    const sinRol = tiposActivos().filter(t => !rolDelMes(t, fecha.slice(0, 7))).map(t => cortoDe(t));
+    if (sinRol.length) ayuda += ` <i>Sin rol cargado de ${esc(nombreMes(fecha.slice(0, 7)))}: ${esc(sinRol.join(', '))}.</i>`;
+  } else {
+    const personas = personasDelNombre(q), ids = personas.map(p => p.id), hasta = sumarDias(fecha, DIAS_POR_NOMBRE - 1);
+    if (!personas.length){ $('ayudaBuscar').innerHTML = ''; $('tablaBuscar').innerHTML = '<div class="vacio">Nadie con ese nombre en Defensores.</div>'; return; }
+    await Promise.all(mesesEntre(fecha, hasta).map(cargarRoles));
+    if ($('bNombre').value.trim() !== q || ($('bFecha').value || hoyIso()) !== fecha) return;
+    for (let iso = fecha; iso <= hasta; iso = sumarDias(iso, 1)) filas.push(...filasDelDia(iso, ids));
+    LICENCIAS.filter(l => l.fin >= fecha && l.inicio <= hasta).forEach(l => {
+      const desde = l.inicio < fecha ? fecha : l.inicio;
+      if (ids.includes(l.defensorId)) filas.push(...filasLicencia(l, desde));
+      apoyoIdsDe(l).filter(id => ids.includes(id)).forEach(id => filas.push(...filasLicencia(l, desde, id)));
+    });
+    ayuda = `${personas.length === 1 ? '<b>' + esc(personas[0].nombre) + '</b>' : personas.length + ' personas coinciden'}: turnos y licencias del ${fechaCorta(fecha)} al ${fechaCorta(hasta)} (${DIAS_POR_NOMBRE} días desde la fecha de arriba).`;
+  }
+  filas.sort((a, b) => a.iso.localeCompare(b.iso) || a.orden - b.orden);
+  $('ayudaBuscar').innerHTML = ayuda;
+  const hoy = hoyIso();
+  $('tablaBuscar').innerHTML = filas.length ? `<div class="tabla-wrap"><table class="tabla-buscar">
+    <thead><tr><th>Tipo</th><th>Defensor</th><th>Fecha</th><th>Horario</th><th>Sede / Lugar</th><th>Celular</th><th>Correo</th></tr></thead>
+    <tbody>${filas.map(f => `<tr class="${f.lic ? 'lic' : ''} ${q && f.iso === hoy && f.orden !== 99 ? 'hoy' : ''}">
+      <td class="col-tipo">${f.seguida ? '' : `<i style="background:${esc(f.color)}"></i>${esc(f.tipo)}`}</td>
+      <td class="nombre">${esc(f.nombre)}${f.id && !defPorId(f.id) ? '<span class="alerta">No está en Defensores</span>' : ''}${f.nota ? `<span class="${f.alerta ? 'alerta' : 'chico'}">${esc(f.nota)}</span>` : ''}</td>
+      <td style="white-space:nowrap">${f.seguida ? '' : esc(f.fecha)}${q && f.orden !== 99 ? `<span class="chico">${esc(DIAS_SEMANA[diaSemana(f.iso)])}</span>` : ''}</td>
+      <td style="white-space:nowrap">${esc(f.horario)}</td>
+      <td>${esc(f.lugar) || '<span class="chico">—</span>'}${f.lugarChico ? '<span class="chico">' + esc(f.lugarChico) + '</span>' : ''}</td>
+      <td style="white-space:nowrap">${f.contacto ? celularHtml(f.contacto) : '<span class="chico">—</span>'}</td>
+      <td>${f.contacto ? correoHtml(f.contacto) : '<span class="chico">—</span>'}</td></tr>`).join('')}</tbody></table></div>`
+    : `<div class="vacio">${q ? 'No tiene turnos ni licencias en esos días.' : 'Nadie de turno ni de licencia ese día.'}</div>`;
+}
+$('bFecha').addEventListener('change', pintarBuscar);
+$('btnBHoy').onclick = () => { $('bFecha').value = hoyIso(); pintarBuscar(); };
+$('btnBManana').onclick = () => { $('bFecha').value = sumarDias(hoyIso(), 1); pintarBuscar(); };
+$('bNombre').addEventListener('input', () => { clearTimeout(pintarBuscar.t); pintarBuscar.t = setTimeout(pintarBuscar, 250); });
+$('btnBLimpiar').onclick = () => { $('bNombre').value = ''; pintarBuscar(); };
+
+// ================= b) CALENDARIO COMPLETO por pestaña (rol del mes) =================
+let pestana = 'flagrancia';
+function pintarPestanas(){
+  const tipos = tiposActivos().map(t => [t.id, cortoDe(t), t.color]);
+  // Orden: el primer tipo (Flagrancia), Turno presencial, los demás tipos, Licencias y (solo autorizados) Administrar
+  const lista = [...tipos.slice(0, 1), ['presencial', 'Turno presencial', COLOR_PRESENCIAL], ...tipos.slice(1), ['licencias', 'Licencias', COLOR_LICENCIA]];
+  if (puedeTurnos) lista.push(['admin', '⚙ Administrar', '']);
+  if (!lista.some(x => x[0] === pestana)) pestana = lista[0][0];
+  $('pestanasRol').innerHTML = lista.map(([id, n, c]) => `<button class="pestana ${id === pestana ? 'activa' : ''}" data-pestana="${esc(id)}" role="tab">${c ? `<span class="punto" style="background:${esc(c)}"></span>` : ''}${esc(n)}</button>`).join('');
+}
+$('pestanasRol').addEventListener('click', e => { const b = e.target.closest('[data-pestana]'); if (b){ pestana = b.dataset.pestana; mostrarPestana(); } });
+function mostrarPestana(){
+  pintarPestanas();
+  $('secRol').hidden = pestana === 'admin'; $('secAdmin').hidden = pestana !== 'admin';
+  if (pestana === 'admin'){ mostrarAdmin(); return; }
+  $('cajaEditorPresencial').hidden = !(pestana === 'presencial' && puedeTurnos);
+  if (pestana === 'presencial' && puedeTurnos) pintarEditorPresencial();
+  pintarRol();
+}
+// Contenido del rol que se ve y se descarga: { titulo, datos, cab, filas: [{ celdas, gris, hoy }] }
+// Cada celda es texto, una lista de personas [{ id, nombre, lic }] o { tel: [ids] } / { correo: [ids] }
+const areasDe = t => AREAS.filter(a => ((t.areas || {})[a] || 0) > 0);
+function armarRol(){
+  const mes = $('rMes').value || hoyIso().slice(0, 7), MES = nombreMes(mes).toUpperCase(), hoy = hoyIso();
+  if (pestana === 'licencias'){
+    const fin = mes + '-' + String(ultimoDia(mes)).padStart(2, '0');
+    const lista = LICENCIAS.filter(l => l.inicio <= fin && l.fin >= mes + '-01').sort((a, b) => a.inicio.localeCompare(b.inicio) || (a.defensorNombre || '').localeCompare(b.defensorNombre || '', 'es'));
+    return { titulo: 'LICENCIAS – ' + MES, datos: 'Licencias que tocan algún día del mes, con su abogado de apoyo (a quien se llama). Marcadas: vigentes hoy.', color: COLOR_LICENCIA,
+      cab: ['Defensor/a', 'Área', 'Desde', 'Hasta', 'Días', 'Apoyo', 'Celular del apoyo', 'Correo del apoyo'],
+      filas: lista.map(l => { const ap = apoyosDe(l);
+        return { hoy: l.inicio <= hoy && hoy <= l.fin, celdas: [(defPorId(l.defensorId) || {}).nombre || l.defensorNombre, AREA_CORTA[l.area] || l.area || '', fechaCorta(l.inicio), fechaCorta(l.fin),
+          String(Math.round((new Date(l.fin + 'T12:00:00') - new Date(l.inicio + 'T12:00:00')) / 86400000) + 1),
+          ap.map(a => a.nombre).join('\n') || 'Sin apoyo registrado', { tel: ap.map(a => a.id) }, { correo: ap.map(a => a.id) }] }; }) };
+  }
+  if (pestana === 'presencial'){
+    const cols = SEDES.flatMap(sede => AREAS_PRESENCIAL.map(area => [sede, area]));
+    return { titulo: 'TURNO PRESENCIAL – ' + MES, datos: SEDES.map(s => sedeNombre(s) + ': ' + [SEDES_PRES[s].direccion, SEDES_PRES[s].horario].filter(Boolean).join(', ')).join(' · ') + ' · de lunes a viernes, sin feriados · el Drive 1 lo usa para sugerir abogado en los casos de Fono Alegra', color: COLOR_PRESENCIAL,
+      cab: ['Fecha', 'Día', ...cols.map(([s, a]) => sedeNombre(s) + ' · ' + AREA_CORTA[a]), 'Observación'],
+      filas: diasDelMes(mes).map(iso => { const toca = tocaPresencial(iso), fer = esFeriado(iso);
+        return { gris: !toca, hoy: iso === hoy, celdas: [fechaCorta(iso), DIAS_SEMANA[diaSemana(iso)],
+          ...cols.map(([s, a]) => toca ? personasPresencial(PRESENCIAL, s, a, diaSemana(iso)).map(p => ({ ...p, lic: p.id ? licenciaDe(p.id, iso) : null })) : []),
+          fer ? 'Feriado' + (fer.nombre ? ': ' + fer.nombre : '') : toca ? '' : 'No toca este día'] }; }) };
+  }
+  const t = TIPOS.find(x => x.id === pestana); if (!t) return null;
+  const areas = areasDe(t), varias = areas.length > 1, equipo = areas.length === 1 && areas[0] === 'Equipo multidisciplinario';
+  return { titulo: t.nombre.toUpperCase() + ' – ' + MES, datos: [t.horario, t.lugar, frecuenciaTexto(t)].filter(Boolean).join(' · '), color: t.color, sinRol: !rolDelMes(t, mes), tipo: t,
+    cab: ['Fecha', 'Día', ...(varias ? areas.map(a => AREA_CORTA[a]) : [equipo ? (t.areas[areas[0]] > 1 ? 'Servidores' : 'Servidor/a') : (t.areas[areas[0]] > 1 ? 'Defensores' : 'Defensor/a')]), 'Observación'],
+    filas: diasDelMes(mes).map(iso => {
+      const toca = tocaElDia(t, iso), fer = esFeriado(iso);
+      const personas = deTurno(t, iso).map(p => ({ id: p.id, nombre: nombreDe(p), area: p.area || (defPorId(p.id) || {}).area || '', lic: p.id ? licenciaDe(p.id, iso) : null }));
+      return { gris: !toca && !personas.length, hoy: iso === hoy, celdas: [fechaCorta(iso), DIAS_SEMANA[diaSemana(iso)],
+        ...(varias ? areas.map(a => personas.filter(p => p.area === a)) : [personas]),
+        fer ? 'Feriado' + (fer.nombre ? ': ' + fer.nombre : '') : !toca && !personas.length ? 'No toca este día' : ''] };
+    }) };
+}
+// Texto de una celda para Excel y PDF
+const textoCelda = c => Array.isArray(c) ? c.map(p => p.nombre + (p.lic ? ' (de licencia)' : '') + ((defPorId(p.id) || {}).celular ? ' · ' + defPorId(p.id).celular : '')).join('\n')
+  : c && c.tel ? c.tel.map(id => (defPorId(id) || {}).celular || '').filter(Boolean).join('\n')
+  : c && c.correo ? c.correo.map(id => (defPorId(id) || {}).correo || '').filter(Boolean).join('\n') : String(c ?? '');
+function celdaHtml(c){
+  if (Array.isArray(c)) return c.map(p => `<div style="margin-bottom:3px"><b>${esc(p.nombre)}</b>${p.lic ? `<span class="alerta">de licencia hasta el ${diaMes(p.lic.fin)}</span>` : ''}${p.id ? `<span class="chico">${celularHtml(p.id)}</span>` : '<span class="alerta">no está en Defensores</span>'}</div>`).join('') || '<span class="chico">—</span>';
+  if (c && c.tel) return c.tel.map(celularHtml).join('<br>') || '<span class="chico">—</span>';
+  if (c && c.correo) return c.correo.map(correoHtml).join('<br>') || '<span class="chico">—</span>';
+  return esc(c).replace(/\n/g, '<br>');
+}
+async function pintarRol(){
+  const mes = $('rMes').value || hoyIso().slice(0, 7);
+  $('tablaRol').innerHTML = '<div class="vacio">Cargando…</div>';
+  await cargarRoles(mes);
+  const r = armarRol(); if (!r){ $('tablaRol').innerHTML = ''; return; }
+  $('tituloRol').innerHTML = `<span class="etiqueta" style="background:${esc(r.color)}">&nbsp;</span> ${esc(r.titulo)}`
+    + (pestana === 'licencias' && nivelLicencias === 'editar' ? ' <a class="btn sec chico" href="licencias.html" style="text-decoration:none">Registrar licencia ↗</a>' : '');
+  $('datosRol').textContent = r.datos;
+  if (r.sinRol){
+    $('tablaRol').innerHTML = `<div class="vacio">Todavía no hay rol de ${esc(r.tipo.nombre)} para ${esc(nombreMes(mes))}.${puedeTurnos ? ' Puedes subirlo o crearlo en <b>⚙ Administrar</b>.' : ''}</div>`;
+    $('btnRolExcel').disabled = $('btnRolPdf').disabled = true; return;
+  }
+  $('btnRolExcel').disabled = $('btnRolPdf').disabled = !r.filas.length;
+  $('tablaRol').innerHTML = r.filas.length ? `<div class="tabla-wrap"><table class="tabla-rol"><thead><tr>${r.cab.map(c => `<th>${esc(c)}</th>`).join('')}</tr></thead>
+    <tbody>${r.filas.map(f => `<tr class="${f.gris ? 'gris' : ''} ${f.hoy ? 'hoy' : ''}">${f.celdas.map((c, i) => `<td class="${i === 0 && pestana === 'licencias' ? 'nombre' : ''}" ${i < 2 ? 'style="white-space:nowrap"' : ''}>${celdaHtml(c)}</td>`).join('')}</tr>`).join('')}</tbody></table></div>`
+    : `<div class="vacio">No hay licencias en ${esc(nombreMes(mes))}.</div>`;
+}
+$('rMes').addEventListener('change', pintarRol);
+$('btnRolAntes').onclick = () => { $('rMes').value = sumarMes($('rMes').value || hoyIso().slice(0, 7), -1); pintarRol(); };
+$('btnRolDespues').onclick = () => { $('rMes').value = sumarMes($('rMes').value || hoyIso().slice(0, 7), 1); pintarRol(); };
+const nombreArchivo = r => ('Rol ' + r.titulo).replace(/[\\/:*?"<>|]/g, '-');
+
+// ---------- Entregar un archivo (igual que el Drive 3) ----------
+// En iPhone/iPad se abre la ventana "Compartir" (guardar en Archivos, abrir en Excel o enviarlo).
+// Si el teléfono no lo permite, se descarga y se avisa dónde quedó.
+const esIOS = () => /iP(hone|ad|od)/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+function descargarDirecto(blob, nombre){
+  const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = nombre;
+  document.body.appendChild(a); a.click(); setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 5000);
+}
+function botonCompartir(archivo){
+  // Si pasó mucho tiempo desde el toque, el iPhone pide tocar otra vez: se muestra un botón para compartir
+  const caja = document.createElement('div');
+  caja.style.cssText = 'position:fixed;left:16px;right:16px;bottom:calc(16px + env(safe-area-inset-bottom,0px));z-index:500;background:#241E1B;color:#fff;border-radius:12px;padding:12px;display:flex;gap:8px;align-items:center;flex-wrap:wrap;box-shadow:0 6px 18px rgba(0,0,0,.3);font-weight:700;font-size:13.5px';
+  caja.innerHTML = '<span style="flex:1;min-width:160px">Archivo listo: ' + archivo.name.replace(/[<>&]/g, '') + '</span>';
+  const b = document.createElement('button'); b.textContent = '📤 Compartir / guardar';
+  b.style.cssText = 'background:#fff;color:#241E1B;border:none;border-radius:8px;padding:8px 12px;font:inherit;font-weight:800';
+  const x = document.createElement('button'); x.textContent = '✕'; x.setAttribute('aria-label', 'Cerrar');
+  x.style.cssText = 'background:none;color:#fff;border:1px solid #fff;border-radius:8px;padding:6px 10px;font:inherit';
+  b.onclick = async () => { try { await navigator.share({ files: [archivo], title: archivo.name }); } catch (e){ if (e.name !== 'AbortError'){ descargarDirecto(archivo, archivo.name); avisar('Descargado: búscalo en Archivos → Descargas', 8000); } } caja.remove(); };
+  x.onclick = () => caja.remove();
+  caja.append(b, x); document.body.appendChild(caja);
+}
+async function entregarArchivo(blob, nombre){
+  if (esIOS() && navigator.canShare){
+    const archivo = new File([blob], nombre, { type: blob.type });
+    if (navigator.canShare({ files: [archivo] })){
+      try { await navigator.share({ files: [archivo], title: nombre }); return; }
+      catch (e){ if (e.name === 'AbortError') return; if (e.name === 'NotAllowedError'){ botonCompartir(archivo); return; } }
+    }
+  }
+  descargarDirecto(blob, nombre);
+  if (esIOS()) avisar('Descargado: búscalo en Archivos → Descargas', 8000);
+}
+
+// ---------- Excel del rol (la misma tabla de la pantalla) ----------
+$('btnRolExcel').onclick = () => {
+  const r = armarRol(); if (!r) return;
+  if (typeof XLSX === 'undefined'){ avisar('No se pudo cargar la herramienta de Excel. Revisa tu conexión.', 6000); return; }
+  const borde = { top: { style: 'thin', color: { rgb: 'BFB6A8' } }, bottom: { style: 'thin', color: { rgb: 'BFB6A8' } }, left: { style: 'thin', color: { rgb: 'BFB6A8' } }, right: { style: 'thin', color: { rgb: 'BFB6A8' } } };
+  const sCab = { font: { bold: true, color: { rgb: 'FFFFFF' } }, fill: { fgColor: { rgb: '241E1B' } }, border: borde, alignment: { vertical: 'center', wrapText: true } };
+  const sNormal = { border: borde, alignment: { vertical: 'top', wrapText: true } };
+  const sGris = { ...sNormal, font: { color: { rgb: '9A938A' } }, fill: { fgColor: { rgb: 'F1EEE8' } } };
+  const filas = r.filas.map(f => f.celdas.map(textoCelda));
+  const hoja = XLSX.utils.aoa_to_sheet([[r.titulo], [r.datos], [], r.cab, ...filas]);
+  hoja['!merges'] = [{ s: { r: 0, c: 0 }, e: { r: 0, c: r.cab.length - 1 } }, { s: { r: 1, c: 0 }, e: { r: 1, c: r.cab.length - 1 } }];
+  hoja['A1'].s = { font: { bold: true, sz: 14 } };
+  hoja['A2'].s = { font: { italic: true, color: { rgb: '6A635C' } } };
+  r.cab.forEach((_, c) => { hoja[XLSX.utils.encode_cell({ r: 3, c })].s = sCab; });
+  r.filas.forEach((f, i) => r.cab.forEach((_, c) => { const k = XLSX.utils.encode_cell({ r: 4 + i, c }); if (hoja[k]) hoja[k].s = f.gris ? sGris : sNormal; }));
+  hoja['!cols'] = r.cab.map(c => ({ wch: /^(Fecha|Día|Desde|Hasta|Días|Área)$/.test(c) ? 12 : c === 'Observación' ? 28 : 34 }));
+  const libro = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(libro, hoja, 'Rol');
+  const datos = XLSX.write(libro, { bookType: 'xlsx', type: 'array' });
+  entregarArchivo(new Blob([datos], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }), nombreArchivo(r) + '.xlsx');
+};
+
+// ---------- PDF del rol (la misma tabla de la pantalla) ----------
+function cargarScript(src){
+  return new Promise((res, rej) => {
+    if (document.querySelector(`script[src="${src}"]`)){ res(); return; }
+    const s = document.createElement('script'); s.src = src; s.onload = res; s.onerror = () => rej(new Error('No se pudo cargar ' + src));
+    document.head.appendChild(s);
+  });
+}
+const rgb = hex => { const m = String(hex || '').match(/^#?([0-9a-f]{6})$/i); return m ? [0, 2, 4].map(i => parseInt(m[1].slice(i, i + 2), 16)) : [36, 30, 27]; };
+$('btnRolPdf').onclick = async () => {
+  const r = armarRol(); if (!r) return;
+  $('btnRolPdf').disabled = true;
+  try {
+    await cargarScript('https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js');
+    await cargarScript('https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js');
+    const { jsPDF } = window.jspdf;
+    const pdf = new jsPDF({ orientation: r.cab.length > 4 ? 'landscape' : 'portrait', unit: 'mm', format: 'a4' });
+    const ancho = pdf.internal.pageSize.getWidth();
+    pdf.setFillColor(...rgb(r.color)); pdf.rect(14, 12, 3, 12, 'F');
+    pdf.setFont('helvetica', 'bold'); pdf.setFontSize(14); pdf.text(r.titulo, 20, 17);
+    pdf.setFont('helvetica', 'normal'); pdf.setFontSize(9); pdf.setTextColor(106, 99, 92);
+    pdf.text(pdf.splitTextToSize(r.datos, ancho - 34), 20, 22);
+    pdf.setTextColor(36, 30, 27);
+    pdf.autoTable({
+      startY: 30, head: [r.cab], body: r.filas.map(f => f.celdas.map(textoCelda)),
+      styles: { fontSize: 8, cellPadding: 1.5, valign: 'top', lineColor: [191, 182, 168], lineWidth: 0.1 },
+      headStyles: { fillColor: [36, 30, 27], textColor: 255 },
+      didParseCell: data => { if (data.section === 'body' && r.filas[data.row.index] && r.filas[data.row.index].gris){ data.cell.styles.fillColor = [241, 238, 232]; data.cell.styles.textColor = [154, 147, 138]; } },
+      didDrawPage: () => { pdf.setFontSize(7.5); pdf.setTextColor(154, 147, 138); pdf.text('MEGA ALEGRA · Lima Centro · descargado el ' + fechaCorta(hoyIso()), 14, pdf.internal.pageSize.getHeight() - 7); pdf.setTextColor(36, 30, 27); }
+    });
+    await entregarArchivo(pdf.output('blob'), nombreArchivo(r) + '.pdf');
+  } catch (e){ console.error(e); avisar('No se pudo armar el PDF. Revisa tu conexión.', 6000); }
+  $('btnRolPdf').disabled = false;
+};
+
+// ---------- Editor del turno presencial (antes en el Drive 3; misma tabla turnos/fonoAlegra) ----------
+let PRES_EDIT = null;
+const hayCambiosPresencial = () => JSON.stringify(PRES_EDIT) !== JSON.stringify(PRESENCIAL);
+function pintarEditorPresencial(){
+  if (!PRES_EDIT) PRES_EDIT = copia(PRESENCIAL);
+  const hoy = hoyIso(), malos = {};
+  $('cuerpoPresencial').innerHTML = SEDES.flatMap(sede => AREAS_PRESENCIAL.map(area => {
+    const clave = sede + '|' + area, fila = PRES_EDIT[clave] || {};
+    return `<tr><td class="nombre">${esc(sedeNombre(sede))} · ${esc(AREA_CORTA[area])}</td>${[1, 2, 3, 4, 5].map(dia => {
+      const ids = fila[dia] || [];
+      const chips = ids.map((id, i) => {
+        const d = defensorDeTurno(id), lic = d && licenciaDe(d.id, hoy);
+        if (!d) (malos[legible(id)] = malos[legible(id)] || []).push(sedeNombre(sede) + ' · ' + AREA_CORTA[area] + ' · ' + DIAS_SEMANA[dia].toLowerCase());
+        return `<div class="chip ${!d ? 'malo' : lic ? 'lic' : ''}"><span>${esc(d ? d.nombre : legible(id))}${!d ? ' — no está en Defensores' : lic ? ' — de licencia hasta ' + diaMes(lic.fin) : ''}</span><button data-quitar="${esc(clave)}|${dia}|${i}" aria-label="Quitar">✕</button></div>`;
+      }).join('');
+      const usados = new Set(ids.map(id => (defensorDeTurno(id) || {}).id));
+      return `<td>${chips || '<span class="chico">Nadie</span>'}<select data-agregar="${esc(clave)}|${dia}" aria-label="Agregar defensor"><option value="">+ Agregar…</option>${
+        DEFS.filter(d => d.activo !== false && d.area === area && !usados.has(d.id)).map(d => `<option value="${esc(d.id)}">${esc(d.nombre)}</option>`).join('')}</select></td>`;
+    }).join('')}</tr>`;
+  })).join('');
+  const lista = Object.entries(malos).map(([k, donde]) => '<b>' + esc(k) + '</b> (' + esc(donde.join('; ')) + ')');
+  $('avisosPresencial').innerHTML = (lista.length ? `<div class="advertencia" style="margin:0 0 8px">⚠ No están en la lista de Defensores (o están de baja): ${lista.join(' · ')}. Quítalos o pon a otro defensor.</div>` : '')
+    + (presencialEnFirebase ? '' : '<p class="ayuda"><i>Todavía es la tabla inicial (copiada de "Datos Matriz").</i></p>');
+  $('btnGuardarPresencial').disabled = $('btnDeshacerPresencial').disabled = !hayCambiosPresencial();
+}
+$('cuerpoPresencial').addEventListener('click', e => {
+  const b = e.target.closest('[data-quitar]'); if (!b) return;
+  const [sede, area, dia, i] = b.dataset.quitar.split('|');
+  PRES_EDIT[sede + '|' + area][dia].splice(Number(i), 1);
+  pintarEditorPresencial();
+});
+$('cuerpoPresencial').addEventListener('change', e => {
+  const s = e.target.closest('[data-agregar]'); if (!s || !s.value) return;
+  const [sede, area, dia] = s.dataset.agregar.split('|'), clave = sede + '|' + area;
+  PRES_EDIT[clave] = PRES_EDIT[clave] || {};
+  (PRES_EDIT[clave][dia] = PRES_EDIT[clave][dia] || []).push(s.value);
+  pintarEditorPresencial();
+});
+$('btnDeshacerPresencial').onclick = () => { PRES_EDIT = copia(PRESENCIAL); pintarEditorPresencial(); };
+$('btnGuardarPresencial').onclick = async () => {
+  const nombres = t => Object.fromEntries(Object.entries(t).flatMap(([clave, dias]) => Object.entries(dias).map(([dia, ids]) =>
+    [clave.replace('|', ' · ') + ' · ' + DIAS_SEMANA[dia], ids.map(id => (defensorDeTurno(id) || { nombre: id }).nombre).join(', ')])));
+  $('btnGuardarPresencial').disabled = true;
+  try {
+    // merge: no se tocan las sedes (nombre, dirección, horario) guardadas en el mismo documento
+    await setDoc(doc(db, 'turnos', 'fonoAlegra'), { tabla: PRES_EDIT, actualizadoPor: yo.correo, actualizadoEn: new Date().toISOString() }, { merge: true });
+    await registrarCambio('Cambió el turno presencial', 'turnos', 'fonoAlegra', nombres(PRESENCIAL), nombres(PRES_EDIT));
+    PRESENCIAL = copia(PRES_EDIT); presencialEnFirebase = true;
+    avisar('Turno presencial guardado. El Drive 1 y el Drive 3 lo usan al recargar.');
+    pintarRol(); pintarBuscar();
+  } catch (err){ error(err); }
+  pintarEditorPresencial();
+};
+
+// ================= Unir nombres con Defensores (igual que el Drive 4) =================
+// "CELIA MARISELA ARCE VILLAR" = "ARCE VILLAR, Celia Marisela": sin importar tildes, orden ni comas; tolera una letra de diferencia
+// ("GUILLEMO" / "GUILLERMO") y apellidos pegados ("CRUZCRISOLO" / "CRUZ CRISOLO").
+const VACIAS = new Set(['de', 'del', 'la', 'las', 'los', 'y', 'dr', 'dra', 'abg', 'lic']);
+const palabras = s => norm(s).replace(/\(.*?\)/g, ' ').replace(/[^a-zñ\s]/g, ' ').split(/\s+/).filter(p => p.length > 1 && !VACIAS.has(p));
+function distancia(a, b){
+  if (Math.abs(a.length - b.length) > 1) return 2;
+  const d = Array.from({ length: a.length + 1 }, (_, i) => [i]);
+  for (let j = 1; j <= b.length; j++) d[0][j] = j;
+  for (let i = 1; i <= a.length; i++) for (let j = 1; j <= b.length; j++)
+    d[i][j] = Math.min(d[i - 1][j] + 1, d[i][j - 1] + 1, d[i - 1][j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1));
+  return d[a.length][b.length];
+}
+const parecida = (a, b) => a === b || (Math.min(a.length, b.length) >= 4 && distancia(a, b) <= 1);
+function coincidencias(A, B){
+  const usados = new Set(); let m = 0;
+  A.forEach(w => {
+    const j = B.findIndex((x, i) => !usados.has(i) && parecida(w, x));
+    if (j >= 0){ usados.add(j); m++; return; }
+    // Apellido pegado: una palabra = dos seguidas del otro nombre
+    for (let i = 0; i < B.length - 1; i++) if (!usados.has(i) && !usados.has(i + 1) && parecida(w, B[i] + B[i + 1])){ usados.add(i); usados.add(i + 1); m += 2; return; }
+  });
+  return m;
+}
+function unirDefensor(nombre, lista){
+  const A = palabras(nombre);
+  if (!A.length) return { id: '', segura: false };
+  const res = lista.map(d => { const B = palabras(d.nombre); const m = Math.max(coincidencias(A, B), coincidencias(B, A)); return { d, m, r: m / Math.max(A.length, B.length) }; })
+    .filter(x => x.m >= 2).sort((a, b) => b.r - a.r || b.m - a.m);
+  if (!res.length) return { id: '', segura: false };
+  const [p, s] = res;
+  const segura = p.r >= 0.6 && !(s && s.r === p.r && s.m === p.m);
+  return { id: p.d.id, segura };
+}
+const idPorNombreOficial = n => (DEFS.find(d => d.activo !== false && norm(d.nombre) === norm(n)) || {}).id || '';
+
+// ================= SUBIR ROL (Excel, Word con tabla o PDF con texto) =================
+const MESES_LEER = { enero: 1, january: 1, febrero: 2, february: 2, marzo: 3, march: 3, abril: 4, april: 4, mayo: 5, may: 5, junio: 6, june: 6, julio: 7, july: 7,
+  agosto: 8, august: 8, setiembre: 9, septiembre: 9, september: 9, octubre: 10, october: 10, noviembre: 11, november: 11, diciembre: 12, december: 12 };
+const armarIso = (d, m, y) => { const iso = y + '-' + String(m).padStart(2, '0') + '-' + String(d).padStart(2, '0'); const x = new Date(iso + 'T12:00:00'); return !isNaN(x) && isoDe(x) === iso ? iso : ''; };
+// Fechas como vengan: fecha de Excel, "01/10/2026", "Viernes 03.04.26", "24.04.6" (año del título), "Thursday, 1 de January de 2026", "1 de octubre de 2026"
+function leerFecha(v, anio){
+  if (v instanceof Date && !isNaN(v)) return isoDe(v);
+  if (typeof v === 'number' && v > 30000 && v < 80000){ const d = new Date(Math.round((v - 25569) * 86400000)); return armarIso(d.getUTCDate(), d.getUTCMonth() + 1, d.getUTCFullYear()); }
+  const t = norm(String(v ?? ''));
+  let m = t.match(/(\d{1,2})\s+de\s+([a-z]+)(?:\s+(?:de|del)\s+(\d{4}))?/);
+  if (m && MESES_LEER[m[2]]) return armarIso(m[1], MESES_LEER[m[2]], m[3] || anio);
+  m = t.match(/(\d{1,2})[\/.\-](\d{1,2})(?:[\/.\-](\d{1,4}))?/);
+  if (!m) return '';
+  const y = !m[3] ? anio : m[3].length === 4 ? Number(m[3]) : m[3].length === 2 ? 2000 + Number(m[3]) : anio;
+  return armarIso(m[1], m[2], y);
+}
+const areaDeTexto = t => { const n = norm(t); return /asist/.test(n) ? 'Asistencia Legal' : /victim/.test(n) ? 'Defensa de Víctimas' : /equipo|perit|multidisc/.test(n) ? 'Equipo multidisciplinario' : ''; };
+// Qué es cada hoja o tabla: por su nombre y su título (primero los tipos guardados, luego las palabras de siempre)
+const PISTAS = [[/flagran/, 'flagrancia'], [/perit/, 'peritos'], [/defensoria del pueblo|defensoria/, 'defensoria'], [/conadis/, 'conadis'], [/licencia/, 'licencias'], [/teletrabajo|remoto/, 'teletrabajo']];
+function adivinarDestino(texto){
+  const t = norm(texto);
+  const tipo = tiposActivos().find(x => [cortoDe(x), x.nombre.replace(/^Turno de /i, '')].some(n => norm(n).length > 3 && t.includes(norm(n))));
+  if (tipo) return tipo.id;
+  const p = PISTAS.find(([re, id]) => re.test(t) && (id === 'licencias' || id === 'teletrabajo' || TIPOS.some(x => x.id === id && x.activo !== false)));
+  return p ? p[1] : '';
+}
+
+// ---------- Leer el archivo → tablas [{ nombre, pista, filas: [[celdas]] }] ----------
+async function tablasDeArchivo(archivo){
+  const ext = archivo.name.toLowerCase().split('.').pop(), buf = await archivo.arrayBuffer();
+  if (ext === 'xlsx' || ext === 'xls'){
+    if (typeof XLSX === 'undefined') throw new Error('No se pudo cargar la herramienta de Excel. Revisa tu conexión.');
+    const libro = XLSX.read(buf, { type: 'array', cellDates: true });
+    return libro.SheetNames.map(n => ({ nombre: 'Hoja «' + n.trim() + '»', pista: n, filas: XLSX.utils.sheet_to_json(libro.Sheets[n], { header: 1, raw: true, defval: '' }) }));
+  }
+  if (ext === 'docx') return tablasDeWord(buf, archivo.name);
+  if (ext === 'pdf') return tablasDePdf(buf, archivo.name);
+  throw new Error('Formato no admitido: sube un Excel (.xlsx), un Word (.docx) o un PDF.');
+}
+async function tablasDeWord(buf, nombreArchivo){
+  await cargarScript('https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js');
+  const zip = await window.JSZip.loadAsync(buf), f = zip.file('word/document.xml');
+  if (!f) throw new Error('No parece un Word (.docx).');
+  const dom = new DOMParser().parseFromString(await f.async('string'), 'application/xml');
+  const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
+  const hijos = (el, n) => [...el.children].filter(x => x.localName === n);
+  const texto = el => [...el.getElementsByTagNameNS(W, 'p')].map(p => [...p.getElementsByTagNameNS(W, 't')].map(t => t.textContent).join('')).join(' ').replace(/\s+/g, ' ').trim();
+  const cuerpo = dom.getElementsByTagNameNS(W, 'body')[0], tablas = [];
+  let previo = '';
+  [...(cuerpo ? cuerpo.children : [])].forEach(el => {
+    if (el.localName === 'p'){ previo += ' ' + [...el.getElementsByTagNameNS(W, 't')].map(t => t.textContent).join(''); return; } // título encima de la tabla
+    if (el.localName !== 'tbl') return;
+    // Celdas combinadas: las que siguen una combinación vertical toman el texto de la de arriba (columna según su ancho)
+    const filas = [], arriba = {};
+    hijos(el, 'tr').forEach(tr => {
+      const fila = []; let col = 0;
+      hijos(tr, 'tc').forEach(tc => {
+        const pr = hijos(tc, 'tcPr')[0], span = pr && hijos(pr, 'gridSpan')[0] ? Number(hijos(pr, 'gridSpan')[0].getAttributeNS(W, 'val')) || 1 : 1;
+        const vm = pr && hijos(pr, 'vMerge')[0], sigue = vm && (vm.getAttributeNS(W, 'val') || 'continue') !== 'restart';
+        const t = sigue ? (arriba[col] || '') : texto(tc);
+        fila[col] = t; arriba[col] = t; col += span;
+      });
+      filas.push(Array.from(fila, x => x || ''));
+    });
+    tablas.push({ nombre: 'Tabla ' + (tablas.length + 1) + ' del Word', pista: previo + ' ' + nombreArchivo, filas });
+    previo = '';
+  });
+  if (!tablas.length) throw new Error('El Word no tiene tablas: el rol debe estar en una tabla.');
+  return tablas;
+}
+let pdfListo = null;
+function cargarPdfJs(){
+  if (pdfListo) return pdfListo;
+  pdfListo = new Promise((res, rej) => {
+    const s = document.createElement('script');
+    s.src = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js';
+    s.onload = () => { window.pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js'; res(window.pdfjsLib); };
+    s.onerror = () => { pdfListo = null; rej(new Error('No se pudo cargar el lector de PDF. Revisa tu conexión.')); };
+    document.head.appendChild(s);
+  });
+  return pdfListo;
+}
+// PDF: se arma la tabla por posición; las columnas salen del renglón que dice "Fecha"
+async function tablasDePdf(buf, nombreArchivo){
+  const pdfjs = await cargarPdfJs(), pdf = await pdfjs.getDocument({ data: buf }).promise;
+  const items = []; let letras = 0;
+  for (let p = 1; p <= pdf.numPages; p++){
+    const tc = await (await pdf.getPage(p)).getTextContent();
+    tc.items.forEach(it => { const s = (it.str || '').trim(); if (!s) return; letras += s.length; items.push({ s, x: it.transform[4], y: p * 10000 - it.transform[5] }); });
+  }
+  if (letras < 30) throw new Error('Este PDF es escaneado (es una imagen): no se puede leer. Súbelo en Excel o en Word, o en un PDF con texto.');
+  items.sort((a, b) => a.y - b.y || a.x - b.x);
+  const lineas = [];
+  items.forEach(it => { const l = lineas[lineas.length - 1]; if (l && Math.abs(l.y - it.y) <= 3) l.items.push(it); else lineas.push({ y: it.y, items: [it] }); });
+  lineas.forEach(l => l.items.sort((a, b) => a.x - b.x));
+  const h = lineas.findIndex(l => l.items.some(it => /^(fecha|semana)/i.test(norm(it.s))));
+  if (h < 0) throw new Error('No se encontró en el PDF la tabla del rol (falta la columna "Fecha").');
+  const cols = lineas[h].items.map(it => it.x);
+  const filas = lineas.map((l, i) => {
+    if (i < h) return [l.items.map(it => it.s).join(' ')];
+    const fila = cols.map(() => '');
+    l.items.forEach(it => { let c = 0; cols.forEach((x, j) => { if (it.x >= x - 6) c = j; }); fila[c] = (fila[c] ? fila[c] + ' ' : '') + it.s; });
+    return fila;
+  });
+  return [{ nombre: 'Tabla del PDF', pista: nombreArchivo, filas }];
+}
+
+// ---------- Entender una tabla: turno (fecha + nombres) o licencias (defensor + inicio + fin + apoyo) ----------
+function interpretar(tabla){
+  const filas = tabla.filas.map(f => (f || []).map(c => c instanceof Date || typeof c === 'number' ? c : String(c ?? '').replace(/\s+/g, ' ').trim()));
+  const esTexto = c => typeof c === 'string';
+  let h = -1, hl = -1;
+  for (let i = 0; i < Math.min(filas.length, 25); i++){
+    const n = filas[i].map(c => esTexto(c) ? norm(c) : '');
+    if (hl < 0 && n.some(c => /defensor|abogad|servidor/.test(c)) && n.some(c => /^(inicio|desde)/.test(c))) hl = i;
+    if (h < 0 && n.some(c => /^(fecha|semana)/.test(c))) h = i;
+  }
+  const ini = Math.max(0, Math.min(...[h, hl].filter(x => x >= 0), 25));
+  const titulo = filas.slice(0, ini).flat().filter(esTexto).join(' ');
+  const anio = Number((String(tabla.pista + ' ' + titulo).match(/20\d\d/) || [])[0]) || Number(hoyIso().slice(0, 4));
+  const destino = adivinarDestino(tabla.pista + ' ' + titulo);
+  if (hl >= 0 && (h < 0 || destino === 'licencias')){
+    const cab = filas[hl].map(c => esTexto(c) ? norm(c) : '');
+    const col = re => cab.findIndex(c => re.test(c));
+    const cD = col(/defensor|abogad|servidor/), cI = col(/^(inicio|desde)/), cF = col(/^(fin|hasta)/), cA = col(/^apoyo/);
+    const entradas = filas.slice(hl + 1).map(f => ({ texto: String(f[cD] ?? '').trim(), inicio: leerFecha(f[cI], anio), fin: cF >= 0 ? leerFecha(f[cF], anio) : '', apoyoTexto: cA >= 0 ? String(f[cA] ?? '').trim() : '' }))
+      .filter(e => e.texto && e.inicio && e.fin && e.fin >= e.inicio);
+    return { tipo: 'licencias', destino: 'licencias', entradas };
+  }
+  if (h < 0) return null;
+  const cab = filas[h].map(c => esTexto(c) ? norm(c) : '');
+  const cFecha = cab.findIndex(c => /^(fecha|semana)/.test(c)), cArea = cab.findIndex(c => /especialidad|^area/.test(c));
+  const cNombres = cab.map((c, i) => /defensor|servidor|nombre|apellido|abogad|perit/.test(c) && !/correo|telef|celular|dni|contacto|apoyo|lugar|direcc|horario/.test(c) ? i : -1).filter(i => i >= 0);
+  if (cFecha < 0 || !cNombres.length) return null;
+  const entradas = []; let ultima = '';
+  filas.slice(h + 1).forEach(f => {
+    const leida = leerFecha(f[cFecha], anio), vacia = String(f[cFecha] ?? '').trim() === '';
+    if (leida) ultima = leida;
+    const iso = leida || (vacia ? ultima : ''); // celda de fecha combinada (CONADIS: dos filas por fecha)
+    if (!iso) return;
+    const area = cArea >= 0 ? areaDeTexto(f[cArea]) : '';
+    cNombres.forEach(c => { const texto = String(f[c] ?? '').trim(); if (texto && !/feriado|no laborable|^[-–—.]+$/i.test(norm(texto))) entradas.push({ iso, texto, area }); });
+  });
+  return entradas.length ? { tipo: 'turno', destino: destino === 'licencias' ? '' : destino, entradas } : null;
+}
+
+// ---------- Vista previa ----------
+let SUBIDA = null; // { archivo, bloques: [{ origen, tipo, destino, filas, nombres: { texto: { id, segura } }, meses: Set, confirmar }] }
+$('fArchivoRol').addEventListener('change', async () => {
+  const archivo = $('fArchivoRol').files[0]; if (!archivo) return;
+  $('msgSubir').textContent = 'Leyendo ' + archivo.name + '…'; $('previaSubir').innerHTML = '';
+  try {
+    const tablas = await tablasDeArchivo(archivo);
+    const activos = DEFS.filter(d => d.activo !== false);
+    const bloques = tablas.map(t => ({ t, r: interpretar(t) })).filter(x => x.r).map(({ t, r }) => {
+      const nombres = {};
+      const unir = texto => { if (!(texto in nombres)) nombres[texto] = unirDefensor(texto, activos); return nombres[texto]; };
+      const filas = r.entradas.map(e => {
+        const u = unir(e.texto);
+        if (r.tipo === 'licencias'){ const a = e.apoyoTexto ? unir(e.apoyoTexto) : { id: '' }; return { ...e, apoyoId: a.id }; }
+        return { ...e };
+      });
+      return { origen: t.nombre, tipo: r.tipo, destino: r.destino === 'teletrabajo' ? '' : r.destino, teletrabajo: r.destino === 'teletrabajo', filas, nombres, meses: null, confirmar: false };
+    });
+    if (!bloques.length) throw new Error('No se encontró ningún rol: el archivo debe tener una tabla con la columna "Fecha" y los nombres (o, para licencias, Defensor, Inicio y Fin).');
+    SUBIDA = { archivo: archivo.name, bloques };
+    // Ordenadas: primero las que se reconocieron; solo de esas se leen los meses ya guardados
+    bloques.sort((a, z) => !a.destino - !z.destino);
+    const meses = new Set(bloques.filter(b => b.tipo === 'turno' && b.destino).flatMap(b => b.filas.map(f => f.iso.slice(0, 7))));
+    await Promise.all([...meses].map(cargarRoles));
+    $('msgSubir').textContent = archivo.name + ': ' + bloques.length + (bloques.length === 1 ? ' tabla encontrada' : ' tablas encontradas') + '. Revisa cada una abajo.';
+    pintarSubida();
+  } catch (e){ console.error(e); $('msgSubir').textContent = '⚠ ' + (e.message || 'No se pudo leer el archivo.'); SUBIDA = null; }
+  $('fArchivoRol').value = '';
+});
+const idDeFila = (b, f) => f.id !== undefined ? f.id : (b.nombres[f.texto] || {}).id || '';
+function avisosTurno(b, f, t, vistos){
+  const id = idDeFila(b, f), lista = [];
+  if (!id) return ['No se reconoce: elige a la persona'];
+  const d = defPorId(id) || {};
+  if (f.id === undefined && !(b.nombres[f.texto] || {}).segura) lista.push('Revisa el nombre');
+  if (licenciaDe(id, f.iso)) lista.push('De licencia ese día');
+  if (t && !tocaElDia(t, f.iso)) lista.push('Este turno no toca ese día');
+  if (t && d.area && !((t.areas || {})[d.area] > 0)) lista.push('Su área no es de este turno');
+  const k = f.iso + '|' + id; if (vistos.has(k)) lista.push('Repetido ese día'); vistos.add(k);
+  return lista;
+}
+function pintarSubida(){
+  if (!SUBIDA){ $('previaSubir').innerHTML = ''; return; }
+  const opcionesDestino = b => (b.tipo === 'licencias' ? [['licencias', 'Licencias']] : tiposActivos().map(t => [t.id, t.nombre])).concat([['', '— No cargar —']])
+    .map(([id, n]) => `<option value="${esc(id)}" ${id === b.destino ? 'selected' : ''}>${esc(n)}</option>`).join('');
+  $('previaSubir').innerHTML = SUBIDA.bloques.map((b, i) => {
+    const cabeza = `<h3>${esc(b.origen)} <span class="etiqueta">${b.filas.length} ${b.tipo === 'licencias' ? 'licencias' : 'turnos'}</span></h3>
+      <div class="fila-form" style="margin-bottom:8px"><label>Es el rol de<select data-destino="${i}">${opcionesDestino(b)}</select></label></div>`;
+    if (!b.destino) return `<div class="caja" style="opacity:.8">${cabeza}<p class="ayuda">${b.teletrabajo ? 'El teletrabajo no se carga por ahora.' : 'No se carga. Si es un rol, elige arriba de qué tipo es.'}</p></div>`;
+    return `<div class="caja">${cabeza}${b.tipo === 'licencias' ? previaLicencias(b, i) : previaTurno(b, i)}</div>`;
+  }).join('');
+}
+// Tabla de nombres del archivo: corregir uno corrige todas sus filas
+function tablaNombres(b, i, cuenta){
+  const filas = Object.entries(b.nombres).filter(([texto]) => cuenta[texto]).sort((a, z) => (a[1].segura - z[1].segura) || a[0].localeCompare(z[0], 'es'));
+  return `<details ${filas.some(([, u]) => !u.segura) ? 'open' : ''} style="margin-bottom:8px"><summary style="cursor:pointer;font-weight:700;font-size:13px">Nombres del archivo (${filas.length}) · ${filas.filter(([, u]) => !u.segura).length} por revisar</summary>
+    <div class="tabla-wrap" style="margin-top:6px;max-height:320px"><table><thead><tr><th>En el archivo</th><th>Veces</th><th>Se guarda como (Defensores)</th></tr></thead><tbody>
+    ${filas.map(([texto, u]) => `<tr class="${u.segura ? '' : 'lic'}"><td>${esc(texto)}</td><td>${cuenta[texto]}</td>
+      <td><input list="listaNombres" data-nombre-bloque="${i}" data-texto="${esc(texto)}" value="${esc(u.id ? nombreDe({ id: u.id }) : '')}" placeholder="Escribe y elige de la lista" style="width:100%;min-width:260px;padding:5px 7px;border:1.5px solid var(--linea);border-radius:6px">
+      ${u.id ? (u.segura ? '' : '<span class="alerta">Revisa: se eligió el más parecido</span>') : '<span class="alerta">No está en Defensores: elige a la persona o deja vacío para no cargarlo</span>'}</td></tr>`).join('')}</tbody></table></div></details>`;
+}
+function previaTurno(b, i){
+  const t = TIPOS.find(x => x.id === b.destino), meses = [...new Set(b.filas.map(f => f.iso.slice(0, 7)))].sort();
+  if (!b.meses) b.meses = new Set(meses);
+  const cuenta = {}; b.filas.forEach(f => cuenta[f.texto] = (cuenta[f.texto] || 0) + 1);
+  const vistos = new Set(), filas = b.filas.filter(f => b.meses.has(f.iso.slice(0, 7))).sort((x, z) => x.iso.localeCompare(z.iso));
+  const conAviso = filas.map(f => ({ f, av: avisosTurno(b, f, t, vistos) }));
+  const sinPersona = conAviso.filter(x => !idDeFila(b, x.f)).length;
+  const yaHay = meses.filter(m => b.meses.has(m) && rolDelMes(t, m));
+  return `<p class="ayuda">${esc(t.nombre)} · ${esc(frecuenciaTexto(t))}. Marca los meses que quieres guardar:</p>
+    <div class="fila-form" style="margin-bottom:8px">${meses.map(m => `<label class="casilla"><input type="checkbox" data-mes-bloque="${i}" value="${m}" ${b.meses.has(m) ? 'checked' : ''}> ${esc(nombreMes(m))}${rolDelMes(t, m) ? ' <span class="etiqueta feriado">ya tiene rol: se reemplaza</span>' : ''}</label>`).join('')}</div>
+    ${tablaNombres(b, i, cuenta)}
+    <div class="tabla-wrap" style="max-height:420px"><table><thead><tr><th>Fecha</th><th>Día</th><th>En el archivo</th><th>Se guarda como</th><th>Aviso</th></tr></thead><tbody>
+    ${conAviso.map(({ f, av }) => { const id = idDeFila(b, f), k = b.filas.indexOf(f);
+      return `<tr class="${av.length ? 'lic' : ''}"><td style="white-space:nowrap">${fechaCorta(f.iso)}</td><td>${DIAS_SEMANA[diaSemana(f.iso)]}</td><td>${esc(f.texto)}</td>
+      <td><input list="listaNombres" data-fila-bloque="${i}" data-k="${k}" value="${esc(id ? nombreDe({ id }) : '')}" placeholder="(no se carga)" style="width:100%;min-width:240px;padding:4px 6px;border:1.5px solid var(--linea);border-radius:6px"></td>
+      <td>${av.map(a => `<span class="alerta">${esc(a)}</span>`).join('') || '<span class="chico">—</span>'}</td></tr>`; }).join('')}</tbody></table></div>
+    <div class="fila-form" style="margin-top:10px">
+      <button class="btn" data-guardar-bloque="${i}" ${b.meses.size ? '' : 'disabled'}>${b.confirmar ? '¿Seguro? Sí, guardar' : 'Guardar rol de ' + esc(cortoDe(t))} (${b.meses.size} ${b.meses.size === 1 ? 'mes' : 'meses'})</button>
+      ${b.confirmar ? `<button class="btn sec" data-cancelar-bloque="${i}">Cancelar</button>` : ''}</div>
+    <p class="ayuda">${filas.length - sinPersona} turnos se guardan${sinPersona ? ` · <b>${sinPersona} sin persona no se cargan</b>` : ''}${yaHay.length ? ` · <b>Se reemplaza el rol que ya había de: ${esc(yaHay.map(nombreMes).join(', '))}</b>` : ''}.</p>`;
+}
+function previaLicencias(b, i){
+  const cuenta = {}; b.filas.forEach(f => { cuenta[f.texto] = (cuenta[f.texto] || 0) + 1; if (f.apoyoTexto) cuenta[f.apoyoTexto] = (cuenta[f.apoyoTexto] || 0) + 1; });
+  const filas = b.filas.map((f, k) => { const id = idDeFila(b, f), ya = id && LICENCIAS.find(l => l.defensorId === id && l.inicio <= f.fin && f.inicio <= l.fin);
+    const apoyo = f.apoyoTexto ? (b.nombres[f.apoyoTexto] || {}).id || '' : '';
+    if (f.incluir === undefined) f.incluir = !!id && !ya;
+    return { f, k, id, ya, apoyo }; });
+  const puede = nivelLicencias === 'editar';
+  return `<p class="ayuda">Solo se cargan las licencias que <b>no están registradas</b> (si el defensor ya tiene una que se cruza con esas fechas, sale desmarcada). El motivo no se toma del archivo. ${puede ? '' : '<b>Para guardarlas necesitas Editar en la columna Licencias de Personal y permisos.</b>'}</p>
+    ${tablaNombres(b, i, cuenta)}
+    <div class="tabla-wrap" style="max-height:420px"><table><thead><tr><th>Cargar</th><th>Defensor/a</th><th>Desde</th><th>Hasta</th><th>Apoyo</th><th>Nota</th></tr></thead><tbody>
+    ${filas.map(({ f, k, id, ya, apoyo }) => `<tr class="${!id ? 'lic' : ''}"><td><input type="checkbox" data-lic-bloque="${i}" data-k="${k}" ${f.incluir ? 'checked' : ''} ${id ? '' : 'disabled'}></td>
+      <td class="nombre">${esc(id ? nombreDe({ id }) : f.texto)}${!id ? '<span class="alerta">No está en Defensores</span>' : ''}</td><td>${fechaCorta(f.inicio)}</td><td>${fechaCorta(f.fin)}</td>
+      <td>${apoyo ? esc(nombreDe({ id: apoyo })) : f.apoyoTexto ? esc(f.apoyoTexto) + '<span class="alerta">no reconocido</span>' : '<span class="chico">Sin apoyo</span>'}</td>
+      <td>${ya ? `<span class="chico">Ya registrada (${fechaCorta(ya.inicio)} al ${fechaCorta(ya.fin)})</span>` : ''}</td></tr>`).join('')}</tbody></table></div>
+    <div class="fila-form" style="margin-top:10px">
+      <button class="btn" data-guardar-bloque="${i}" ${puede && filas.some(x => x.f.incluir) ? '' : 'disabled'}>${b.confirmar ? '¿Seguro? Sí, guardar' : 'Guardar las licencias marcadas'} (${filas.filter(x => x.f.incluir).length})</button>
+      ${b.confirmar ? `<button class="btn sec" data-cancelar-bloque="${i}">Cancelar</button>` : ''}</div>`;
+}
+$('previaSubir').addEventListener('change', e => {
+  const el = e.target, b = SUBIDA && SUBIDA.bloques[Number(el.dataset.destino ?? el.dataset.mesBloque ?? el.dataset.nombreBloque ?? el.dataset.filaBloque ?? el.dataset.licBloque)];
+  if (!b) return;
+  b.confirmar = false;
+  if (el.dataset.destino !== undefined){ b.destino = el.value; b.meses = null; Promise.all([...new Set(b.filas.map(f => f.iso && f.iso.slice(0, 7)).filter(Boolean))].map(cargarRoles)).then(pintarSubida); return; }
+  if (el.dataset.mesBloque !== undefined){ if (el.checked) b.meses.add(el.value); else b.meses.delete(el.value); }
+  if (el.dataset.nombreBloque !== undefined){ const id = idPorNombreOficial(el.value); b.nombres[el.dataset.texto] = { id, segura: !!id }; if (b.tipo === 'licencias') b.filas.forEach(f => { if (f.texto === el.dataset.texto) f.incluir = undefined; }); }
+  if (el.dataset.filaBloque !== undefined) b.filas[Number(el.dataset.k)].id = idPorNombreOficial(el.value);
+  if (el.dataset.licBloque !== undefined) b.filas[Number(el.dataset.k)].incluir = el.checked;
+  pintarSubida();
+});
+$('previaSubir').addEventListener('click', async e => {
+  const c = e.target.closest('[data-cancelar-bloque]');
+  if (c){ SUBIDA.bloques[Number(c.dataset.cancelarBloque)].confirmar = false; pintarSubida(); return; }
+  const g = e.target.closest('[data-guardar-bloque]'); if (!g) return;
+  const b = SUBIDA.bloques[Number(g.dataset.guardarBloque)];
+  if (!b.confirmar){ b.confirmar = true; pintarSubida(); return; } // primer toque: pide confirmar en el mismo botón
+  g.disabled = true;
+  try {
+    if (b.tipo === 'licencias') await guardarLicenciasSubidas(b); else await guardarRolSubido(b);
+    SUBIDA.bloques.splice(SUBIDA.bloques.indexOf(b), 1);
+    if (!SUBIDA.bloques.length){ SUBIDA = null; $('msgSubir').textContent = 'Listo: todo lo del archivo quedó guardado.'; }
+    pintarSubida(); pintarBuscar();
+  } catch (err){ error(err); b.confirmar = false; pintarSubida(); }
+});
+// Rol de cada mes elegido: un documento por tipo y mes; reemplaza al que había
+async function guardarRolSubido(b){
+  const t = TIPOS.find(x => x.id === b.destino), porMes = {};
+  [...b.meses].forEach(m => porMes[m] = {});
+  b.filas.filter(f => b.meses.has(f.iso.slice(0, 7))).forEach(f => {
+    const id = idDeFila(b, f); if (!id) return;
+    const d = defPorId(id) || {}, dias = porMes[f.iso.slice(0, 7)];
+    if ((dias[f.iso] = dias[f.iso] || []).some(p => p.id === id)) return;
+    dias[f.iso].push({ id, nombre: d.nombre || f.texto, area: f.area || d.area || '' });
+  });
+  const lote = writeBatch(db), ahora = new Date().toISOString();
+  Object.entries(porMes).forEach(([mes, dias]) => lote.set(doc(db, 'turnos', t.id + '__' + mes), { tipo: t.id, mes, dias, origen: 'Subido: ' + SUBIDA.archivo, actualizadoPor: yo.correo, actualizadoEn: ahora }));
+  await lote.commit();
+  const antes = Object.fromEntries(Object.keys(porMes).map(m => [nombreMes(m), rolDelMes(t, m) ? Object.keys(rolDelMes(t, m).dias || {}).length + ' días' : 'sin rol']));
+  Object.entries(porMes).forEach(([mes, dias]) => ROLES[t.id + '__' + mes] = { tipo: t.id, mes, dias });
+  await registrarCambio('Subió el rol de ' + t.nombre + ' (' + SUBIDA.archivo + ')', 'turnos', t.id, antes,
+    Object.fromEntries(Object.entries(porMes).map(([m, dias]) => [nombreMes(m), Object.keys(dias).length + ' días'])));
+  avisar('Rol de ' + t.nombre + ' guardado: ' + Object.keys(porMes).map(nombreMes).join(', '), 6000);
+}
+// Licencias nuevas (como en la página Licencias): lo público en "licencias" y el registro en "licenciasPrivado"
+async function guardarLicenciasSubidas(b){
+  const marcadas = b.filas.filter(f => f.incluir && idDeFila(b, f));
+  const lote = writeBatch(db), ahora = new Date().toISOString(), nuevas = [];
+  marcadas.forEach(f => {
+    const id = idDeFila(b, f), d = defPorId(id) || {}, apoyo = f.apoyoTexto ? (b.nombres[f.apoyoTexto] || {}).id || '' : '';
+    const ref = doc(collection(db, 'licencias')), a = apoyo ? defPorId(apoyo) || {} : null;
+    const pub = { defensorId: id, defensorNombre: d.nombre || id, area: d.area || '', inicio: f.inicio, fin: f.fin, apoyoIds: apoyo ? [apoyo] : [],
+      apoyos: apoyo ? [{ id: apoyo, nombre: a.nombre || apoyo, area: a.area || '', celular: a.celular || '', correo: a.correo || '' }] : [], actualizadoEn: ahora };
+    lote.set(ref, pub);
+    lote.set(doc(db, 'licenciasPrivado', ref.id), { motivo: '', registradoPor: (yo.nombre || yo.correo) + ' (subido: ' + SUBIDA.archivo + ')', registradoEn: ahora });
+    nuevas.push({ id: ref.id, ...pub });
+  });
+  await lote.commit();
+  LICENCIAS.push(...nuevas);
+  await registrarCambio('Subió ' + nuevas.length + ' licencias (' + SUBIDA.archivo + ')', 'licencias', 'subida', {},
+    { licencias: nuevas.map(l => l.defensorNombre + ' ' + fechaCorta(l.inicio) + '–' + fechaCorta(l.fin)).join('; ') });
+  avisar(nuevas.length + ' licencia(s) guardadas', 5000);
+}
+
+// ================= c) ADMINISTRAR (solo la casilla Turnos) =================
+let modoAdmin = 'tipos';
+$('pestanasAdmin').addEventListener('click', e => { const b = e.target.closest('[data-admin]'); if (b){ modoAdmin = b.dataset.admin; mostrarAdmin(); } });
+function mostrarAdmin(){
+  document.querySelectorAll('#pestanasAdmin .pestana').forEach(x => x.classList.toggle('activa', x.dataset.admin === modoAdmin));
+  ['subir', 'crear', 'onomasticos', 'tipos', 'feriados'].forEach(k => $('admin' + k[0].toUpperCase() + k.slice(1)).hidden = k !== modoAdmin);
+  if (modoAdmin === 'tipos') pintarTipos();
+  if (modoAdmin === 'feriados') pintarFeriados();
+  if (modoAdmin === 'crear') abrirCrear();
+  if (modoAdmin === 'onomasticos') cargarOnomasticos().then(pintarOnomasticos);
+}
+
+// ================= ONOMÁSTICOS (privado: turnosPrivado/onomasticos, solo la casilla Turnos) =================
+// { fechas: { códigoDefensor: "MM-DD" } }. Necesita la regla de Firestore "turnosPrivado" (lectura y escritura: puedeEditar('turnos')).
+let ONOM = null, ONOM_EDIT = null, onomError = '';
+async function cargarOnomasticos(){
+  if (ONOM) return ONOM;
+  try { const s = await getDoc(doc(db, 'turnosPrivado', 'onomasticos')); ONOM = (s.exists() && s.data().fechas) || {}; onomError = ''; }
+  catch (e){ console.warn('No se pudieron leer los onomásticos', e); ONOM = {}; onomError = e.code === 'permission-denied' ? 'regla' : 'otro'; }
+  return ONOM;
+}
+const textoOnom = md => md ? md.slice(3, 5) + '/' + md.slice(0, 2) : '';
+function leerOnom(t){ const m = String(t || '').trim().match(/^(\d{1,2})\s*[\/.\-]\s*(\d{1,2})$/); if (!m) return null; const d = Number(m[1]), mes = Number(m[2]);
+  return mes >= 1 && mes <= 12 && d >= 1 && d <= new Date(2024, mes, 0).getDate() ? String(mes).padStart(2, '0') + '-' + String(d).padStart(2, '0') : null; }
+const esOnomastico = (id, iso) => !!(ONOM && ONOM[id] && ONOM[id] === iso.slice(5));
+const avisoReglaOnom = () => onomError === 'regla' ? '<div class="advertencia" style="margin:0 0 8px">⚠ Firebase no dejó leer los onomásticos: falta publicar la regla nueva <b>turnosPrivado</b> en la consola de Firebase. Mientras tanto, al crear un rol no se pueden saltar los onomásticos.</div>' : onomError ? '<div class="advertencia" style="margin:0 0 8px">⚠ No se pudieron leer los onomásticos. Revisa tu conexión.</div>' : '';
+function pintarOnomasticos(){
+  if (!ONOM_EDIT) ONOM_EDIT = copia(ONOM || {});
+  $('onomAviso').innerHTML = avisoReglaOnom();
+  const q = norm($('onomBuscar').value);
+  $('cuerpoOnom').innerHTML = DEFS.filter(d => d.activo !== false && (!q || norm(d.nombre).includes(q))).map(d => {
+    const v = ONOM_EDIT[d.id] || '';
+    return `<tr><td class="nombre">${esc(d.nombre)}</td><td>${esc(AREA_CORTA[d.area] || d.area || '')}</td>
+      <td><input type="text" data-onom="${esc(d.id)}" value="${esc(textoOnom(v))}" placeholder="dd/mm" inputmode="numeric" style="width:90px;padding:5px 7px;border:1.5px solid var(--linea);border-radius:6px"></td></tr>`;
+  }).join('') || '<tr><td colspan="3" class="vacio">Nadie coincide.</td></tr>';
+  $('btnGuardarOnom').disabled = $('btnDeshacerOnom').disabled = JSON.stringify(ONOM_EDIT) === JSON.stringify(ONOM || {}) || onomError === 'regla';
+}
+$('onomBuscar').addEventListener('input', pintarOnomasticos);
+$('cuerpoOnom').addEventListener('change', e => {
+  const i = e.target.closest('[data-onom]'); if (!i) return;
+  const v = i.value.trim(), md = leerOnom(v);
+  if (v && !md){ i.classList.add('error-campo'); $('msgOnom').textContent = 'Escribe día/mes, por ejemplo 15/08.'; return; }
+  i.classList.remove('error-campo'); $('msgOnom').textContent = '';
+  if (md) ONOM_EDIT[i.dataset.onom] = md; else delete ONOM_EDIT[i.dataset.onom];
+  pintarOnomasticos();
+});
+$('btnDeshacerOnom').onclick = () => { ONOM_EDIT = copia(ONOM || {}); pintarOnomasticos(); };
+$('btnGuardarOnom').onclick = async () => {
+  $('btnGuardarOnom').disabled = true;
+  try {
+    await setDoc(doc(db, 'turnosPrivado', 'onomasticos'), { fechas: ONOM_EDIT, actualizadoPor: yo.correo, actualizadoEn: new Date().toISOString() });
+    // En el Registro de cambios solo queda a quién se le cambió, nunca la fecha
+    const cambiados = [...new Set([...Object.keys(ONOM || {}), ...Object.keys(ONOM_EDIT)])].filter(id => (ONOM || {})[id] !== ONOM_EDIT[id]);
+    await registrarCambio('Cambió onomásticos', 'turnosPrivado', 'onomasticos', {}, { personas: cambiados.map(id => nombreDe({ id })).join('; ') + ' (cambiado)' });
+    ONOM = copia(ONOM_EDIT); avisar('Onomásticos guardados');
+  } catch (err){ error(err); }
+  pintarOnomasticos();
+};
+
+// ================= CREAR ROL CON CRITERIOS =================
+let CREAR = null; // { tipo, desde, hasta, orden: { área: [ids] }, elegidos: Set, dias: [{ iso, slots: [{ area, id }] }], semanas }
+function abrirCrear(){
+  const actual = $('cTipo').value;
+  $('cTipo').innerHTML = tiposActivos().map(t => `<option value="${esc(t.id)}" ${t.id === actual ? 'selected' : ''}>${esc(t.nombre)}</option>`).join('');
+  if (!$('cDesde').value){ const sig = sumarMes(hoyIso().slice(0, 7), 1); $('cDesde').value = sig + '-01'; $('cHasta').value = sig + '-' + String(ultimoDia(sig)).padStart(2, '0'); }
+  pintarPersonasCrear(true);
+  cargarOnomasticos().then(() => { $('cAvisoOnom').innerHTML = avisoReglaOnom(); });
+}
+$('cTipo').addEventListener('change', () => pintarPersonasCrear(true));
+// Personas de cada área del tipo, en su orden (N° de orden de Personal y permisos); se marcan o desmarcan y se mueven con ▲ ▼
+let ORDEN_CREAR = null;
+function pintarPersonasCrear(reiniciar){
+  const t = TIPOS.find(x => x.id === $('cTipo').value); if (!t) return;
+  $('cDatosTipo').innerHTML = esc([t.horario, t.lugar, frecuenciaTexto(t)].filter(Boolean).join(' · ')) + ' · ' + areasDe(t).map(a => esc(AREA_CORTA[a]) + ': <b>' + t.areas[a] + '</b> por día').join(', ');
+  if (reiniciar || !ORDEN_CREAR || ORDEN_CREAR.tipo !== t.id){
+    ORDEN_CREAR = { tipo: t.id, areas: Object.fromEntries(areasDe(t).map(a => [a, DEFS.filter(d => d.activo !== false && d.area === a && !/coordinador/i.test(d.notas || '')).sort((x, z) => (x.orden ?? 999) - (z.orden ?? 999)).map(d => ({ id: d.id, si: true }))])) };
+  }
+  $('cPersonas').innerHTML = Object.entries(ORDEN_CREAR.areas).map(([a, lista]) => `<details class="caja" style="padding:10px;margin:8px 0" open><summary style="cursor:pointer;font-weight:700">${esc(AREA_CORTA[a])} · ${lista.filter(x => x.si).length} de ${lista.length} entran</summary>
+    <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:4px;margin-top:8px">${lista.map((x, i) => { const lic = licenciaDe(x.id, $('cDesde').value || hoyIso());
+      return `<div style="display:flex;align-items:center;gap:6px;font-size:13px;background:${x.si ? 'var(--papel)' : '#fff'};border:1px solid var(--linea);border-radius:7px;padding:3px 6px">
+      <b style="width:22px;text-align:right">${i + 1}.</b><label style="flex:1;display:flex;gap:6px;align-items:center"><input type="checkbox" data-c-si="${esc(a)}|${i}" ${x.si ? 'checked' : ''}> ${esc(nombreDe({ id: x.id }))}${lic ? ' <span class="etiqueta lic">licencia hasta ' + diaMes(lic.fin) + '</span>' : ''}</label>
+      <button class="btn sec chico" data-c-mover="${esc(a)}|${i}|-1" aria-label="Subir" ${i ? '' : 'disabled'}>▲</button><button class="btn sec chico" data-c-mover="${esc(a)}|${i}|1" aria-label="Bajar" ${i < lista.length - 1 ? '' : 'disabled'}>▼</button></div>`; }).join('')}</div></details>`).join('');
+}
+$('cPersonas').addEventListener('change', e => { const c = e.target.closest('[data-c-si]'); if (!c) return; const [a, i] = c.dataset.cSi.split('|'); ORDEN_CREAR.areas[a][Number(i)].si = c.checked; pintarPersonasCrear(false); });
+$('cPersonas').addEventListener('click', e => {
+  const b = e.target.closest('[data-c-mover]'); if (!b) return;
+  const [a, i, d] = b.dataset.cMover.split('|'), lista = ORDEN_CREAR.areas[a], k = Number(i), j = k + Number(d);
+  [lista[k], lista[j]] = [lista[j], lista[k]]; pintarPersonasCrear(false);
+});
+['cDesde', 'cHasta'].forEach(id => $(id).addEventListener('change', () => pintarPersonasCrear(false)));
+
+// Quién tiene otro turno ese día (otros tipos ya guardados); el turno presencial no cuenta
+const conOtroTurno = (iso, tipoId) => new Set(tiposActivos().filter(t => t.id !== tipoId).flatMap(t => deTurno(t, iso).map(p => p.id)));
+const lunesDe = iso => sumarDias(iso, -((diaSemana(iso) + 6) % 7));
+$('btnGenerar').onclick = async () => {
+  const t = TIPOS.find(x => x.id === $('cTipo').value), desde = $('cDesde').value, hasta = $('cHasta').value;
+  if (!t || !desde || !hasta || hasta < desde){ avisar('Elige el tipo y las fechas (Hasta no puede ser antes que Desde).', 5000); return; }
+  if (hasta > sumarDias(desde, 92)){ avisar('Crea como máximo tres meses de una vez.', 5000); return; }
+  $('btnGenerar').disabled = true; $('cPrevia').innerHTML = '<div class="vacio">Armando el rol…</div>';
+  try {
+    const mesAnt = sumarMes(desde.slice(0, 7), -1);
+    await Promise.all([mesAnt, ...mesesEntre(desde, hasta)].map(cargarRoles));
+    await cargarOnomasticos();
+    CREAR = generarRol(t, desde, hasta);
+    pintarCrear();
+  } catch (e){ console.error(e); $('cPrevia').innerHTML = '<div class="vacio">No se pudo armar el rol.</div>'; }
+  $('btnGenerar').disabled = false;
+};
+// El reparto. Reglas fijas: sin licencia, sin onomástico, sin otro turno ese día; sin días seguidos (o semanas seguidas) si se puede; parejo.
+function generarRol(t, desde, hasta){
+  const dias = []; for (let iso = desde; iso <= hasta; iso = sumarDias(iso, 1)) if (tocaElDia(t, iso)) dias.push(iso);
+  const areas = areasDe(t), res = Object.fromEntries(dias.map(iso => [iso, []]));
+  const libre = (id, iso) => !licenciaDe(id, iso) && !esOnomastico(id, iso) && !conOtroTurno(iso, t.id).has(id);
+  areas.forEach(a => {
+    const lista = ORDEN_CREAR.areas[a].filter(x => x.si).map(x => x.id), n = t.areas[a] || 1;
+    if (!lista.length) return;
+    const cuenta = Object.fromEntries(lista.map(id => [id, 0])), antes = {};
+    // Mes anterior: cuántos tuvo cada uno (desempata) y por dónde iba la rotación
+    const mesAnt = sumarMes(desde.slice(0, 7), -1);
+    let ultimoAnt = -1;
+    diasDelMes(mesAnt).forEach(iso => deTurno(t, iso).forEach(p => { if (p.area === a || (defPorId(p.id) || {}).area === a){ antes[p.id] = (antes[p.id] || 0) + 1; const k = lista.indexOf(p.id); if (k >= 0) ultimoAnt = k; } }));
+    let puntero = (ultimoAnt + 1) % lista.length;
+    const elegir = (cands, previos, cuantos) => {
+      const rank = id => (lista.indexOf(id) - puntero + lista.length) % lista.length;
+      const orden = cands.sort((x, z) => cuenta[x] - cuenta[z] || (antes[x] || 0) - (antes[z] || 0) || rank(x) - rank(z));
+      const sinSeguir = orden.filter(id => !previos.has(id));
+      const elegidos = [...sinSeguir, ...orden.filter(id => previos.has(id))].slice(0, cuantos); // si no alcanza, se repite (con aviso)
+      elegidos.forEach(id => { cuenta[id]++; puntero = (lista.indexOf(id) + 1) % lista.length; });
+      return elegidos;
+    };
+    // Día anterior al rango (para no repetir días seguidos con el rol que ya había)
+    let previos = new Set(deTurno(t, sumarDias(desde, -1)).map(p => p.id));
+    if (t.frecuencia === 'semanal'){
+      const semanas = {}; dias.forEach(iso => (semanas[lunesDe(iso)] = semanas[lunesDe(iso)] || []).push(iso));
+      Object.values(semanas).forEach(ds => {
+        // El grupo de la semana: libres todos (o la mayoría de) los días de esa semana
+        const cands = lista.filter(id => ds.filter(iso => libre(id, iso)).length >= Math.ceil(ds.length / 2));
+        const grupo = elegir(cands, previos, n);
+        ds.forEach(iso => grupo.forEach(id => { if (libre(id, iso)) res[iso].push({ area: a, id });
+          else { const otro = lista.filter(x => !grupo.includes(x) && libre(x, iso) && !res[iso].some(s => s.id === x)).sort((x, z) => cuenta[x] - cuenta[z])[0];
+            res[iso].push({ area: a, id: otro || '' }); } }));
+        previos = new Set(grupo);
+      });
+    } else {
+      dias.forEach(iso => {
+        const cands = lista.filter(id => libre(id, iso) && !res[iso].some(s => s.id === id));
+        const elegidos = elegir(cands, previos, n);
+        for (let k = 0; k < n; k++) res[iso].push({ area: a, id: elegidos[k] || '' });
+        previos = new Set(elegidos);
+      });
+    }
+  });
+  return { tipo: t.id, desde, hasta, dias: dias.map(iso => ({ iso, slots: res[iso] })), confirmar: false };
+}
+function avisosSlot(c, k, s){
+  if (!s.id) return ['Falta persona'];
+  const t = TIPOS.find(x => x.id === c.tipo), l = [], iso = c.dias[k].iso;
+  if (licenciaDe(s.id, iso)) l.push('De licencia');
+  if (esOnomastico(s.id, iso)) l.push('Su onomástico');
+  if (conOtroTurno(iso, c.tipo).has(s.id)) l.push('Tiene otro turno ese día');
+  if (c.dias[k].slots.filter(x => x.id === s.id).length > 1) l.push('Repetido ese día');
+  if (t.frecuencia !== 'semanal' && k > 0 && c.dias[k - 1].iso === sumarDias(iso, -1) && c.dias[k - 1].slots.some(x => x.id === s.id)) l.push('Día seguido');
+  const d = defPorId(s.id); if (d && d.area !== s.area) l.push('Es de otra área');
+  return l;
+}
+function pintarCrear(){
+  const c = CREAR; if (!c){ $('cPrevia').innerHTML = ''; return; }
+  const t = TIPOS.find(x => x.id === c.tipo), areas = areasDe(t);
+  const meses = mesesEntre(c.desde, c.hasta), yaHay = meses.filter(m => rolDelMes(t, m));
+  const reparto = {}; c.dias.forEach(d => d.slots.forEach(s => { if (s.id) (reparto[s.id] = reparto[s.id] || []).push(d.iso); }));
+  let faltas = 0, conAviso = 0;
+  const filas = c.dias.map((d, k) => `<tr><td style="white-space:nowrap">${fechaCorta(d.iso)}</td><td>${DIAS_SEMANA[diaSemana(d.iso)]}${esFeriado(d.iso) ? '<span class="chico">Feriado</span>' : ''}</td>
+    ${areas.map(a => `<td>${d.slots.map((s, j) => s.area !== a ? '' : (() => { const av = avisosSlot(c, k, s); if (!s.id) faltas++; else if (av.length) conAviso++;
+      return `<div style="margin-bottom:4px"><input list="listaNombres" data-c-slot="${k}|${j}" value="${esc(s.id ? nombreDe({ id: s.id }) : '')}" placeholder="(nadie)" style="width:100%;min-width:220px;padding:4px 6px;border:1.5px solid ${av.length ? 'var(--rojo)' : 'var(--linea)'};border-radius:6px">${av.map(x => `<span class="alerta">${esc(x)}</span>`).join('')}</div>`; })()).join('')}</td>`).join('')}</tr>`).join('');
+  $('cPrevia').innerHTML = `<div class="caja"><h3>Vista previa: ${esc(t.nombre)} del ${fechaCorta(c.desde)} al ${fechaCorta(c.hasta)} <span class="etiqueta">${c.dias.length} días</span></h3>
+    <p class="ayuda">Cambia a cualquiera escribiendo otro nombre (sale la lista). Lo que tenga aviso sale en rojo. ${faltas ? `<b>${faltas} sin persona</b> (no alcanzó la gente libre). ` : ''}${conAviso ? `<b>${conAviso} con aviso.</b>` : ''}</p>
+    <div class="tabla-wrap" style="max-height:480px"><table class="tabla-rol"><thead><tr><th>Fecha</th><th>Día</th>${areas.map(a => `<th>${esc(AREA_CORTA[a])}</th>`).join('')}</tr></thead><tbody>${filas}</tbody></table></div>
+    <details style="margin-top:8px"><summary style="cursor:pointer;font-weight:700;font-size:13px">Reparto (${Object.keys(reparto).length} personas)</summary>
+      <div class="tabla-wrap" style="margin-top:6px"><table><thead><tr><th>Persona</th><th>Turnos</th><th>Días</th></tr></thead><tbody>
+      ${Object.entries(reparto).sort((x, z) => z[1].length - x[1].length || nombreDe({ id: x[0] }).localeCompare(nombreDe({ id: z[0] }), 'es')).map(([id, ds]) => `<tr><td class="nombre">${esc(nombreDe({ id }))}</td><td>${ds.length}</td><td>${ds.map(diaMes).join(', ')}</td></tr>`).join('')}</tbody></table></div></details>
+    <div class="fila-form" style="margin-top:10px">
+      <button class="btn" id="btnGuardarCreado">${c.confirmar ? '¿Seguro? Sí, guardar' : 'Guardar rol'}</button>
+      ${c.confirmar ? '<button class="btn sec" id="btnCancelarCreado">Cancelar</button>' : ''}
+      <button class="btn sec" id="btnRegenerar">Generar de nuevo</button></div>
+    <p class="ayuda">${yaHay.length ? `<b>Ya hay rol de ${esc(yaHay.map(nombreMes).join(', '))}:</b> se reemplazan solo los días del ${fechaCorta(c.desde)} al ${fechaCorta(c.hasta)}; los demás días de esos meses se quedan como están.` : 'Todavía no hay rol en esas fechas.'}</p></div>`;
+}
+$('cPrevia').addEventListener('change', e => {
+  const i = e.target.closest('[data-c-slot]'); if (!i) return;
+  const [k, j] = i.dataset.cSlot.split('|').map(Number);
+  CREAR.dias[k].slots[j].id = idPorNombreOficial(i.value);
+  if (i.value && !CREAR.dias[k].slots[j].id) avisar('Ese nombre no está en Defensores: elígelo de la lista.', 4000);
+  CREAR.confirmar = false; pintarCrear();
+});
+$('cPrevia').addEventListener('click', async e => {
+  if (e.target.id === 'btnRegenerar'){ $('btnGenerar').click(); return; }
+  if (e.target.id === 'btnCancelarCreado'){ CREAR.confirmar = false; pintarCrear(); return; }
+  if (e.target.id !== 'btnGuardarCreado') return;
+  if (!CREAR.confirmar){ CREAR.confirmar = true; pintarCrear(); return; }
+  e.target.disabled = true;
+  try { await guardarCreado(); } catch (err){ error(err); CREAR.confirmar = false; pintarCrear(); }
+});
+// Se guarda por mes: dentro del rango, lo nuevo; fuera del rango, lo que ya había
+async function guardarCreado(){
+  const c = CREAR, t = TIPOS.find(x => x.id === c.tipo), lote = writeBatch(db), ahora = new Date().toISOString(), nuevos = {};
+  mesesEntre(c.desde, c.hasta).forEach(mes => {
+    const viejos = (rolDelMes(t, mes) || {}).dias || {};
+    const dias = Object.fromEntries(Object.entries(viejos).filter(([iso]) => iso < c.desde || iso > c.hasta));
+    c.dias.filter(d => d.iso.slice(0, 7) === mes).forEach(d => {
+      const ps = d.slots.filter(s => s.id).map(s => ({ id: s.id, nombre: nombreDe({ id: s.id }), area: s.area }));
+      if (ps.length) dias[d.iso] = ps;
+    });
+    nuevos[mes] = dias;
+    lote.set(doc(db, 'turnos', t.id + '__' + mes), { tipo: t.id, mes, dias, origen: 'Creado con criterios', actualizadoPor: yo.correo, actualizadoEn: ahora });
+  });
+  await lote.commit();
+  const antes = Object.fromEntries(Object.keys(nuevos).map(m => [nombreMes(m), rolDelMes(t, m) ? Object.keys(rolDelMes(t, m).dias || {}).length + ' días' : 'sin rol']));
+  Object.entries(nuevos).forEach(([mes, dias]) => ROLES[t.id + '__' + mes] = { tipo: t.id, mes, dias });
+  await registrarCambio('Creó el rol de ' + t.nombre + ' del ' + fechaCorta(c.desde) + ' al ' + fechaCorta(c.hasta), 'turnos', t.id, antes,
+    Object.fromEntries(Object.entries(nuevos).map(([m, dias]) => [nombreMes(m), Object.keys(dias).length + ' días'])));
+  avisar('Rol de ' + t.nombre + ' guardado', 5000);
+  CREAR = null; pintarCrear(); pintarBuscar();
+}
+
+// ---------- Tipos de turno ----------
+let TIPOS_EDIT = [];
+const hayCambiosTipos = () => JSON.stringify(TIPOS_EDIT) !== JSON.stringify(TIPOS);
+function pintarTipos(){
+  pintarSedes(); pintarResumenTipos();
+  $('listaTipos').innerHTML = TIPOS_EDIT.map((t, i) => {
+    const nuevo = !TIPOS.some(x => x.id === t.id);
+    return `<div class="tipo ${t.activo === false ? 'inactivo' : ''}" style="border-left-color:${esc(t.color || '#9A938A')}" data-i="${i}">
+      <div class="fila-form">
+        <label class="ancho">Nombre<input type="text" data-c="nombre" value="${esc(t.nombre)}"></label>
+        <label>Nombre de la pestaña<input type="text" data-c="corto" value="${esc(t.corto || '')}" placeholder="${esc(cortoDe({ ...t, corto: '' }))}"></label>
+        <label>Color<input type="color" data-c="color" value="${esc(t.color || '#6A635C')}"></label>
+        <label class="casilla"><input type="checkbox" data-c="activo" ${t.activo !== false ? 'checked' : ''}> Activo</label>
+        ${nuevo ? `<button class="btn sec chico" data-quitar-tipo="${i}">Quitar</button>` : ''}
+      </div>
+      <div class="areas">${AREAS.map(a => {
+        const n = (t.areas || {})[a] || 0;
+        return `<span class="area"><label class="casilla" style="display:flex;gap:5px;align-items:center"><input type="checkbox" data-area="${esc(a)}" ${n > 0 ? 'checked' : ''}> ${esc(AREA_CORTA[a])}</label>
+          <input type="number" min="1" max="20" data-cuantos="${esc(a)}" value="${n || 1}" ${n > 0 ? '' : 'disabled'} aria-label="Personas por día de ${esc(AREA_CORTA[a])}"> por día</span>`;
+      }).join('')}</div>
+      <div class="fila-form">
+        <label>Horario<input type="text" data-c="horario" value="${esc(t.horario || '')}" placeholder="08:00 a 16:30"></label>
+        <label class="ancho">Dirección / lugar (opcional)<input type="text" data-c="lugar" value="${esc(t.lugar || '')}"></label>
+        <label>Frecuencia<select data-c="frecuencia">
+          <option value="diario" ${t.frecuencia === 'diario' ? 'selected' : ''}>Todos los días</option>
+          <option value="semanal" ${t.frecuencia === 'semanal' ? 'selected' : ''}>Por semana (mismo grupo de lunes a viernes)</option>
+          <option value="diaFijo" ${t.frecuencia === 'diaFijo' ? 'selected' : ''}>Un día fijo de la semana</option></select></label>
+        <label ${t.frecuencia === 'diaFijo' ? '' : 'hidden'}>¿Qué día?<select data-c="diaSemana">${[1, 2, 3, 4, 5, 6, 0].map(n => `<option value="${n}" ${Number(t.diaSemana) === n ? 'selected' : ''}>${DIAS_SEMANA[n]}</option>`).join('')}</select></label>
+        <label class="casilla" ${t.frecuencia === 'diaFijo' ? 'hidden' : ''}><input type="checkbox" data-c="finesDeSemana" ${t.finesDeSemana ? 'checked' : ''}> Cubre sábados y domingos</label>
+        <label class="casilla"><input type="checkbox" data-c="feriados" ${t.feriados ? 'checked' : ''}> Cubre feriados</label>
+        <label>En el Drive 1 es<select data-c="drive1"><option value="">— Ninguno —</option>${DRIVE1_TURNOS.map(x => `<option ${t.drive1 === x ? 'selected' : ''}>${esc(x)}</option>`).join('')}</select></label>
+      </div>
+      <p class="ayuda" style="margin-top:6px">${esc(frecuenciaTexto(t))}${t.activo === false ? ' · <b>Desactivado</b>: no sale en el buscador ni tiene pestaña; sus roles guardados no se borran.' : ''}</p>
+    </div>`;
+  }).join('');
+  $('btnGuardarTipos').disabled = $('btnDeshacerTipos').disabled = !hayCambiosTipos();
+}
+// Resumen de todos los tipos (lo que se está editando) y del turno presencial por sede
+function pintarResumenTipos(){
+  const areasTxt = t => Object.entries(t.areas || {}).filter(([, n]) => n > 0).map(([a, n]) => AREA_CORTA[a] + ' (' + n + ')').join(', ');
+  $('cuerpoResumenTipos').innerHTML = TIPOS_EDIT.map(t => `<tr class="${t.activo === false ? 'gris' : ''}"><td class="col-tipo"><i style="background:${esc(t.color || '#9A938A')}"></i>${esc(t.nombre || '(sin nombre)')}${t.activo === false ? ' <span class="etiqueta">desactivado</span>' : ''}</td>
+    <td>${esc(t.lugar) || '<span class="chico">—</span>'}</td><td style="white-space:nowrap">${esc(t.horario) || '<span class="chico">—</span>'}</td><td>${esc(frecuenciaTexto(t))}</td><td>${esc(areasTxt(t))}</td></tr>`).join('')
+    + (SEDES_EDIT || SEDES_LISTA).map(x => `<tr><td class="col-tipo"><i style="background:${COLOR_PRESENCIAL}"></i>${SEDES.includes(x.clave) ? 'Turno presencial · ' : 'Sede · '}${esc(x.nombre || '(sin nombre)')}</td>
+    <td>${esc(x.direccion) || '<span class="chico">—</span>'}</td><td>${esc(x.horario) || '<span class="chico">—</span>'}</td>
+    <td>${SEDES.includes(x.clave) ? 'De lunes a viernes (sin feriados)' : 'Solo para las cartas'}</td><td>${SEDES.includes(x.clave) ? 'Víctimas y Asistencia Legal' : '—'}</td></tr>`).join('');
+}
+// ---------- Sedes: un solo lugar (turnos/sedes) para el turno presencial y las cartas de asignación ----------
+let SEDES_EDIT = null;
+const hayCambiosSedes = () => !!SEDES_EDIT && JSON.stringify(SEDES_EDIT) !== JSON.stringify(SEDES_LISTA);
+function pintarSedes(){
+  if (!SEDES_EDIT) SEDES_EDIT = copia(SEDES_LISTA);
+  $('avisoSedes').innerHTML = sedesEnFirebase ? '' : '<div class="advertencia" style="margin:0 0 8px">Todavía no se guardan aquí: se tomaron de "Documentos de asignación" (Personal y permisos), con la dirección de Mega Alegra en Jr. Contumaza. Revísalas y toca <b>Guardar sedes</b> para que el Drive 1 las use en las cartas.</div>';
+  $('listaSedesPres').innerHTML = SEDES_EDIT.map((x, i) => `<div class="fila-form" style="margin-bottom:8px" data-i-sede="${i}">
+      <label>Sede${x.clave === 'LIMA CENTRO' ? ' (turno presencial Lima Centro)' : x.clave === 'MIRAFLORES' ? ' (turno presencial Miraflores)' : ''}<input type="text" data-c="nombre" value="${esc(x.nombre)}"></label>
+      <label class="ancho">Dirección<input type="text" data-c="direccion" value="${esc(x.direccion)}"></label>
+      <label class="ancho">Horario<input type="text" data-c="horario" value="${esc(x.horario)}" placeholder="lunes a viernes, de 8:00 a 16:30 horas"></label>
+      ${SEDES.includes(x.clave) ? '' : `<button class="btn sec chico" data-quitar-sede="${i}">Quitar</button>`}</div>`).join('');
+  $('btnGuardarSedes').disabled = $('btnDeshacerSedes').disabled = !hayCambiosSedes() && sedesEnFirebase;
+}
+$('listaSedesPres').addEventListener('input', e => {
+  const f = e.target.closest('[data-i-sede]'); if (!f || !e.target.dataset.c) return;
+  SEDES_EDIT[Number(f.dataset.iSede)][e.target.dataset.c] = e.target.value;
+  $('btnGuardarSedes').disabled = $('btnDeshacerSedes').disabled = !hayCambiosSedes() && sedesEnFirebase;
+  pintarResumenTipos();
+});
+$('listaSedesPres').addEventListener('click', e => {
+  const b = e.target.closest('[data-quitar-sede]'); if (!b) return;
+  SEDES_EDIT.splice(Number(b.dataset.quitarSede), 1); pintarSedes(); pintarResumenTipos();
+});
+$('btnAgregarSede').onclick = () => { SEDES_EDIT.push({ clave: '', nombre: '', direccion: '', horario: '' }); pintarSedes(); pintarResumenTipos(); };
+$('btnDeshacerSedes').onclick = () => { SEDES_EDIT = copia(SEDES_LISTA); pintarSedes(); pintarResumenTipos(); };
+$('btnGuardarSedes').onclick = async () => {
+  const limpias = SEDES_EDIT.map(x => ({ clave: x.clave, nombre: (x.nombre || '').trim(), direccion: (x.direccion || '').trim(), horario: (x.horario || '').trim() }))
+    .filter(x => x.nombre || SEDES.includes(x.clave));
+  limpias.forEach(x => { if (!x.nombre) x.nombre = SEDES_PRES_INICIAL[x.clave].nombre; });
+  if (new Set(limpias.map(x => norm(x.nombre))).size < limpias.length){ avisar('Hay dos sedes con el mismo nombre.', 5000); return; }
+  limpias.forEach(x => { if (!x.clave){ let c = claveSede(x.nombre), n = 2; while (limpias.some(y => y !== x && y.clave === c)) c = claveSede(x.nombre) + '_' + n++; x.clave = c; } });
+  const resumen = lista => Object.fromEntries(lista.map(x => [x.nombre, [x.direccion, x.horario].join(' · ')]));
+  $('btnGuardarSedes').disabled = true;
+  try {
+    await setDoc(doc(db, 'turnos', 'sedes'), { lista: limpias, actualizadoPor: yo.correo, actualizadoEn: new Date().toISOString() });
+    await registrarCambio('Cambió las sedes (turnos y cartas de asignación)', 'turnos', 'sedes', sedesEnFirebase ? resumen(SEDES_LISTA) : {}, resumen(limpias));
+    aplicarSedes(copia(limpias)); SEDES_EDIT = copia(limpias); sedesEnFirebase = true;
+    avisar('Sedes guardadas. El Drive 1 las usa en las próximas cartas.');
+    pintarBuscar();
+  } catch (err){ error(err); }
+  pintarSedes(); pintarResumenTipos();
+};
+function tipoDe(el){ const caja = el.closest('[data-i]'); return caja ? TIPOS_EDIT[Number(caja.dataset.i)] : null; }
+$('listaTipos').addEventListener('input', e => {
+  const t = tipoDe(e.target); if (!t) return;
+  const c = e.target.dataset.c;
+  if (c === 'nombre' || c === 'corto' || c === 'horario' || c === 'lugar'){ t[c] = e.target.value; pintarResumenTipos(); $('btnGuardarTipos').disabled = $('btnDeshacerTipos').disabled = !hayCambiosTipos(); return; }
+  if (c === 'color'){ t.color = e.target.value; e.target.closest('.tipo').style.borderLeftColor = t.color; $('btnGuardarTipos').disabled = $('btnDeshacerTipos').disabled = !hayCambiosTipos(); return; }
+  if (e.target.dataset.cuantos){ t.areas[e.target.dataset.cuantos] = Math.max(1, Math.min(20, Number(e.target.value) || 1)); $('btnGuardarTipos').disabled = $('btnDeshacerTipos').disabled = !hayCambiosTipos(); }
+});
+$('listaTipos').addEventListener('change', e => {
+  const t = tipoDe(e.target); if (!t) return;
+  const c = e.target.dataset.c;
+  if (e.target.dataset.area){
+    const a = e.target.dataset.area;
+    t.areas = t.areas || {};
+    if (e.target.checked) t.areas[a] = Number(e.target.closest('.area').querySelector('[data-cuantos]').value) || 1; else delete t.areas[a];
+  } else if (c === 'activo' || c === 'finesDeSemana' || c === 'feriados') t[c] = e.target.checked;
+  else if (c === 'frecuencia' || c === 'drive1') t[c] = e.target.value;
+  else if (c === 'diaSemana') t.diaSemana = Number(e.target.value);
+  else return;
+  pintarTipos();
+});
+$('listaTipos').addEventListener('click', e => {
+  const b = e.target.closest('[data-quitar-tipo]'); if (!b) return;
+  TIPOS_EDIT.splice(Number(b.dataset.quitarTipo), 1);
+  pintarTipos();
+});
+$('btnAgregarTipo').onclick = () => {
+  TIPOS_EDIT.push({ id: '', nombre: '', corto: '', color: '#6A635C', activo: true, areas: { 'Defensa de Víctimas': 1 }, horario: '08:00 a 16:30', lugar: '',
+    frecuencia: 'diario', diaSemana: 5, finesDeSemana: false, feriados: false, drive1: '' });
+  pintarTipos();
+  const ult = $('listaTipos').lastElementChild; if (ult){ ult.scrollIntoView({ behavior: 'smooth', block: 'center' }); ult.querySelector('[data-c="nombre"]').focus(); }
+};
+$('btnDeshacerTipos').onclick = () => { TIPOS_EDIT = copia(TIPOS); $('msgTipos').textContent = ''; pintarTipos(); };
+// Código del tipo nuevo: sale del nombre y ya no cambia
+function codigoNuevo(nombre){
+  const base = norm(nombre).replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '').slice(0, 30) || 'turno';
+  let id = base, n = 2;
+  while (TIPOS_EDIT.some(t => t.id === id) || ['tipos', 'fonoAlegra', 'teletrabajo', 'presencial', 'licencias', 'admin'].includes(id)) id = base + '_' + n++;
+  return id;
+}
+const resumenTipos = lista => Object.fromEntries((lista || []).map(t => [t.id || t.nombre, [t.nombre, t.activo === false ? 'desactivado' : 'activo',
+  Object.entries(t.areas || {}).map(([a, n]) => AREA_CORTA[a] + ' ' + n).join(' + '), t.horario, t.lugar, frecuenciaTexto(t), t.drive1 ? 'Drive 1: ' + t.drive1 : ''].filter(Boolean).join(' · ')]));
+$('btnGuardarTipos').onclick = async () => {
+  $('msgTipos').textContent = '';
+  document.querySelectorAll('#listaTipos .error-campo').forEach(x => x.classList.remove('error-campo'));
+  const cajas = [...$('listaTipos').children];
+  for (let i = 0; i < TIPOS_EDIT.length; i++){
+    const t = TIPOS_EDIT[i];
+    t.nombre = (t.nombre || '').trim(); t.corto = (t.corto || '').trim();
+    const falla = texto => { const inp = cajas[i].querySelector('[data-c="nombre"]'); inp.classList.add('error-campo'); inp.focus(); $('msgTipos').textContent = texto; };
+    if (!t.nombre) return falla('Escribe el nombre del tipo de turno.');
+    if (TIPOS_EDIT.some((x, j) => j !== i && norm(x.nombre) === norm(t.nombre))) return falla('Hay dos tipos con el nombre "' + t.nombre + '".');
+    if (!Object.values(t.areas || {}).some(n => n > 0)) return falla('"' + t.nombre + '": marca al menos un área.');
+    const usados = TIPOS_EDIT.filter(x => x.drive1 && x.drive1 === t.drive1);
+    if (t.drive1 && usados.length > 1) return falla('"' + t.drive1 + '" del Drive 1 solo puede corresponder a un tipo.');
+  }
+  TIPOS_EDIT.forEach(t => { if (!t.id) t.id = codigoNuevo(t.nombre); });
+  $('btnGuardarTipos').disabled = true;
+  try {
+    await setDoc(doc(db, 'turnos', 'tipos'), { lista: TIPOS_EDIT, actualizadoPor: yo.correo, actualizadoEn: new Date().toISOString() });
+    await registrarCambio('Cambió los tipos de turno', 'turnos', 'tipos', tiposEnFirebase ? resumenTipos(TIPOS) : {}, resumenTipos(TIPOS_EDIT));
+    TIPOS = copia(TIPOS_EDIT); tiposEnFirebase = true;
+    pintarPestanas();
+    avisar('Tipos de turno guardados');
+  } catch (err){ error(err); }
+  pintarTipos();
+};
+window.addEventListener('beforeunload', e => {
+  if (!puedeTurnos) return;
+  if ((TIPOS_EDIT.length && hayCambiosTipos()) || (PRES_EDIT && hayCambiosPresencial()) || hayCambiosSedes()){ e.preventDefault(); e.returnValue = ''; }
+});
+
+// ---------- Feriados (solo el administrador los cambia) ----------
+// Feriados nacionales del Perú (fijos + Jueves y Viernes Santo, que cambian cada año)
+function pascua(anio){ // domingo de Pascua (cálculo gregoriano)
+  const a = anio % 19, b = Math.floor(anio / 100), c = anio % 100, d = Math.floor(b / 4), e = b % 4, f = Math.floor((b + 8) / 25),
+    g = Math.floor((b - f + 1) / 3), h = (19 * a + b - d - g + 15) % 30, i = Math.floor(c / 4), k = c % 4,
+    l = (32 + 2 * e + 2 * i - h - k) % 7, m = Math.floor((a + 11 * h + 22 * l) / 451), mes = Math.floor((h + l - 7 * m + 114) / 31), dia = ((h + l - 7 * m + 114) % 31) + 1;
+  return anio + '-' + String(mes).padStart(2, '0') + '-' + String(dia).padStart(2, '0');
+}
+function feriadosNacionales(anio){
+  const p = pascua(anio);
+  return [
+    ['01-01', 'Año Nuevo'], [sumarDias(p, -3).slice(5), 'Jueves Santo'], [sumarDias(p, -2).slice(5), 'Viernes Santo'], ['05-01', 'Día del Trabajo'],
+    ['06-07', 'Batalla de Arica y Día de la Bandera'], ['06-29', 'San Pedro y San Pablo'], ['07-23', 'Día de la Fuerza Aérea del Perú'],
+    ['07-28', 'Fiestas Patrias'], ['07-29', 'Fiestas Patrias'], ['08-06', 'Batalla de Junín'], ['08-30', 'Santa Rosa de Lima'],
+    ['10-08', 'Combate de Angamos'], ['11-01', 'Día de Todos los Santos'], ['12-08', 'Inmaculada Concepción'], ['12-09', 'Batalla de Ayacucho'], ['12-25', 'Navidad']
+  ].map(([md, nombre]) => ({ fecha: anio + '-' + md, nombre })).sort((a, b) => a.fecha.localeCompare(b.fecha));
+}
+function pintarFeriados(){
+  const anio = $('fAnioFer').value, admin = esAdmin();
+  $('formFer').hidden = !admin; $('thFerAccion').hidden = !admin;
+  $('ayudaFer').textContent = admin ? 'Solo tú (administrador) puedes agregarlos o quitarlos.' : 'Solo el administrador puede cambiarlos.';
+  const lista = FERIADOS.filter(f => f.fecha.startsWith(anio)).sort((a, b) => a.fecha.localeCompare(b.fecha));
+  $('cuerpoFer').innerHTML = lista.map(f => `<tr><td style="white-space:nowrap">${fechaCorta(f.fecha)}</td><td>${DIAS_SEMANA[diaSemana(f.fecha)]}</td><td>${esc(f.nombre) || '<span class="ayuda">—</span>'}</td>
+    ${admin ? `<td><button class="btn sec chico" data-borrar-fer="${esc(f.docId)}">Quitar</button></td>` : ''}</tr>`).join('')
+    || `<tr><td colspan="4" class="vacio">No hay feriados registrados en ${esc(anio)}.</td></tr>`;
+  const faltan = admin ? feriadosNacionales(Number(anio)).filter(s => !FERIADOS.some(f => f.fecha === s.fecha)) : [];
+  $('cajaSugeridos').hidden = !faltan.length;
+  $('listaSugeridos').innerHTML = faltan.map(s => `<label><input type="checkbox" data-sugerido="${s.fecha}" data-nombre="${esc(s.nombre)}" checked> ${fechaCorta(s.fecha)} (${DIAS_SEMANA[diaSemana(s.fecha)].toLowerCase()}) · ${esc(s.nombre)}</label>`).join('');
+}
+$('fAnioFer').addEventListener('change', pintarFeriados);
+async function guardarFeriados(lista){
+  const lote = writeBatch(db);
+  lista.forEach(f => lote.set(doc(db, 'feriados', f.fecha), { fecha: f.fecha, nombre: f.nombre }));
+  await lote.commit();
+  lista.forEach(f => { FERIADOS = FERIADOS.filter(x => x.docId !== f.fecha); FERIADOS.push({ docId: f.fecha, fecha: f.fecha, nombre: f.nombre }); });
+  await registrarCambio(lista.length === 1 ? 'Agregó un feriado' : 'Agregó ' + lista.length + ' feriados', 'feriados', lista.length === 1 ? lista[0].fecha : 'varios', {},
+    Object.fromEntries(lista.map(f => [fechaCorta(f.fecha), f.nombre])));
+}
+$('btnAgregarFer').onclick = async () => {
+  const fecha = $('fFerFecha').value, nombre = $('fFerNombre').value.trim();
+  if (!fecha){ $('fFerFecha').classList.add('error-campo'); $('fFerFecha').focus(); return; }
+  $('fFerFecha').classList.remove('error-campo');
+  if (FERIADOS.some(f => f.fecha === fecha && f.docId !== fecha)){ avisar('Ese día ya está registrado como feriado.'); return; }
+  $('btnAgregarFer').disabled = true;
+  try { await guardarFeriados([{ fecha, nombre }]); $('fFerFecha').value = ''; $('fFerNombre').value = ''; avisar('Feriado agregado'); $('fAnioFer').value = fecha.slice(0, 4); pintarFeriados(); pintarBuscar(); }
+  catch (err){ error(err); }
+  $('btnAgregarFer').disabled = false;
+};
+$('btnAgregarSugeridos').onclick = async () => {
+  const lista = [...$('listaSugeridos').querySelectorAll('[data-sugerido]:checked')].map(i => ({ fecha: i.dataset.sugerido, nombre: i.dataset.nombre }));
+  if (!lista.length){ avisar('Marca al menos uno.'); return; }
+  $('btnAgregarSugeridos').disabled = true;
+  try { await guardarFeriados(lista); avisar(lista.length + ' feriado(s) agregados'); pintarFeriados(); pintarBuscar(); }
+  catch (err){ error(err); }
+  $('btnAgregarSugeridos').disabled = false;
+};
+// Quitar: primer toque pide confirmar en el mismo botón; el segundo borra
+$('cuerpoFer').addEventListener('click', async e => {
+  const b = e.target.closest('[data-borrar-fer]'); if (!b) return;
+  if (!b.dataset.seguro){ b.dataset.seguro = '1'; b.textContent = '¿Seguro? Quitar'; b.style.color = 'var(--rojo-oscuro)'; setTimeout(() => { if (b.isConnected){ delete b.dataset.seguro; b.textContent = 'Quitar'; b.style.color = ''; } }, 4000); return; }
+  const f = FERIADOS.find(x => x.docId === b.dataset.borrarFer); if (!f) return;
+  b.disabled = true;
+  try {
+    await deleteDoc(doc(db, 'feriados', f.docId));
+    FERIADOS = FERIADOS.filter(x => x.docId !== f.docId);
+    await registrarCambio('Quitó un feriado', 'feriados', f.docId, { [fechaCorta(f.fecha)]: f.nombre || '(sin nombre)' }, {});
+    avisar('Feriado quitado'); pintarFeriados(); pintarBuscar();
+  } catch (err){ error(err); b.disabled = false; }
+});
+
+// ---------- Sesión ----------
+$('btnEntrar').onclick = async () => {
+  try { await signInWithEmailAndPassword(auth, $('loginCorreo').value.trim().toLowerCase(), $('loginClave').value); }
+  catch (e){ $('msgLogin').textContent = 'No se pudo entrar (' + e.code + ').'; }
+};
+$('btnSalir').onclick = () => signOut(auth);
+onAuthStateChanged(auth, async user => {
+  if (!user){ $('app').hidden = true; $('pantallaLogin').hidden = false; $('cargandoSesion').hidden = true; $('cajaLogin').hidden = false; return; }
+  try {
+    const correo = (user.email || '').toLowerCase();
+    const ficha = await getDoc(doc(db, 'staff', correo));
+    if (!ficha.exists()){ $('msgLogin').textContent = 'Tu correo no está autorizado.'; $('cargandoSesion').hidden = true; $('cajaLogin').hidden = false; await signOut(auth); return; }
+    const f = ficha.data();
+    yo = { correo, ...f };
+    // Ver: todo el personal. Administrar y cambiar el turno presencial: la casilla "Turnos" de Personal y permisos
+    puedeTurnos = f.esAdmin === true || ((f.permisos || {}).turnos === 'editar' && f.bloqueado !== true);
+    nivelLicencias = nivelSeccion(f, 'licencias');
+    document.querySelectorAll('.menu-drives [data-seccion]').forEach(a => a.hidden = nivelSeccion(f, a.dataset.seccion) === 'sin');
+    $('enlacePermisos').hidden = !(f.esAdmin === true || f.puedeAutorizar === true);
+    $('usuarioSesion').textContent = (f.nombre || correo) + (puedeTurnos ? ' · puede cambiar turnos' : ' · solo puede ver');
+    $('pantallaLogin').hidden = true; $('app').hidden = false;
+    await cargarBase();
+    TIPOS_EDIT = copia(TIPOS);
+    $('listaNombres').innerHTML = DEFS.filter(d => d.activo !== false).map(d => `<option value="${esc(d.nombre)}">`).join('');
+    const anio = Number(hoyIso().slice(0, 4));
+    $('fAnioFer').innerHTML = [anio - 1, anio, anio + 1].map(a => `<option ${a === anio ? 'selected' : ''}>${a}</option>`).join('');
+    $('bFecha').value = hoyIso(); $('rMes').value = hoyIso().slice(0, 7);
+    await pintarBuscar();
+    mostrarPestana();
+  } catch (e){ console.error(e); $('msgLogin').textContent = 'No se pudo cargar tu acceso (' + (e.code || e.message) + ').'; $('cargandoSesion').hidden = true; $('cajaLogin').hidden = false; }
+});
+</script>
+</body>
+</html>
