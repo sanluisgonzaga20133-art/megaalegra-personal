@@ -1050,7 +1050,7 @@ function cargarTurnosAgenda(mes){
     tipos: (st && st.exists() && Array.isArray(st.data().lista) ? st.data().lista : TIPOS_TURNO_INICIALES).filter(t => t.activo !== false),
     presencial: sp && sp.exists() ? sp.data().tabla || {} : {},
     sedes: Object.fromEntries((ss && ss.exists() && ss.data().lista || []).map(x => [x.clave, x.nombre])),
-    feriados: new Set(sf && sf.size ? sf.docs.map(x => { const f = x.data(); return [x.id, f.fecha, f.dia, f.date].map(v => typeof v === 'string' ? v : '').find(v => /^\d{4}-\d{2}-\d{2}/.test(v)) || ''; }).map(v => v.slice(0, 10)) : FERIADOS_2026)
+    feriados: new Set(sf ? sf.docs.map(x => { const f = x.data(); return [x.id, f.fecha, f.dia, f.date].map(v => typeof v === 'string' ? v : '').find(v => /^\d{4}-\d{2}-\d{2}/.test(v)) || ''; }).map(v => v.slice(0, 10)).filter(Boolean) : [])
   }));
   return TURNOS_AGENDA.then(base => Promise.all(base.tipos.map(t => {
     const k = t.id + '__' + mes;
@@ -1223,15 +1223,10 @@ function formateaCorta(fechaIso){
   return String(d.getDate()).padStart(2, '0') + '/' + String(d.getMonth() + 1).padStart(2, '0');
 }
 
-// Feriados nacionales 2026 (Perú)
-const FERIADOS_2026 = [
-  '2026-01-01', '2026-04-02', '2026-04-03', '2026-05-01', '2026-06-07',
-  '2026-06-29', '2026-07-23', '2026-07-28', '2026-07-29', '2026-08-06',
-  '2026-08-30', '2026-10-08', '2026-11-01', '2026-12-08', '2026-12-09', '2026-12-25'
-];
+// Feriados: UN SOLO lugar (Turnos y licencias › Feriados, colección "feriados"); se leen junto con los turnos del día
 function esNoLaborable(fechaIso){
   const dow = new Date(fechaIso + 'T00:00:00').getDay();
-  return dow === 0 || dow === 6 || FERIADOS_2026.includes(fechaIso);
+  return dow === 0 || dow === 6 || !!(turnosAgendaListos && turnosAgendaListos.feriados.has(fechaIso));
 }
 
 function nombreMes(fechaIso){
