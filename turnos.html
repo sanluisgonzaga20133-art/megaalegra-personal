@@ -202,11 +202,12 @@
     </div>
     <div id="adminCrear" hidden>
       <div class="caja"><h3>Crear rol con criterios</h3>
-        <p class="ayuda">Elige el tipo, las fechas y quiénes entran (en su orden). El reparto: <b>nadie de licencia ni en su onomástico</b>, <b>nadie dos días seguidos</b> (en los turnos por semana: no dos semanas seguidas), <b>nadie con otro turno el mismo día</b> y <b>parejo</b> (primero quien tiene menos turnos; si empatan, quien tuvo menos el mes anterior y luego el orden de la lista, que sigue rotando desde donde quedó). Los días que no tocan (fines de semana y feriados, salvo en flagrancia) se saltan solos. Luego ves la vista previa y puedes cambiar a cualquiera día por día antes de guardar.</p>
+        <p class="ayuda">Elige el tipo, las fechas y quiénes entran (por defecto en orden alfabético; también por N° de orden, o muévelos con ▲ ▼). El reparto: <b>nadie de licencia ni en su onomástico</b>, <b>en los turnos mensuales (flagrancia y Defensoría) nadie en teletrabajo ese día</b>, <b>nadie dos días seguidos</b> (en los turnos por semana: no dos semanas seguidas), <b>nadie con otro turno el mismo día</b> y <b>parejo</b> (primero quien tiene menos turnos; si empatan, quien tuvo menos el mes anterior y luego el orden de la lista, que sigue rotando desde donde quedó). Los días que no tocan (fines de semana y feriados, salvo en flagrancia) se saltan solos. Luego ves la vista previa y puedes cambiar a cualquiera día por día antes de guardar.</p>
         <div class="fila-form">
           <label class="ancho">Tipo de turno<select id="cTipo"></select></label>
           <label>Desde<input type="date" id="cDesde"></label>
           <label>Hasta<input type="date" id="cHasta"></label>
+          <label>Orden de la rotación<select id="cOrden"><option value="alfabetico">Alfabético (A → Z)</option><option value="orden">N° de orden (Personal y permisos)</option></select></label>
         </div>
         <p class="ayuda" id="cDatosTipo"></p>
         <div id="cPersonas"></div>
@@ -351,6 +352,9 @@ let tiposEnFirebase = false;
 // TURNO PRESENCIAL = turnos/fonoAlegra: tabla "SEDE|Área" → día 1-5 → códigos. Se edita AQUÍ;
 // el Drive 1 lo lee para sugerir abogado en los casos de Fono Alegra y el Drive 3 solo lo muestra.
 let PRESENCIAL = null, presencialEnFirebase = false;
+// TELETRABAJO = turnos/teletrabajo (UN solo lugar): { patron: { código: { 1..5: 'REMOTO' | 'PRESENCIAL' } }, desde, hasta (opcional) }.
+// Se carga subiendo la pestaña TELETRABAJO del Excel del Drive 1 (Administrar › Subir rol).
+let TELE = { patron: {} };
 // Sedes: UN SOLO lugar (turnos/sedes › lista [{ clave, nombre, direccion, horario }]) para el turno presencial y las cartas de asignación del Drive 1.
 // "LIMA CENTRO" y "MIRAFLORES" son las dos del turno presencial (no se pueden quitar). Mega Alegra: Jr. Contumaza (indicación del Coordinador, 17/10/2026).
 const SEDES_PRES_INICIAL = {
@@ -405,6 +409,9 @@ const TIPOS_INICIALES = [
     horario: '08:00 a 16:30', lugar: '', frecuencia: 'semanal', diaSemana: 5, finesDeSemana: false, feriados: false, drive1: 'Turno peritos' }
 ];
 const DRIVE1_TURNOS = ['Turno de flagrancia', 'Turno peritos'];
+// teletrabajo: el tipo salta a quien está en teletrabajo ese día (turnos MENSUALES: flagrancia y Defensoría).
+// Los ANUALES (CONADIS, peritos, turno presencial) no lo toman en cuenta: el teletrabajo se programa según el turno presencial.
+const saltaTeletrabajo = t => t.teletrabajo ?? ['flagrancia', 'defensoria'].includes(t.id);
 const COLOR_PRESENCIAL = '#6B4A0E', COLOR_LICENCIA = '#241E1B';
 const tiposActivos = () => TIPOS.filter(t => t.activo !== false);
 const cortoDe = t => t.corto || t.nombre.replace(/^Turno de /i, '').replace(/^./, c => c.toUpperCase());
@@ -437,7 +444,7 @@ function aIso(v){
   return m ? m[3] + '-' + m[2].padStart(2, '0') + '-' + m[1].padStart(2, '0') : '';
 }
 async function cargarBase(){
-  const [sd, sl, sf, st, sp, ss, sda, sa] = await Promise.all([
+  const [sd, sl, sf, st, sp, ss, sda, sa, st2] = await Promise.all([
     getDocs(collection(db, 'defensores')),
     intentar(getDocs(collection(db, 'licencias')), null, 'las licencias'),
     intentar(getDocs(collection(db, 'feriados')), null, 'los feriados'),
@@ -445,8 +452,10 @@ async function cargarBase(){
     intentar(getDoc(doc(db, 'turnos', 'fonoAlegra')), null, 'el turno presencial'),
     intentar(getDoc(doc(db, 'turnos', 'sedes')), null, 'las sedes'),
     intentar(getDoc(doc(db, 'configuracion', 'documentosAsignacion')), null, 'las sedes de los documentos de asignación'),
-    intentar(getDocs(collection(db, 'asistentes')), null, 'la lista de asistentes')
+    intentar(getDocs(collection(db, 'asistentes')), null, 'la lista de asistentes'),
+    intentar(getDoc(doc(db, 'turnos', 'teletrabajo')), null, 'el teletrabajo')
   ]);
+  TELE = st2 && st2.exists() ? { patron: {}, ...st2.data() } : { patron: {} };
   ASIS = sa ? sa.docs.map(d => d.data()).filter(a => a.codigo).map(a => ({ id: a.codigo, nombre: a.nombre || a.correo, area: 'Asistente', esAsistente: true, activo: true })) : [];
   DEFS = sd.docs.map(d => ({ id: d.id, ...d.data() }))
     .sort((a, b) => (a.area || '').localeCompare(b.area || '') || (a.orden ?? 999) - (b.orden ?? 999) || (a.nombre || '').localeCompare(b.nombre || '', 'es'));
@@ -518,10 +527,18 @@ const personasPresencial = (tabla, sede, area, dia) => (((tabla || {})[sede + '|
   .map(x => { const d = defensorDeTurno(x); return d ? { id: d.id, nombre: d.nombre, area } : { id: '', nombre: legible(x), area }; });
 // El turno presencial no atiende sábados, domingos ni feriados
 const tocaPresencial = iso => { const d = diaSemana(iso); return d >= 1 && d <= 5 && !esFeriado(iso); };
+// Teletrabajo (patrón semanal, dentro de su vigencia si la tiene)
+function enTeletrabajo(id, iso){
+  const d = diaSemana(iso);
+  if (d < 1 || d > 5 || (TELE.desde && iso < TELE.desde) || (TELE.hasta && iso > TELE.hasta)) return false;
+  return ((TELE.patron || {})[id] || {})[d] === 'REMOTO';
+}
+// Sedes donde la persona tiene turno presencial ese día de la semana (1-5)
+const presencialDe = (tabla, id, dia) => SEDES.filter(sede => AREAS_PRESENCIAL.some(area => personasPresencial(tabla, sede, area, dia).some(p => p.id === id)));
 
 // ================= a) BUSCADOR: por fecha o por nombre → la misma tabla =================
 // Cada fila: { iso, orden, tipo, color, id, nombre, nota, fecha, horario, lugar, contacto (de quien se llama), lic }
-const DIAS_POR_NOMBRE = 60;
+const NOMBRE_PRESENCIAL = 'Turno presencial (consultas)'; // atención en la sede (tabla turnos/fonoAlegra); también sugiere abogado en Fono Alegra
 const notaLicencia = lic => 'De licencia hasta el ' + diaMes(lic.fin) + (apoyosDe(lic).length ? ' · Lo apoya: ' + apoyosDe(lic).map(a => a.nombre).join(', ') : '');
 function filasDelDia(iso, soloIds){
   const filas = [], incluye = id => !soloIds || soloIds.includes(id);
@@ -533,7 +550,7 @@ function filasDelDia(iso, soloIds){
   if (tocaPresencial(iso)) SEDES.forEach(sede => AREAS_PRESENCIAL.forEach(area =>
     personasPresencial(PRESENCIAL, sede, area, diaSemana(iso)).filter(p => incluye(p.id)).forEach(p => {
       const lic = p.id ? licenciaDe(p.id, iso) : null;
-      filas.push({ iso, orden: 50, tipo: 'Turno presencial', color: COLOR_PRESENCIAL, id: p.id, nombre: p.nombre, nota: lic ? notaLicencia(lic) : '',
+      filas.push({ iso, orden: 50, tipo: NOMBRE_PRESENCIAL, color: COLOR_PRESENCIAL, id: p.id, nombre: p.nombre, nota: lic ? notaLicencia(lic) : '',
         fecha: fechaCorta(iso), horario: SEDES_PRES[sede].horario || '', lugar: sedeNombre(sede) + ' · ' + AREA_CORTA[area], lugarChico: SEDES_PRES[sede].direccion || '', contacto: p.id, alerta: !!lic });
     })));
   return filas;
@@ -563,17 +580,18 @@ async function pintarBuscar(){
     const sinRol = tiposActivos().filter(t => !rolDelMes(t, fecha.slice(0, 7))).map(t => cortoDe(t));
     if (sinRol.length) ayuda += ` <i>Sin rol cargado de ${esc(nombreMes(fecha.slice(0, 7)))}: ${esc(sinRol.join(', '))}.</i>`;
   } else {
-    const personas = personasDelNombre(q), ids = personas.map(p => p.id), hasta = sumarDias(fecha, DIAS_POR_NOMBRE - 1);
+    // Por nombre: todo el mes de la fecha elegida (del 1 al último día)
+    const personas = personasDelNombre(q), ids = personas.map(p => p.id), mes = fecha.slice(0, 7), desde = mes + '-01', hasta = mes + '-' + String(ultimoDia(mes)).padStart(2, '0');
     if (!personas.length){ $('ayudaBuscar').innerHTML = ''; $('tablaBuscar').innerHTML = '<div class="vacio">Nadie con ese nombre en Defensores ni en Asistentes.</div>'; return; }
-    await Promise.all(mesesEntre(fecha, hasta).map(cargarRoles));
+    await cargarRoles(mes);
     if ($('bNombre').value.trim() !== q || ($('bFecha').value || hoyIso()) !== fecha) return;
-    for (let iso = fecha; iso <= hasta; iso = sumarDias(iso, 1)) filas.push(...filasDelDia(iso, ids));
-    LICENCIAS.filter(l => l.fin >= fecha && l.inicio <= hasta).forEach(l => {
-      const desde = l.inicio < fecha ? fecha : l.inicio;
-      if (ids.includes(l.defensorId)) filas.push(...filasLicencia(l, desde));
-      apoyoIdsDe(l).filter(id => ids.includes(id)).forEach(id => filas.push(...filasLicencia(l, desde, id)));
+    diasDelMes(mes).forEach(iso => filas.push(...filasDelDia(iso, ids)));
+    LICENCIAS.filter(l => l.fin >= desde && l.inicio <= hasta).forEach(l => {
+      const ini = l.inicio < desde ? desde : l.inicio;
+      if (ids.includes(l.defensorId)) filas.push(...filasLicencia(l, ini));
+      apoyoIdsDe(l).filter(id => ids.includes(id)).forEach(id => filas.push(...filasLicencia(l, ini, id)));
     });
-    ayuda = `${personas.length === 1 ? '<b>' + esc(personas[0].nombre) + '</b>' : personas.length + ' personas coinciden'}: turnos y licencias del ${fechaCorta(fecha)} al ${fechaCorta(hasta)} (${DIAS_POR_NOMBRE} días desde la fecha de arriba).`;
+    ayuda = `${personas.length === 1 ? '<b>' + esc(personas[0].nombre) + '</b>' : personas.length + ' personas coinciden'}: turnos y licencias de <b>${esc(nombreMes(mes))}</b> (el mes de la fecha de arriba; cambia la fecha para ver otro mes).`;
   }
   filas.sort((a, b) => a.iso.localeCompare(b.iso) || a.orden - b.orden);
   $('ayudaBuscar').innerHTML = ayuda;
@@ -588,7 +606,7 @@ async function pintarBuscar(){
       <td>${esc(f.lugar) || '<span class="chico">—</span>'}${f.lugarChico ? '<span class="chico">' + esc(f.lugarChico) + '</span>' : ''}</td>
       <td style="white-space:nowrap">${f.contacto ? celularHtml(f.contacto) : '<span class="chico">—</span>'}</td>
       <td>${f.contacto ? correoHtml(f.contacto) : '<span class="chico">—</span>'}</td></tr>`).join('')}</tbody></table></div>`
-    : `<div class="vacio">${q ? 'No tiene turnos ni licencias en esos días.' : 'Nadie de turno ni de licencia ese día.'}</div>`;
+    : `<div class="vacio">${q ? 'No tiene turnos ni licencias ese mes.' : 'Nadie de turno ni de licencia ese día.'}</div>`;
 }
 $('bFecha').addEventListener('change', pintarBuscar);
 $('btnBHoy').onclick = () => { $('bFecha').value = hoyIso(); pintarBuscar(); };
@@ -601,7 +619,7 @@ let pestana = 'flagrancia';
 function pintarPestanas(){
   const tipos = tiposActivos().map(t => [t.id, cortoDe(t), t.color]);
   // Orden: el primer tipo (Flagrancia), Turno presencial, los demás tipos, Licencias y (solo autorizados) Administrar
-  const lista = [...tipos.slice(0, 1), ['presencial', 'Turno presencial', COLOR_PRESENCIAL], ...tipos.slice(1), ['licencias', 'Licencias', COLOR_LICENCIA]];
+  const lista = [...tipos.slice(0, 1), ['presencial', NOMBRE_PRESENCIAL, COLOR_PRESENCIAL], ...tipos.slice(1), ['licencias', 'Licencias', COLOR_LICENCIA]];
   if (puedeTurnos) lista.push(['admin', '⚙ Administrar', '']);
   if (!lista.some(x => x[0] === pestana)) pestana = lista[0][0];
   $('pestanasRol').innerHTML = lista.map(([id, n, c]) => `<button class="pestana ${id === pestana ? 'activa' : ''}" data-pestana="${esc(id)}" role="tab">${c ? `<span class="punto" style="background:${esc(c)}"></span>` : ''}${esc(n)}</button>`).join('');
@@ -992,6 +1010,18 @@ function interpretar(tabla){
       .filter(e => e.texto && e.inicio && e.fin && e.fin >= e.inicio);
     return { tipo: 'licencias', destino: 'licencias', entradas };
   }
+  // Teletrabajo (pestaña TELETRABAJO): DEFENSOR | LUNES … VIERNES → REMOTO / PRESENCIAL (patrón semanal, sin fechas)
+  const DIA_COL = { lunes: 1, martes: 2, miercoles: 3, jueves: 4, viernes: 5 };
+  for (let i = 0; i < Math.min(filas.length, 25); i++){
+    const n = filas[i].map(c => esTexto(c) ? norm(c).trim() : '');
+    const cDias = n.map((c, j) => [DIA_COL[c], j]).filter(([d]) => d);
+    const cD = n.findIndex(c => /defensor|servidor|nombre|abogad/.test(c));
+    if (cD < 0 || cDias.length < 3 || (h >= 0 && destino !== 'teletrabajo')) continue;
+    const entradas = filas.slice(i + 1).map(f => ({ texto: String(f[cD] ?? '').trim(),
+      dias: Object.fromEntries(cDias.map(([d, j]) => { const v = norm(String(f[j] ?? '')); return [d, /remot|tele/.test(v) ? 'REMOTO' : /presen/.test(v) ? 'PRESENCIAL' : '']; })) }))
+      .filter(e => e.texto && Object.values(e.dias).some(Boolean));
+    return entradas.length ? { tipo: 'teletrabajo', destino: 'teletrabajo', entradas } : null;
+  }
   if (h < 0) return null;
   const cab = filas[h].map(c => esTexto(c) ? norm(c) : '');
   const cFecha = cab.findIndex(c => /^(fecha|semana)/.test(c)), cArea = cab.findIndex(c => /especialidad|^area/.test(c));
@@ -1027,7 +1057,7 @@ $('fArchivoRol').addEventListener('change', async () => {
         if (r.tipo === 'licencias'){ const a = e.apoyoTexto ? unir(e.apoyoTexto) : { id: '' }; return { ...e, apoyoId: a.id }; }
         return { ...e };
       });
-      return { origen: t.nombre, tipo: r.tipo, destino: r.destino === 'teletrabajo' ? '' : r.destino, teletrabajo: r.destino === 'teletrabajo', filas, nombres, meses: null, confirmar: false };
+      return { origen: t.nombre, tipo: r.tipo, destino: r.tipo !== 'teletrabajo' && r.destino === 'teletrabajo' ? '' : r.destino, teletrabajo: r.destino === 'teletrabajo', filas, nombres, meses: null, confirmar: false };
     });
     if (!bloques.length) throw new Error('No se encontró ningún rol: el archivo debe tener una tabla con la columna "Fecha" y los nombres (o, para licencias, Defensor, Inicio y Fin).');
     SUBIDA = { archivo: archivo.name, bloques };
@@ -1047,6 +1077,7 @@ function avisosTurno(b, f, t, vistos){
   const d = defPorId(id) || {};
   if (f.id === undefined && !(b.nombres[f.texto] || {}).segura) lista.push('Revisa el nombre');
   if (licenciaDe(id, f.iso)) lista.push('De licencia ese día');
+  if (t && saltaTeletrabajo(t) && enTeletrabajo(id, f.iso)) lista.push('En teletrabajo ese día');
   if (t && !tocaElDia(t, f.iso)) lista.push('Este turno no toca ese día');
   if (t && d.area && !((t.areas || {})[d.area] > 0)) lista.push('Su área no es de este turno');
   const k = f.iso + '|' + id; if (vistos.has(k)) lista.push('Repetido ese día'); vistos.add(k);
@@ -1054,13 +1085,13 @@ function avisosTurno(b, f, t, vistos){
 }
 function pintarSubida(){
   if (!SUBIDA){ $('previaSubir').innerHTML = ''; return; }
-  const opcionesDestino = b => (b.tipo === 'licencias' ? [['licencias', 'Licencias']] : tiposActivos().map(t => [t.id, t.nombre])).concat([['', '— No cargar —']])
+  const opcionesDestino = b => (b.tipo === 'licencias' ? [['licencias', 'Licencias']] : b.tipo === 'teletrabajo' ? [['teletrabajo', 'Teletrabajo']] : tiposActivos().map(t => [t.id, t.nombre])).concat([['', '— No cargar —']])
     .map(([id, n]) => `<option value="${esc(id)}" ${id === b.destino ? 'selected' : ''}>${esc(n)}</option>`).join('');
   $('previaSubir').innerHTML = SUBIDA.bloques.map((b, i) => {
-    const cabeza = `<h3>${esc(b.origen)} <span class="etiqueta">${b.filas.length} ${b.tipo === 'licencias' ? 'licencias' : 'turnos'}</span></h3>
+    const cabeza = `<h3>${esc(b.origen)} <span class="etiqueta">${b.filas.length} ${b.tipo === 'licencias' ? 'licencias' : b.tipo === 'teletrabajo' ? 'personas' : 'turnos'}</span></h3>
       <div class="fila-form" style="margin-bottom:8px"><label>Es el rol de<select data-destino="${i}">${opcionesDestino(b)}</select></label></div>`;
     if (!b.destino) return `<div class="caja" style="opacity:.8">${cabeza}<p class="ayuda">${b.teletrabajo ? 'El teletrabajo no se carga por ahora.' : 'No se carga. Si es un rol, elige arriba de qué tipo es.'}</p></div>`;
-    return `<div class="caja">${cabeza}${b.tipo === 'licencias' ? previaLicencias(b, i) : previaTurno(b, i)}</div>`;
+    return `<div class="caja">${cabeza}${b.tipo === 'licencias' ? previaLicencias(b, i) : b.tipo === 'teletrabajo' ? previaTeletrabajo(b, i) : previaTurno(b, i)}</div>`;
   }).join('');
 }
 // Tabla de nombres del archivo: corregir uno corrige todas sus filas
@@ -1111,10 +1142,54 @@ function previaLicencias(b, i){
       <button class="btn" data-guardar-bloque="${i}" ${puede && filas.some(x => x.f.incluir) ? '' : 'disabled'}>${b.confirmar ? '¿Seguro? Sí, guardar' : 'Guardar las licencias marcadas'} (${filas.filter(x => x.f.incluir).length})</button>
       ${b.confirmar ? `<button class="btn sec" data-cancelar-bloque="${i}">Cancelar</button>` : ''}</div>`;
 }
+// Teletrabajo: patrón semanal por persona. Se guarda TODO junto en turnos/teletrabajo (reemplaza al anterior).
+// Aviso en rojo si a alguien le cae teletrabajo el mismo día de su turno presencial (consultas).
+const DIAS_CORTOS = ['', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie'];
+function avisosTele(b, f){
+  const id = (b.nombres[f.texto] || {}).id || '', l = [];
+  if (!id) return ['No está en Defensores: elige a la persona o deja vacío para no cargarlo'];
+  if (!(b.nombres[f.texto] || {}).segura) l.push('Revisa el nombre');
+  [1, 2, 3, 4, 5].filter(d => f.dias[d] === 'REMOTO').forEach(d => {
+    const sedes = presencialDe(PRESENCIAL, id, d);
+    if (sedes.length) l.push('Teletrabajo el ' + DIAS_SEMANA[d].toLowerCase() + ' y ese día tiene turno presencial (' + sedes.map(sedeNombre).join(', ') + ')');
+  });
+  return l;
+}
+function previaTeletrabajo(b, i){
+  if (b.desde === undefined){ b.desde = hoyIso(); b.hasta = ''; }
+  const conId = b.filas.filter(f => (b.nombres[f.texto] || {}).id), choques = b.filas.filter(f => avisosTele(b, f).some(a => a.startsWith('Teletrabajo'))).length;
+  const antes = Object.keys(TELE.patron || {}).length;
+  return `<p class="ayuda">Patrón de cada semana (lunes a viernes). Al crear el rol, los turnos <b>mensuales</b> (flagrancia y Defensoría del Pueblo) saltan a quien está en <b>REMOTO</b> ese día; los anuales (CONADIS, peritos y turno presencial) no lo toman en cuenta. Corrige un nombre y se corrige en toda su fila.</p>
+    <div class="fila-form" style="margin-bottom:8px">
+      <label>Vigente desde<input type="date" data-tele-bloque="${i}" data-c="desde" value="${esc(b.desde)}"></label>
+      <label>Hasta (opcional)<input type="date" data-tele-bloque="${i}" data-c="hasta" value="${esc(b.hasta)}"></label></div>
+    ${choques ? `<div class="advertencia" style="margin:0 0 8px">⚠ ${choques} ${choques === 1 ? 'persona tiene' : 'personas tienen'} teletrabajo el mismo día de su turno presencial (consultas). Revisa las filas en rojo.</div>` : ''}
+    <div class="tabla-wrap" style="max-height:420px"><table><thead><tr><th>En el archivo</th><th>Se guarda como</th>${[1, 2, 3, 4, 5].map(d => `<th>${DIAS_CORTOS[d]}</th>`).join('')}<th>Aviso</th></tr></thead><tbody>
+    ${b.filas.map(f => { const u = b.nombres[f.texto] || {}, av = avisosTele(b, f);
+      return `<tr class="${av.length ? 'lic' : ''}"><td>${esc(f.texto)}</td>
+      <td><input list="listaNombres" data-nombre-bloque="${i}" data-texto="${esc(f.texto)}" value="${esc(u.id ? nombreDe({ id: u.id }) : '')}" placeholder="(no se carga)" style="width:100%;min-width:240px;padding:4px 6px;border:1.5px solid var(--linea);border-radius:6px"></td>
+      ${[1, 2, 3, 4, 5].map(d => `<td style="white-space:nowrap">${f.dias[d] === 'REMOTO' ? '<b>Remoto</b>' : f.dias[d] === 'PRESENCIAL' ? 'Presencial' : '<span class="chico">—</span>'}</td>`).join('')}
+      <td>${av.map(a => `<span class="alerta">${esc(a)}</span>`).join('') || '<span class="chico">—</span>'}</td></tr>`; }).join('')}</tbody></table></div>
+    <div class="fila-form" style="margin-top:10px">
+      <button class="btn" data-guardar-bloque="${i}" ${conId.length && b.desde ? '' : 'disabled'}>${b.confirmar ? '¿Seguro? Sí, guardar' : 'Guardar teletrabajo'} (${conId.length} personas)</button>
+      ${b.confirmar ? `<button class="btn sec" data-cancelar-bloque="${i}">Cancelar</button>` : ''}</div>
+    <p class="ayuda">${antes ? `<b>Se reemplaza el teletrabajo guardado (${antes} personas${TELE.desde ? ', desde el ' + fechaCorta(TELE.desde) : ''}).</b>` : 'Todavía no hay teletrabajo guardado.'}</p>`;
+}
+async function guardarTeletrabajo(b){
+  const patron = {};
+  b.filas.forEach(f => { const id = (b.nombres[f.texto] || {}).id; if (id) patron[id] = { ...(patron[id] || {}), ...Object.fromEntries(Object.entries(f.dias).filter(([, v]) => v)) }; });
+  const datos = { patron, desde: b.desde, hasta: b.hasta || '', origen: 'Subido: ' + SUBIDA.archivo, actualizadoPor: yo.correo, actualizadoEn: new Date().toISOString() };
+  await setDoc(doc(db, 'turnos', 'teletrabajo'), datos);
+  const texto = p => Object.entries(p || {}).map(([id, d]) => nombreDe({ id }) + ': ' + [1, 2, 3, 4, 5].filter(n => d[n] === 'REMOTO').map(n => DIAS_CORTOS[n]).join(', ')).join('; ');
+  await registrarCambio('Subió el teletrabajo (' + SUBIDA.archivo + ')', 'turnos', 'teletrabajo', { remoto: texto(TELE.patron) }, { remoto: texto(patron), vigencia: fechaCorta(b.desde) + (b.hasta ? ' al ' + fechaCorta(b.hasta) : ' (sin fin)') });
+  TELE = datos;
+  avisar('Teletrabajo guardado (' + Object.keys(patron).length + ' personas).', 6000);
+}
 $('previaSubir').addEventListener('change', e => {
-  const el = e.target, b = SUBIDA && SUBIDA.bloques[Number(el.dataset.destino ?? el.dataset.mesBloque ?? el.dataset.nombreBloque ?? el.dataset.filaBloque ?? el.dataset.licBloque)];
+  const el = e.target, b = SUBIDA && SUBIDA.bloques[Number(el.dataset.destino ?? el.dataset.mesBloque ?? el.dataset.nombreBloque ?? el.dataset.filaBloque ?? el.dataset.licBloque ?? el.dataset.teleBloque)];
   if (!b) return;
   b.confirmar = false;
+  if (el.dataset.teleBloque !== undefined){ b[el.dataset.c] = el.value; pintarSubida(); return; }
   if (el.dataset.destino !== undefined){ b.destino = el.value; b.meses = null; Promise.all([...new Set(b.filas.map(f => f.iso && f.iso.slice(0, 7)).filter(Boolean))].map(cargarRoles)).then(pintarSubida); return; }
   if (el.dataset.mesBloque !== undefined){ if (el.checked) b.meses.add(el.value); else b.meses.delete(el.value); }
   if (el.dataset.nombreBloque !== undefined){ const id = idPorNombreOficial(el.value); b.nombres[el.dataset.texto] = { id, segura: !!id }; if (b.tipo === 'licencias') b.filas.forEach(f => { if (f.texto === el.dataset.texto) f.incluir = undefined; }); }
@@ -1130,7 +1205,7 @@ $('previaSubir').addEventListener('click', async e => {
   if (!b.confirmar){ b.confirmar = true; pintarSubida(); return; } // primer toque: pide confirmar en el mismo botón
   g.disabled = true;
   try {
-    if (b.tipo === 'licencias') await guardarLicenciasSubidas(b); else await guardarRolSubido(b);
+    if (b.tipo === 'licencias') await guardarLicenciasSubidas(b); else if (b.tipo === 'teletrabajo') await guardarTeletrabajo(b); else await guardarRolSubido(b);
     SUBIDA.bloques.splice(SUBIDA.bloques.indexOf(b), 1);
     if (!SUBIDA.bloques.length){ SUBIDA = null; $('msgSubir').textContent = 'Listo: todo lo del archivo quedó guardado.'; }
     pintarSubida(); pintarBuscar();
@@ -1244,13 +1319,16 @@ function abrirCrear(){
   cargarOnomasticos().then(() => { $('cAvisoOnom').innerHTML = avisoReglaOnom(); });
 }
 $('cTipo').addEventListener('change', () => pintarPersonasCrear(true));
-// Personas de cada área del tipo, en su orden (N° de orden de Personal y permisos); se marcan o desmarcan y se mueven con ▲ ▼
+$('cOrden').addEventListener('change', () => pintarPersonasCrear(true));
+// Personas de cada área del tipo, en orden alfabético (por defecto) o por N° de orden de Personal y permisos; se marcan o desmarcan y se mueven con ▲ ▼
 let ORDEN_CREAR = null;
+const ordenCrear = (x, z) => $('cOrden').value === 'orden' ? (x.orden ?? 999) - (z.orden ?? 999) || (x.nombre || '').localeCompare(z.nombre || '', 'es')
+  : norm(x.nombre || '').localeCompare(norm(z.nombre || ''), 'es');
 function pintarPersonasCrear(reiniciar){
   const t = TIPOS.find(x => x.id === $('cTipo').value); if (!t) return;
   $('cDatosTipo').innerHTML = esc([t.horario, t.lugar, frecuenciaTexto(t)].filter(Boolean).join(' · ')) + ' · ' + areasDe(t).map(a => esc(AREA_CORTA[a]) + ': <b>' + t.areas[a] + '</b> por día').join(', ');
   if (reiniciar || !ORDEN_CREAR || ORDEN_CREAR.tipo !== t.id){
-    ORDEN_CREAR = { tipo: t.id, areas: Object.fromEntries(areasDe(t).map(a => [a, DEFS.filter(d => d.activo !== false && d.area === a && !/coordinador/i.test(d.notas || '')).sort((x, z) => (x.orden ?? 999) - (z.orden ?? 999)).map(d => ({ id: d.id, si: true }))])) };
+    ORDEN_CREAR = { tipo: t.id, areas: Object.fromEntries(areasDe(t).map(a => [a, DEFS.filter(d => d.activo !== false && d.area === a && !/coordinador/i.test(d.notas || '')).sort(ordenCrear).map(d => ({ id: d.id, si: true }))])) };
   }
   $('cPersonas').innerHTML = Object.entries(ORDEN_CREAR.areas).map(([a, lista]) => `<details class="caja" style="padding:10px;margin:8px 0" open><summary style="cursor:pointer;font-weight:700">${esc(AREA_CORTA[a])} · ${lista.filter(x => x.si).length} de ${lista.length} entran</summary>
     <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:4px;margin-top:8px">${lista.map((x, i) => { const lic = licenciaDe(x.id, $('cDesde').value || hoyIso());
@@ -1287,7 +1365,8 @@ $('btnGenerar').onclick = async () => {
 function generarRol(t, desde, hasta){
   const dias = []; for (let iso = desde; iso <= hasta; iso = sumarDias(iso, 1)) if (tocaElDia(t, iso)) dias.push(iso);
   const areas = areasDe(t), res = Object.fromEntries(dias.map(iso => [iso, []]));
-  const libre = (id, iso) => !licenciaDe(id, iso) && !esOnomastico(id, iso) && !conOtroTurno(iso, t.id).has(id);
+  const tele = saltaTeletrabajo(t);
+  const libre = (id, iso) => !licenciaDe(id, iso) && !esOnomastico(id, iso) && !conOtroTurno(iso, t.id).has(id) && !(tele && enTeletrabajo(id, iso));
   areas.forEach(a => {
     const lista = ORDEN_CREAR.areas[a].filter(x => x.si).map(x => x.id), n = t.areas[a] || 1;
     if (!lista.length) return;
@@ -1334,6 +1413,7 @@ function avisosSlot(c, k, s){
   const t = TIPOS.find(x => x.id === c.tipo), l = [], iso = c.dias[k].iso;
   if (licenciaDe(s.id, iso)) l.push('De licencia');
   if (esOnomastico(s.id, iso)) l.push('Su onomástico');
+  if (saltaTeletrabajo(t) && enTeletrabajo(s.id, iso)) l.push('En teletrabajo ese día');
   if (conOtroTurno(iso, c.tipo).has(s.id)) l.push('Tiene otro turno ese día');
   if (c.dias[k].slots.filter(x => x.id === s.id).length > 1) l.push('Repetido ese día');
   if (t.frecuencia !== 'semanal' && k > 0 && c.dias[k - 1].iso === sumarDias(iso, -1) && c.dias[k - 1].slots.some(x => x.id === s.id)) l.push('Día seguido');
@@ -1428,6 +1508,7 @@ function pintarTipos(){
         <label ${t.frecuencia === 'diaFijo' ? '' : 'hidden'}>¿Qué día?<select data-c="diaSemana">${[1, 2, 3, 4, 5, 6, 0].map(n => `<option value="${n}" ${Number(t.diaSemana) === n ? 'selected' : ''}>${DIAS_SEMANA[n]}</option>`).join('')}</select></label>
         <label class="casilla" ${t.frecuencia === 'diaFijo' ? 'hidden' : ''}><input type="checkbox" data-c="finesDeSemana" ${t.finesDeSemana ? 'checked' : ''}> Cubre sábados y domingos</label>
         <label class="casilla"><input type="checkbox" data-c="feriados" ${t.feriados ? 'checked' : ''}> Cubre feriados</label>
+        <label class="casilla" title="Turnos mensuales (flagrancia, Defensoría): sí. Anuales (CONADIS, peritos): no."><input type="checkbox" data-c="teletrabajo" ${saltaTeletrabajo(t) ? 'checked' : ''}> Salta a quien está en teletrabajo (turno mensual)</label>
         <label>En el Drive 1 es<select data-c="drive1"><option value="">— Ninguno —</option>${DRIVE1_TURNOS.map(x => `<option ${t.drive1 === x ? 'selected' : ''}>${esc(x)}</option>`).join('')}</select></label>
       </div>
       <p class="ayuda" style="margin-top:6px">${esc(frecuenciaTexto(t))}${t.activo === false ? ' · <b>Desactivado</b>: no sale en el buscador ni tiene pestaña; sus roles guardados no se borran.' : ''}</p>
@@ -1440,7 +1521,7 @@ function pintarResumenTipos(){
   const areasTxt = t => Object.entries(t.areas || {}).filter(([, n]) => n > 0).map(([a, n]) => AREA_CORTA[a] + ' (' + n + ')').join(', ');
   $('cuerpoResumenTipos').innerHTML = TIPOS_EDIT.map(t => `<tr class="${t.activo === false ? 'gris' : ''}"><td class="col-tipo"><i style="background:${esc(t.color || '#9A938A')}"></i>${esc(t.nombre || '(sin nombre)')}${t.activo === false ? ' <span class="etiqueta">desactivado</span>' : ''}</td>
     <td>${esc(t.lugar) || '<span class="chico">—</span>'}</td><td style="white-space:nowrap">${esc(t.horario) || '<span class="chico">—</span>'}</td><td>${esc(frecuenciaTexto(t))}</td><td>${esc(areasTxt(t))}</td></tr>`).join('')
-    + (SEDES_EDIT || SEDES_LISTA).map(x => `<tr><td class="col-tipo"><i style="background:${COLOR_PRESENCIAL}"></i>${SEDES.includes(x.clave) ? 'Turno presencial · ' : 'Sede · '}${esc(x.nombre || '(sin nombre)')}</td>
+    + (SEDES_EDIT || SEDES_LISTA).map(x => `<tr><td class="col-tipo"><i style="background:${COLOR_PRESENCIAL}"></i>${SEDES.includes(x.clave) ? 'Turno presencial (consultas) · ' : 'Sede · '}${esc(x.nombre || '(sin nombre)')}</td>
     <td>${esc(x.direccion) || '<span class="chico">—</span>'}</td><td>${esc(x.horario) || '<span class="chico">—</span>'}</td>
     <td>${SEDES.includes(x.clave) ? 'De lunes a viernes (sin feriados)' : 'Solo para las cartas'}</td><td>${SEDES.includes(x.clave) ? 'Víctimas y Asistencia Legal' : '—'}</td></tr>`).join('');
 }
@@ -1501,7 +1582,7 @@ $('listaTipos').addEventListener('change', e => {
     const a = e.target.dataset.area;
     t.areas = t.areas || {};
     if (e.target.checked) t.areas[a] = Number(e.target.closest('.area').querySelector('[data-cuantos]').value) || 1; else delete t.areas[a];
-  } else if (c === 'activo' || c === 'finesDeSemana' || c === 'feriados') t[c] = e.target.checked;
+  } else if (c === 'activo' || c === 'finesDeSemana' || c === 'feriados' || c === 'teletrabajo') t[c] = e.target.checked;
   else if (c === 'frecuencia' || c === 'drive1') t[c] = e.target.value;
   else if (c === 'diaSemana') t.diaSemana = Number(e.target.value);
   else return;

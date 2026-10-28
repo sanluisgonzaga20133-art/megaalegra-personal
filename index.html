@@ -125,6 +125,7 @@
   .nombre .nota{display:block; font-size:11.5px; font-weight:500; color:var(--gris); margin-top:1px}
   .nombre .nota.responsable{color:var(--dorado); font-weight:700}
   .nombre .nota.licencia{display:inline-block; margin-top:2px; padding:1px 7px; border-radius:8px; background:#FFF3D6; color:#6B4A0E; font-weight:700}
+  .nombre .nota.turno{display:inline-block; margin:2px 4px 0 0; padding:1px 7px; border-radius:8px; background:#EEF3F7; color:#2C4A5E; font-weight:700}
   tr.fila-licencia td.nombre{opacity:.85}
   .btn-rapido:disabled, .btn-detalle-mas:disabled{background:#EEEAE3; color:#B5AEA4; border-color:#E0DAD0; cursor:not-allowed}
   .num{text-align:center; font-variant-numeric:tabular-nums; font-weight:600}
@@ -451,7 +452,7 @@
     <span class="badge-hoy c1">1</span><span class="badge-hoy c2">2</span><span class="badge-hoy c3">3</span>
     <span class="badge-hoy c4">4</span><span class="badge-hoy c5">5</span><span class="badge-hoy c6">6+</span>
   </div>
-  <p class="pie-nota">Arriba eliges el área: Asistencia Legal, Defensa de Víctimas o Equipo multidisciplinario; cada una tiene sus propias columnas. Las columnas de totales (Turno Consulta, Adulto Mayor, Patrocinio presencial, Turno de flagrancia, Turno peritos) marcan casos que ya cuentan en su categoría: no se suman dos veces. Las columnas grises del mes anterior se mueven con el mes elegido: Nuevos y Consultas (en el Equipo: Consultas, Asesorías e Informes técnicos) vienen del Drive 4 · Consolidación; "Fono Alegra mes anterior" cuenta los casos nuevos de Fono Alegra de ese mes (los mismos del Drive 3, sin derivados). "Fono Alegra este mes" suma al momento de asignar. Las reasignaciones son carga muerta: solo se ven en "Reasig." y en el detalle de cada persona. La fila "Sugerido" es la de menor carga (sin quienes están de licencia ese día según la página Licencias, ni Responsables de Área ni Coordinador). Toca cualquier número para ver el detalle.</p>
+  <p class="pie-nota">Arriba eliges el área: Asistencia Legal, Defensa de Víctimas o Equipo multidisciplinario; cada una tiene sus propias columnas. Las columnas de totales (Turno Consulta, Adulto Mayor, Patrocinio presencial, Turno de flagrancia, Turno peritos) marcan casos que ya cuentan en su categoría: no se suman dos veces. Las columnas grises del mes anterior se mueven con el mes elegido: Nuevos y Consultas (en el Equipo: Consultas, Asesorías e Informes técnicos) vienen del Drive 4 · Consolidación; "Fono Alegra mes anterior" cuenta los casos nuevos de Fono Alegra de ese mes (los mismos del Drive 3, sin derivados). "Fono Alegra este mes" suma al momento de asignar. Las reasignaciones son carga muerta: solo se ven en "Reasig." y en el detalle de cada persona. La fila "Sugerido" es la de menor carga (sin quienes están de licencia ese día según la página Licencias, ni Responsables de Área ni Coordinador). La etiqueta 🕑 junto al nombre dice qué turno tiene esa persona el día elegido (se lee de Turnos y licencias; no cambia la cuenta). Toca cualquier número para ver el detalle.</p>
 </div>
 
 <div class="fondo-modal" id="fondoInforme" hidden>
@@ -1034,6 +1035,42 @@ function escucharLicencias(){
     pintarTabla();
   }, err => { console.error(err); avisar('No se pudieron leer las licencias: ' + err.code, 6000); });
 }
+// ---------- Turnos del día (Turnos y licencias, un solo lugar): solo se muestran junto al nombre; no cambian la cuenta ni el Sugerido ----------
+// turnos/tipos (lista), turnos/{tipo}__{mes} (dias), turnos/fonoAlegra (turno presencial: sede|área → día 1-5) y feriados.
+const TIPOS_TURNO_INICIALES = [['flagrancia', 'Flagrancia'], ['defensoria', 'Defensoría'], ['conadis', 'CONADIS'], ['peritos', 'Peritos']].map(([id, corto]) => ({ id, corto, activo: true }));
+let TURNOS_AGENDA = null; const ROLES_AGENDA = {};
+const normT = s => String(s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toUpperCase();
+function cargarTurnosAgenda(mes){
+  if (!TURNOS_AGENDA) TURNOS_AGENDA = Promise.all([
+    getDoc(doc(db, 'turnos', 'tipos')).catch(() => null),
+    getDoc(doc(db, 'turnos', 'fonoAlegra')).catch(() => null),
+    getDoc(doc(db, 'turnos', 'sedes')).catch(() => null),
+    getDocs(collection(db, 'feriados')).catch(() => null)
+  ]).then(([st, sp, ss, sf]) => ({
+    tipos: (st && st.exists() && Array.isArray(st.data().lista) ? st.data().lista : TIPOS_TURNO_INICIALES).filter(t => t.activo !== false),
+    presencial: sp && sp.exists() ? sp.data().tabla || {} : {},
+    sedes: Object.fromEntries((ss && ss.exists() && ss.data().lista || []).map(x => [x.clave, x.nombre])),
+    feriados: new Set(sf && sf.size ? sf.docs.map(x => { const f = x.data(); return [x.id, f.fecha, f.dia, f.date].map(v => typeof v === 'string' ? v : '').find(v => /^\d{4}-\d{2}-\d{2}/.test(v)) || ''; }).map(v => v.slice(0, 10)) : FERIADOS_2026)
+  }));
+  return TURNOS_AGENDA.then(base => Promise.all(base.tipos.map(t => {
+    const k = t.id + '__' + mes;
+    if (!(k in ROLES_AGENDA)) ROLES_AGENDA[k] = getDoc(doc(db, 'turnos', k)).then(s => s.exists() ? s.data() : null).catch(() => null);
+    return ROLES_AGENDA[k].then(r => { ROLES_AGENDA[k] = r; });
+  })).then(() => base));
+}
+let turnosAgendaListos = null; // la base ya leída (para pintar sin esperar)
+function turnosDelDia(defId, iso){
+  const base = turnosAgendaListos; if (!base) return [];
+  const d = DEFENSORES.find(x => x.id === defId), apellidos = d ? normT(d.nombre).split(/[\s,]+/).filter(Boolean) : [];
+  const esEl = clave => clave === defId || (apellidos.length && normT(clave).split(/[\s,_]+/).filter(Boolean).every(p => apellidos.includes(p)));
+  const lista = base.tipos.filter(t => { const r = ROLES_AGENDA[t.id + '__' + iso.slice(0, 7)]; return r && ((r.dias || {})[iso] || []).some(p => p.id === defId); })
+    .map(t => t.corto || String(t.nombre || '').replace(/^Turno de /i, ''));
+  const dow = new Date(iso + 'T12:00:00').getDay();
+  if (dow >= 1 && dow <= 5 && !base.feriados.has(iso)) Object.entries(base.presencial).forEach(([clave, dias]) => {
+    if ((dias[dow] || []).some(esEl)) lista.push('Turno presencial · ' + (base.sedes[clave.split('|')[0]] || clave.split('|')[0]));
+  });
+  return lista;
+}
 // Licencia que cubre esa fecha (si hay dos seguidas, la que termina más tarde)
 function licenciaEn(defId, fecha){
   return LICENCIAS.filter(l => l.defensorId === defId && l.inicio <= fecha && fecha <= l.fin)
@@ -1276,6 +1313,12 @@ function pintarTabla(){
   escucharMes((document.getElementById('selDia').value || hoyIso()).slice(0, 7));
   const diaElegido = document.getElementById('selDia').value || hoyIso();
   const semanaElegida = claveSemana(diaElegido);
+  // Turnos del día (Turnos y licencias): se leen una vez por mes y se vuelve a pintar al llegar
+  const mesTurnos = diaElegido.slice(0, 7);
+  if (pintarTabla.mesTurnos !== mesTurnos){
+    pintarTabla.mesTurnos = mesTurnos;
+    cargarTurnosAgenda(mesTurnos).then(base => { turnosAgendaListos = base; if (pintarTabla.mesTurnos === mesTurnos) pintarTabla(); }).catch(e => console.warn('No se pudieron leer los turnos', e));
+  }
 
   document.getElementById('etiquetaSemana').textContent =
     `${etiquetaMes(diaElegido.slice(0, 7))} — a la derecha, día por día del mes; el cuadro oscuro después de cada domingo es el total de esa semana (TS1, TS2...)`;
@@ -1338,7 +1381,8 @@ function pintarTabla(){
     const esSugerido = d.id === sugeridoId;
     const lic = licenciaEn(d.id, diaElegido);
     const licHoy = deLicenciaHoy(d.id) ? estadoLicencia(d.id) : null; // de licencia HOY: no se le puede asignar
-    const textoLic = lic ? `<span class="nota licencia">De licencia hasta ${lic.fin.slice(8, 10)}/${lic.fin.slice(5, 7)}${(lic.apoyos || []).length ? ' · Apoyo: ' + lic.apoyos.map(a => escHtml(a.nombre)).join(', ') : ''}</span>` : '';
+    const textoLic = (lic ? `<span class="nota licencia">De licencia hasta ${lic.fin.slice(8, 10)}/${lic.fin.slice(5, 7)}${(lic.apoyos || []).length ? ' · Apoyo: ' + lic.apoyos.map(a => escHtml(a.nombre)).join(', ') : ''}</span>` : '')
+      + turnosDelDia(d.id, diaElegido).map(t => `<span class="nota turno" title="De turno el ${formateaCorta(diaElegido)} (Turnos y licencias)">🕑 ${escHtml(t)}</span>`).join('');
     const clasesFila = [
       lic ? 'fila-licencia' : '',
       idx % 2 === 1 ? 'fila-par' : '',

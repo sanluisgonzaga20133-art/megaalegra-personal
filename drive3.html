@@ -178,7 +178,7 @@
     <div class="pestanas" role="tablist">
       <button class="pestana activa" data-pestana="llamadas" role="tab">Llamadas</button>
       <button class="pestana" data-pestana="conteo" role="tab">Conteo</button>
-      <button class="pestana" data-pestana="turnos" role="tab">Turno presencial</button>
+      <button class="pestana" data-pestana="turnos" role="tab">Turno presencial (consultas)</button>
     </div>
 
     <!-- ===== Llamadas ===== -->
@@ -984,7 +984,7 @@ function defensorDeTurno(clave){
 const legible = id => String(id).replace(/_+/g, ' ').trim();
 const hayCambiosTurnos = () => JSON.stringify(TURNOS) !== JSON.stringify(TURNOS_GUARDADOS);
 function pintarTurnos(){
-  $('ayudaTurnos').innerHTML = '<b>Turno presencial</b>: quién atiende cada día, por sub sede y área. El Drive 1 lo usa para sugerir abogado en los casos de Fono Alegra. Se cambia en <a href="turnos.html">Turnos y licencias ↗</a> (pestaña Turno presencial), con la casilla <b>Turnos</b> de Personal y permisos.'
+  $('ayudaTurnos').innerHTML = '<b>Turno presencial (consultas)</b>: turno de atención en la sede; quién atiende cada día, por sub sede y área. El Drive 1 lo usa para sugerir abogado en los casos de Fono Alegra. Se cambia en <a href="turnos.html">Turnos y licencias ↗</a> (pestaña Turno presencial), con la casilla <b>Turnos</b> de Personal y permisos.'
     + (turnosEnFirebase ? '' : ' <i>Todavía es la tabla inicial (copiada de "Datos Matriz").</i>');
   const malos = {}; // nombre → dónde está (sub sede · área: días)
   $('cuerpoTurnos').innerHTML = SEDES.flatMap(sede => AREAS_TURNO.map(area => {

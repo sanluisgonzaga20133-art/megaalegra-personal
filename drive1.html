@@ -2345,6 +2345,7 @@ function limpiarAgendaForm(){
   categoriaManual = ''; grupoEquipo = ''; agendaCargada = true;
   CASILLAS_FORM.forEach(([, el]) => $(el).checked = false);
   $('fTurno').checked = false; $('otrasCategorias').open = false;
+  pedidoTurno++; delete $('ayudaAbogado').dataset.turno;
   pintarAgendaForm();
 }
 // Al editar: primero lo guardado en el Drive 1; si es un caso viejo (sin esos datos), se trae de la Agenda
@@ -2376,6 +2377,53 @@ $('fArea').addEventListener('change', () => { categoriaManual = ''; pintarAgenda
 // Al cambiar la materia, la columna vuelve a salir de la materia
 ['change', 'input'].forEach(t => { $('fMateria').addEventListener(t, () => { if (!(OTRAS_CATEGORIAS[$('fArea').value] || []).includes(categoriaManual)) categoriaManual = ''; pintarAgendaForm(); }); $('fMateriaOtra').addEventListener(t, pintarAgendaForm); });
 [...CASILLAS_FORM.map(c => c[1]), 'fTurno'].forEach(el => $(el).addEventListener('change', pintarAgendaForm));
+
+// ---------- "Llegó por Turno de flagrancia / peritos": quién estaba de turno ese día (rol de Turnos y licencias, un solo lugar) ----------
+// turnos/tipos › lista (el tipo cuyo "drive1" es el turno marcado) y turnos/{tipo}__{mes} › dias[fecha]. Solo sugerencia: se puede elegir a otro.
+const TIPO_TURNO_INICIAL = { 'Turno de flagrancia': 'flagrancia', 'Turno peritos': 'peritos' };
+let tiposTurno = null, pedidoTurno = 0;
+const ROLES_TURNO = new Map();
+async function deTurnoEseDia(nombreTurno, fecha){
+  if (!tiposTurno) tiposTurno = getDoc(doc(db, 'turnos', 'tipos')).then(s => (s.exists() && s.data().lista) || []).catch(() => []);
+  const t = (await tiposTurno).find(x => x.drive1 === nombreTurno && x.activo !== false);
+  const id = t ? t.id : TIPO_TURNO_INICIAL[nombreTurno], k = id + '__' + fecha.slice(0, 7);
+  if (!ROLES_TURNO.has(k)) ROLES_TURNO.set(k, getDoc(doc(db, 'turnos', k)).then(s => s.exists() ? s.data() : null).catch(() => { ROLES_TURNO.delete(k); return null; }));
+  const rol = await ROLES_TURNO.get(k);
+  if (!rol) return null; // sin rol cargado ese mes
+  return ((rol.dias || {})[fecha] || []).map(p => DEFENSORES.find(d => d.id === p.id) || defensorDeTurno(p.nombre || p.id)).filter(Boolean);
+}
+async function sugerirDeTurno(){
+  const area = $('fArea').value, nombreTurno = TURNO_AREA[area], fecha = $('fFecha').value || hoyIso();
+  const aplica = nombreTurno && $('fTurno').checked && modo === 'nuevo' && !editandoId && !fonoAplica();
+  const pedido = ++pedidoTurno;
+  if (!aplica){
+    if ($('ayudaAbogado').dataset.turno){ delete $('ayudaAbogado').dataset.turno; llenarAbogados($('fAbogado').value); $('ayudaAbogado').textContent = AYUDA_ABOGADO; }
+    return;
+  }
+  const lista = await deTurnoEseDia(nombreTurno, fecha);
+  if (pedido !== pedidoTurno) return; // cambió algo mientras se leía
+  const previo = $('fAbogado').value;
+  llenarAbogados(previo);
+  $('ayudaAbogado').dataset.turno = '1';
+  if (!lista || !lista.length){
+    $('ayudaAbogado').textContent = lista ? `Nadie figura de ${nombreTurno.toLowerCase()} el ${fechaCorta(fecha)} en Turnos y licencias. Elige al abogado.`
+      : `No hay rol de ${nombreTurno.toLowerCase()} cargado para ${fechaCorta(fecha).slice(3)} en Turnos y licencias. Elige al abogado.`;
+    return;
+  }
+  const ids = new Set(lista.map(d => d.id));
+  const opcion = d => { const bloq = deLicenciaHoy(d) && d.id !== abogadoPrecargado;
+    return `<option value="${d.id}" ${bloq ? 'disabled style="color:#9A938A"' : ''}>${esc(d.nombre + textoLicencia(d))}</option>`; };
+  $('fAbogado').innerHTML = '<option value="">— Elegir —</option>' +
+    `<optgroup label="De turno ese día · ${esc(nombreTurno)} · ${fechaCorta(fecha)}">${lista.map(opcion).join('')}</optgroup>` +
+    `<optgroup label="${esc(area)} · otros">${DEFENSORES.filter(d => d.area === area && !ids.has(d.id)).map(opcion).join('')}</optgroup>` +
+    `<optgroup label="Otras áreas">${DEFENSORES.filter(d => d.area !== area).map(opcion).join('')}</optgroup>`;
+  const libres = lista.filter(d => !deLicenciaHoy(d));
+  $('fAbogado').value = previo || (libres.length === 1 ? libres[0].id : '');
+  if (!previo && libres.length === 1) $('fAbogado').dispatchEvent(new Event('change'));
+  $('ayudaAbogado').textContent = 'De turno ese día: ' + lista.map(d => d.nombre + (deLicenciaHoy(d) ? ' (de licencia)' : '')).join(', ')
+    + (libres.length > 1 ? '. Elige a quien atendió.' : '. Es solo sugerencia: puedes elegir a otro.');
+}
+['fTurno', 'fFecha', 'fArea'].forEach(el => $(el).addEventListener('change', sugerirDeTurno));
 
 // ---------- Fono Alegra (línea 1884): las columnas de la hoja del Drive 3 dentro del formulario ----------
 // Supuesto 1 (mismo usuario, "Pasar al mismo abogado"): antecedente, NO cuenta en la Agenda; igual se crea su fila en el Drive 3.
@@ -2533,7 +2581,7 @@ async function sugerirAbogadoFono(){
   const previo = $('fAbogado').value;
   abogadoPrecargado = '';
   $('fAbogado').innerHTML = '<option value="">— Elegir —</option>' +
-    `<optgroup label="Turno presencial · ${esc($('fSubSede').value)} · ${dia}">${posibles.map(opcion).join('')}</optgroup>` +
+    `<optgroup label="Turno presencial (consultas) · ${esc($('fSubSede').value)} · ${dia}">${posibles.map(opcion).join('')}</optgroup>` +
     `<optgroup label="${esc(area)} · otros">${DEFENSORES.filter(d => d.area === area && !ids.has(d.id)).map(opcion).join('')}</optgroup>` +
     `<optgroup label="Otras áreas">${DEFENSORES.filter(d => d.area !== area).map(d => `<option value="${d.id}" ${deLicenciaHoy(d) ? 'disabled style="color:#9A938A"' : ''}>${esc(d.nombre + textoLicencia(d))}</option>`).join('')}</optgroup>`;
   $('fAbogado').value = abogadoFonoManual && previo ? previo : (sug ? sug.id : '');
@@ -3353,6 +3401,7 @@ function aplicarDatosAgenda(d){
     const op = [...$('optOrigen').children].find(c => c.dataset.v === o);
     if (op && origen !== o) op.click();
     $('fTurno').checked = conTurno;
+    sugerirDeTurno();
   }
   if (d.conDatos && modo === 'nuevo'){
     const area = $('fArea').value;
